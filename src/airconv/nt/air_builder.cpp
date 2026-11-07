@@ -2,6 +2,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -46,13 +47,9 @@ TextureOperationInfo TextureInfo[] = {
 };
 
 std::string
-AIRBuilder::getTypeOverloadSuffix(Type *Ty, Signedness Sign) {
+AIRBuilder::getTypeOverloadSuffix(Type *Ty, Signedness Sign, std::optional<uint32_t> PointerAddrSpace) {
   std::string Ret = ".";
-  uint32_t PointerAddrSpace = ~0u;
-  if (auto TyPtr = dyn_cast<PointerType>(Ty)) {
-    PointerAddrSpace = TyPtr->getAddressSpace();
-    Ty = TyPtr->getNonOpaquePointerElementType();
-  }
+  assert(!Ty->isPointerTy());
   Type *TyScaler = Ty->getScalarType();
   uint32_t VectorSize = 0;
   if (isa<FixedVectorType>(Ty)) {
@@ -61,16 +58,16 @@ AIRBuilder::getTypeOverloadSuffix(Type *Ty, Signedness Sign) {
   if (TyScaler->isFloatTy()) {
     if (Sign != Signedness::DontCare)
       Ret += "f.";
-    if (PointerAddrSpace != ~0u)
-      Ret += std::format("p{}", PointerAddrSpace);
+    if (PointerAddrSpace)
+      Ret += std::format("p{}", *PointerAddrSpace);
     if (VectorSize)
       Ret += std::format("v{}", VectorSize);
     Ret += "f32";
   } else if (TyScaler->isHalfTy()) {
     if (Sign != Signedness::DontCare)
       Ret += "f.";
-    if (PointerAddrSpace != ~0u)
-      Ret += std::format("p{}", PointerAddrSpace);
+    if (PointerAddrSpace)
+      Ret += std::format("p{}", *PointerAddrSpace);
     if (VectorSize)
       Ret += std::format("v{}", VectorSize);
     Ret += "f16";
@@ -79,8 +76,8 @@ AIRBuilder::getTypeOverloadSuffix(Type *Ty, Signedness Sign) {
       Ret += "s.";
     else if (Sign == Signedness::Unsigned)
       Ret += "u.";
-    if (PointerAddrSpace != ~0u)
-      Ret += std::format("p{}", PointerAddrSpace);
+    if (PointerAddrSpace)
+      Ret += std::format("p{}", *PointerAddrSpace);
     if (VectorSize)
       Ret += std::format("v{}", VectorSize);
     Ret += std::format("i{}", cast<IntegerType>(TyScaler)->getBitWidth());
@@ -136,7 +133,7 @@ AIRBuilder::CreateAtomicRMW(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
       }
@@ -242,7 +239,7 @@ AIRBuilder::CreateAtomicCmpXchg(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
       }
@@ -360,11 +357,11 @@ AIRBuilder::CreateSampleCommon(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {2U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::Convergent)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
@@ -466,11 +463,11 @@ AIRBuilder::CreateSampleCmpCommon(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {2U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::Convergent)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
@@ -553,11 +550,11 @@ AIRBuilder::CreateSampleGrad(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {2U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
@@ -699,9 +696,9 @@ AIRBuilder::CreateRead(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
@@ -775,8 +772,8 @@ AIRBuilder::CreateWrite(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
       }
@@ -838,11 +835,11 @@ AIRBuilder::CreateGather(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {2U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
@@ -928,11 +925,11 @@ AIRBuilder::CreateGatherCompare(
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {2U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
@@ -1039,9 +1036,9 @@ AIRBuilder::CreateTextureQuery(const Texture &Texture, Value *Handle, Texture::Q
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
@@ -1086,11 +1083,11 @@ AIRBuilder::CreateCalculateLOD(const Texture &Texture, Value *Handle, Value *Sam
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {2U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::Convergent)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
@@ -1141,7 +1138,7 @@ AIRBuilder::CreateTextureFence(const Texture &Texture, Value *Handle) {
   auto Attrs = AttributeList::get(
       Context,
       {
-          {1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+          {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {~0U, Attribute::get(Context, Attribute::AttrKind::MustProgress)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
@@ -1502,9 +1499,9 @@ AIRBuilder::CreateDeviceCoherentLoad(Type *Ty, Value *Ptr) {
         {Ptr, getInt(0), getInt(uint32_t(ThreadScope::Device)), getBool(true)}
     );
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoFree)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoSync)},
@@ -1516,7 +1513,7 @@ AIRBuilder::CreateDeviceCoherentLoad(Type *Ty, Value *Ptr) {
 
   std::string FnName = "air.load.device_coherent";
   FnName += getTypeOverloadSuffix(Ty, Signedness::DontCare);
-  FnName += getTypeOverloadSuffix(TyPtr, Signedness::DontCare);
+  FnName += getTypeOverloadSuffix(Ty, Signedness::DontCare, cast<PointerType>(TyPtr)->getAddressSpace());
 
   auto Fn = getModule()->getOrInsertFunction(FnName, FunctionType::get(Ty, {TyPtr}, false), Attrs);
 
@@ -1540,9 +1537,9 @@ AIRBuilder::CreateDeviceCoherentStore(Value *Val, Value *Ptr) {
         {Ptr, Val, getInt(0), getInt(uint32_t(ThreadScope::Device)), getBool(true)}
     );
   auto Attrs = AttributeList::get(
-      Context, {{2U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {2U, Attribute::get(Context, Attribute::AttrKind::WriteOnly)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoFree)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoSync)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
@@ -1554,7 +1551,7 @@ AIRBuilder::CreateDeviceCoherentStore(Value *Val, Value *Ptr) {
 
   std::string FnName = "air.store.device_coherent";
   FnName += getTypeOverloadSuffix(Ty, Signedness::DontCare);
-  FnName += getTypeOverloadSuffix(TyPtr, Signedness::DontCare);
+  FnName += getTypeOverloadSuffix(Ty, Signedness::DontCare, cast<PointerType>(TyPtr)->getAddressSpace());
 
   auto Fn = getModule()->getOrInsertFunction(FnName, FunctionType::get(getVoidTy(), {Ty, TyPtr}, false), Attrs);
 
@@ -1565,11 +1562,11 @@ Value *
 AIRBuilder::CreateInterpolateAtCenter(Value *Interpoant, bool Perspective) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
   );
 
@@ -1585,11 +1582,11 @@ Value *
 AIRBuilder::CreateInterpolateAtCentroid(Value *Interpoant, bool Perspective) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
   );
 
@@ -1627,11 +1624,11 @@ Value *
 AIRBuilder::CreateInterpolateAtSample(Value *Interpoant, Value *SampleIndex, bool Perspective) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1646,11 +1643,11 @@ Value *
 AIRBuilder::CreateInterpolateAtOffset(Value *Interpoant, Value *Offset, bool Perspective) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
   );
 
@@ -1666,11 +1663,11 @@ Value *
 AIRBuilder::CreateGetVertexValue(Value *VertexValue, Type *Ty, Value *Index) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
   );
   auto Fn = getModule()->getOrInsertFunction(
@@ -1685,10 +1682,10 @@ CallInst *
 AIRBuilder::CreateSetMeshProperties(Value *GridSizeVec3) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::MustProgress)}}
   );
 
@@ -1704,10 +1701,10 @@ CallInst *
 AIRBuilder::CreateSetMeshRenderTargetArrayIndex(Value *Vertex, Value *ArrayIndex) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1722,10 +1719,10 @@ CallInst *
 AIRBuilder::CreateSetMeshViewportArrayIndex(Value *Vertex, Value *ArrayIndex) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1740,10 +1737,10 @@ CallInst *
 AIRBuilder::CreateSetMeshPrimitiveID(Value *Primitive, Value *ID) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
   auto Fn = getModule()->getOrInsertFunction(
       "air.set_primitive_id_mesh", FunctionType::get(getVoidTy(), {getMeshHandleType(), getIntTy(), getIntTy()}, false),
@@ -1756,10 +1753,10 @@ CallInst *
 AIRBuilder::CreateSetMeshPrimitiveCulled(Value *Primitive, Value *Culled) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
   auto Fn = getModule()->getOrInsertFunction(
       "air.set_primitive_culled_mesh",
@@ -1772,10 +1769,10 @@ CallInst *
 AIRBuilder::CreateSetMeshPosition(Value *Vertex, Value *Position) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1790,10 +1787,10 @@ CallInst *
 AIRBuilder::CreateSetMeshClipDistance(Value *Vertex, Value *Index, Value *Value) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1808,10 +1805,10 @@ CallInst *
 AIRBuilder::CreateSetMeshVertexData(Value *Vertex, Value *DataIndex, Value *DataValue) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   std::string FnName = "air.set_vertex_data_mesh";
@@ -1829,10 +1826,10 @@ CallInst *
 AIRBuilder::CreateSetMeshPrimitiveData(Value *Primitive, Value *DataIndex, Value *DataValue) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   std::string FnName = "air.set_primitive_data_mesh";
@@ -1850,10 +1847,10 @@ CallInst *
 AIRBuilder::CreateSetMeshIndex(Value *Index, Value *Vertex) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1867,10 +1864,10 @@ CallInst *
 AIRBuilder::CreateSetMeshPrimitiveCount(Value *Count) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1884,10 +1881,10 @@ CallInst *
 AIRBuilder::CreateSetMeshPointSize(Value *Vertex, Value *Size) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ArgMemOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())}}
   );
 
   std::string FnName = "air.set_point_size_mesh";
@@ -2038,10 +2035,6 @@ AIRBuilder::CreateAtomicRMW(AtomicRMWInst::BinOp Op, Value *Ptr, Value *Val) {
     debug << "invalid operation: atomicrmw: not a pointer.\n";
     return nullptr; // TODO
   }
-  if (TyPtr->getNonOpaquePointerElementType() != Val->getType()) {
-    debug << "invalid operation: atomicrmw: mismatched atomic operands.\n";
-    return nullptr; // TODO
-  }
   // the atomic's thread scope, as Metal's compiler writes it for memory of each address space
   Value *Scope = nullptr;
   switch (TyPtr->getAddressSpace()) {
@@ -2100,12 +2093,12 @@ AIRBuilder::CreateAtomicRMW(AtomicRMWInst::BinOp Op, Value *Ptr, Value *Val) {
     FnName += "<invalid atomic op>";
     break;
   }
-  auto TyOp = TyPtr->getNonOpaquePointerElementType();
-  FnName += getTypeOverloadSuffix(TyPtr->getNonOpaquePointerElementType(), Sign);
+  auto TyOp = Val->getType();
+  FnName += getTypeOverloadSuffix(TyOp, Sign, TyPtr->getAddressSpace());
 
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{1U, Attribute::get(Context, Attribute::AttrKind::NoCapture)},
+      Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
