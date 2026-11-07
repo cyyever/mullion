@@ -29,7 +29,7 @@ permissions:
   id-token: write
 
 env:
-  LLVM_VERSION: llvmorg-15.0.7
+  LLVM_VERSION: llvmorg-23.1.5
   WINE_VERSION: v8.16-3shain
   WINE_URL: https://github.com/3Shain/wine/releases/download/v8.16-3shain/wine.tar.gz
   WINE_ARM64EC_VERSION: wine-11.2

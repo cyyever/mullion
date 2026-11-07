@@ -2,6 +2,7 @@
 #include "air_signature.hpp"
 #include "airconv_error.hpp"
 #include "dxbc_converter.hpp"
+#include <bit>
 #include "nt/air_builder.hpp"
 #include "nt/dxbc_converter_base.hpp"
 #include "tessellation_limits.hpp"
@@ -2743,7 +2744,8 @@ convert_dxbc_vertex_for_geometry_shader(
   llvm::Value *indexed = builder.getInt1(is_indexed_draw), *view = nullptr, *format = nullptr;
   if (index_view) {
     view = function->getArg(index_buffer_idx);
-    format = builder.CreateLoad(types._int, builder.CreateStructGEP(view->getType()->getNonOpaquePointerElementType(), view, 2));
+    auto view_type = llvm::StructType::get(context, {types._long, types._int, types._int});
+    format = builder.CreateLoad(types._int, builder.CreateStructGEP(view_type, view, 2));
     indexed = builder.CreateICmpNE(format, builder.getInt32(0));
   }
   auto shifted = [&](unsigned field) {
@@ -2801,7 +2803,7 @@ convert_dxbc_vertex_for_geometry_shader(
         llvm::ArrayType::get(types._int4, max_output_register)->getPointerTo((uint32_t)air::AddressSpace::object_data)
     );
     resource_map.output.ptr_int4 = builder.CreateGEP(
-        resource_map.output.ptr_int4->getType()->getNonOpaquePointerElementType(), resource_map.output.ptr_int4,
+        llvm::ArrayType::get(types._int4, max_output_register), resource_map.output.ptr_int4,
         {warp_vertex_id}
     );
     resource_map.output.ptr_float4 = builder.CreateBitCast(
@@ -2809,7 +2811,7 @@ convert_dxbc_vertex_for_geometry_shader(
         llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo((uint32_t)air::AddressSpace::object_data)
     );
     resource_map.output.ptr_float4 = builder.CreateGEP(
-        resource_map.output.ptr_float4->getType()->getNonOpaquePointerElementType(), resource_map.output.ptr_float4,
+        llvm::ArrayType::get(types._float4, max_output_register), resource_map.output.ptr_float4,
         {warp_vertex_id}
     );
   }
@@ -2855,7 +2857,7 @@ convert_dxbc_vertex_for_geometry_shader(
     if (index_buffer_idx == ~0u)
       return {position, builder.getFalse()};
     auto index_buffer = function->getArg(index_buffer_idx);
-    auto type = index_buffer->getType()->getNonOpaquePointerElementType();
+    auto type = ia_layout->index_buffer_format == 1 ? (llvm::Type *)builder.getInt16Ty() : builder.getInt32Ty();
     auto index = builder.CreateLoad(
         type, builder.CreateGEP(type, index_buffer, {builder.CreateAdd(builder.CreateExtractValue(draw_arguments, 2), position)})
     );

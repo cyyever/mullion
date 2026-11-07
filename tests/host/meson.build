@@ -6,24 +6,26 @@ test('host_window_placement', executable('host_window_placement', 'window_placem
                                          override_options : ['cpp_std=c++20'], native : true), suite : 'host')
 test('host_geometry_budget', executable('host_geometry_budget', 'geometry_budget.cpp',
                                       include_directories : mullion_native_include_path,
-                                      override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+                                      override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_format', executable('host_format', ['format.cpp', '../../src/util/util_string.cpp'],
                              include_directories : mullion_native_include_path,
-                             override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+                             override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_rc_self_move', executable('host_rc_self_move', 'rc.cpp',
-                                    override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+                                    override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_metal_reference', executable('host_metal_reference', 'metal_reference.cpp',
                                        override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+test('host_packed_variant_list', executable('host_packed_variant_list', 'packed_variant_list.cpp',
+                                           override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_private_data', executable('host_private_data', ['private_data.cpp', '../../src/util/com/com_private_data.cpp'],
      include_directories : [mullion_native_include_path, include_directories('../../src/util')],
      override_options : ['cpp_std=c++20'], native : true), suite : 'host')
 test('host_denorm', executable('host_denorm', 'denorm.cpp', include_directories : include_directories('metal'),
-                             override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+                             override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_tessellator',
      executable('host_tessellator', ['tessellator.cpp', '../reference/reference.cpp'],
                 include_directories : include_directories('metal', '../../src/airconv', '../../src/airconv/shaders', '../../libs'),
                 # the reference's and the Metal source's, neither written for this compiler's warnings
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], override_options : ['cpp_std=c++23'], native : true),
      # every factor and partitioning on one core: about 270 s on CI's runner, past 300 s when the runner is loaded
      suite : 'host', timeout : 900)
 # the device's tessellation templates, made as the device makes them
@@ -86,9 +88,9 @@ test('host_metallib_header',
      suite : 'host', timeout : 120)
 # which DXIL operations shaders use, for tests/coverage.py; it reads DXIL with the LLVM the converter is built with
 executable('dxilops', ['dxilops.cpp'], include_directories : llvm_include_path_darwin,
-           link_args : [ llvm_ld_flags_darwin, llvm_deps ], cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true)
+           link_args : [ llvm_ld_flags_darwin, llvm_deps ], cpp_args : ['-w'], override_options : ['cpp_std=c++23'], native : true)
 # the tests' own container hash against the hashes real shaders carry; it wants directories of them (MULLION_HASHED)
-test('host_dxbc_hash', executable('host_dxbc_hash', ['dxbchash.cpp'], override_options : ['cpp_std=c++20'], native : true),
+test('host_dxbc_hash', executable('host_dxbc_hash', ['dxbchash.cpp'], override_options : ['cpp_std=c++23'], native : true),
      suite : 'host')
 # the bridge's shader store, which is Objective-C built as the bridge builds it
 test('host_shader_store',
