@@ -86,7 +86,7 @@ bool
 Derivative(const Instruction &I) {
   auto Call = dyn_cast<CallInst>(&I);
   auto Callee = Call ? Call->getCalledFunction() : nullptr;
-  return Callee && (Callee->getName().startswith("air.dfdx") || Callee->getName().startswith("air.dfdy"));
+  return Callee && (Callee->getName().starts_with("air.dfdx") || Callee->getName().starts_with("air.dfdy"));
 }
 
 // whether `A` and `B` are the same value wherever both are: the same operations on the same values, reading only
@@ -169,7 +169,7 @@ Join(Diamond &First, const Diamond &Second) {
   for (auto [From, To] : {std::pair{Second.Own, &First.Own}, std::pair{Second.Scaled, &First.Scaled}}) {
     auto Into = To->Last;
     Into->getTerminator()->eraseFromParent();
-    Into->getInstList().splice(Into->end(), From.First->getInstList());
+    Into->splice(Into->end(), From.First);
     for (auto Next : successors(Into))
       Next->replacePhiUsesWith(From.First, Into);
     To->Last = From.Last == From.First ? Into : From.Last;
