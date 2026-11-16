@@ -21,6 +21,7 @@
 #include "airconv_context.hpp"
 #include "dxbc_converter.hpp"
 #include <string_view>
+#include <ranges>
 #include "nt/dxbc_converter_base.hpp"
 #include "airconv_ray.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -729,7 +730,21 @@ lower_lib_handles(Module &M) {
 
 Expected<std::unique_ptr<Module>>
 parse(const std::string &bitcode, LLVMContext &context) {
-  auto module = parseBitcodeFile(MemoryBufferRef(bitcode, "dxil"), context);
+  // DXC's legacy layout aligns i8 to 32 bits, which LLVM 23 no longer accepts.
+  // Keep its preferred alignment; the module receives the AIR layout before linking.
+  auto module = parseBitcodeFile(
+      MemoryBufferRef(bitcode, "dxil"), context,
+      ParserCallbacks([](StringRef, StringRef layout) -> std::optional<std::string> {
+        std::string result;
+        for (auto field : std::string_view(layout.data(), layout.size()) | std::views::split('-')) {
+          std::string_view token(field.begin(), field.end());
+          if (!result.empty())
+            result += '-';
+          result += token == "i8:32" ? "i8:8:32" : token;
+        }
+        return result;
+      })
+  );
   if (module) {
     lower_lib_handles(**module);
     lower_bound_handles(**module);
@@ -1660,8 +1675,10 @@ convert_dxil(
   for (auto &I : make_early_inc_range(*body))
     if (isa<AllocaInst>(I))
       I.moveBefore(&*entry_bb.getFirstInsertionPt());
+  // Explicitly transfer ownership: LLVM 23 moveBefore only splices within the source function.
   for (auto &BB : make_early_inc_range(*F)) {
-    BB.moveBefore(epilogue);
+    ctx.function->splice(epilogue->getIterator(), F, BB.getIterator());
+    assert(BB.getParent() == ctx.function && "DXIL block must move to the AIR function");
     if (auto ret = dyn_cast<ReturnInst>(BB.getTerminator())) {
       BranchInst::Create(epilogue, ret);
       ret->eraseFromParent();
@@ -4867,11 +4884,10 @@ convert_dxil_mesh_stage(
   auto shader_info = &(pShaderInternal->shader_info);
   bool mesh = pShaderInternal->shader_type == D3D12_SB_MESH_SHADER;
 
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
-    metal_version = sm50_common->metal_version;
     shader_flags = sm50_common->flags;
   }
   SM50_SHADER_ROOT_SIGNATURE_DATA *rootsig = nullptr;
@@ -5124,11 +5140,10 @@ convert_dxil_ray_shader(
     SM50_SHADER_COMPILATION_ARGUMENT_DATA *pArgs
 ) {
   ShaderInfo *shader_info = &(pShaderInternal->shader_info);
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
-    metal_version = sm50_common->metal_version;
     shader_flags = sm50_common->flags;
   }
   // the shader's module, with the functions it calls of its state object's other libraries, and then the resources
@@ -5272,7 +5287,7 @@ convert_ray_dispatcher(
     return llvm::make_error<UnsupportedFeature>("a ray tracing pipeline has no such dispatcher");
   setup_metal_version(module, metal_version);
   auto context_ty = ray_context_type(context);
-  llvm::Type *i8p = llvm::Type::getInt8PtrTy(context), *i32 = llvm::Type::getInt32Ty(context);
+  llvm::Type *i8p = llvm::PointerType::get(context, 0), *i32 = llvm::Type::getInt32Ty(context);
   auto void_ty = llvm::Type::getVoidTy(context);
   auto shader_ty = llvm::FunctionType::get(void_ty, {context_ty->getPointerTo(), i8p, i8p}, false);
   auto function = llvm::Function::Create(

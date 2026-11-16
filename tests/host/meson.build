@@ -6,7 +6,6 @@ test('host_geometry_budget', executable('host_geometry_budget', 'geometry_budget
                                       override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_format', executable('host_format', 'format.cpp', include_directories : mullion_native_include_path,
                              override_options : ['cpp_std=c++23'], native : true), suite : 'host')
-                             override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_rc_self_move', executable('host_rc_self_move', 'rc.cpp',
                                     override_options : ['cpp_std=c++23'], native : true), suite : 'host')
 test('host_packed_variant_list', executable('host_packed_variant_list', 'packed_variant_list.cpp',
@@ -78,3 +77,16 @@ test('host_frames', find_program('python3', native : true),
      args : files('frames.py') + [meson.project_source_root() / 'tools/frames.py'], suite : 'host')
 test('host_metal_target', find_program('python3', native : true), args : [files('metal_target.py'), d3d11_dll, macos_min],
      suite : 'host')
+
+# Requires a Metal device; the host suite intentionally needs no GPU.
+test('air_bitcode', executable('air_bitcode', 'air_bitcode.cpp',
+  include_directories : llvm_include_path_darwin,
+  dependencies : airconv_dep_darwin,
+  cpp_args : ['-x', 'objective-c++', '-fobjc-arc'],
+  link_args : ['-framework', 'Foundation', '-framework', 'Metal'],
+  native : true), suite : 'native-metal')
+
+test('air_attributes', executable('air_attributes', 'air_attributes.cpp',
+  include_directories : llvm_include_path_darwin,
+  dependencies : airconv_dep_darwin,
+  native : true), suite : 'host')

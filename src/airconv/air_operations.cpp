@@ -31,7 +31,7 @@ AIRBuilderResult call_unpack_impl(
               {~0U, Attribute::get(context, Attribute::AttrKind::MustProgress)},
               {~0U, Attribute::get(context, Attribute::AttrKind::NoFree)},
               {~0U, Attribute::get(context, Attribute::AttrKind::NoSync)},
-              {~0U, Attribute::get(context, Attribute::AttrKind::ReadNone)}}
+              {~0U, Attribute::getWithMemoryEffects(context, MemoryEffects::none())}}
   );
   auto fn = (module.getOrInsertFunction(
     "air.unpack." + op, llvm::FunctionType::get(dst_type, {src_type}, false),

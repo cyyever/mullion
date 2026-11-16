@@ -83,13 +83,13 @@ static cl::opt<bool>
   OptLevelO2("O2", cl::desc("Optimization level 2. Similar to clang -O2. "));
 
 static cl::opt<bool> PreserveBitcodeUseListOrder(
-  "preserve-bc-uselistorder",
+  "air-preserve-bc-uselistorder",
   cl::desc("Preserve use-list order when writing LLVM bitcode."),
   cl::init(false), cl::Hidden
 );
 
 static cl::opt<bool> PreserveAssemblyUseListOrder(
-  "preserve-ll-uselistorder",
+  "air-preserve-ll-uselistorder",
   cl::desc("Preserve use-list order when writing LLVM assembly."),
   cl::init(false), cl::Hidden
 );
@@ -465,7 +465,10 @@ int main(int argc, char **argv) {
     M.print(Out->os(), nullptr, PreserveAssemblyUseListOrder);
   } else if (EmitMetallib) {
     mullion::metallib::MetallibWriter writer;
-    writer.Write(M, Out->os());
+    if (auto error = writer.Write(M, Out->os())) {
+      errs() << toString(std::move(error)) << '\n';
+      return 1;
+    }
   } else {
     WriteBitcodeToFile(
       M, Out->os(), PreserveBitcodeUseListOrder, nullptr, true
