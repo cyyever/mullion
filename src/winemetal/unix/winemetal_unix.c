@@ -107,7 +107,16 @@ init_encoder_errors(void) {
 static NTSTATUS
 _MTLCopyAllDevices(void *obj) {
   struct unixcall_generic_obj_ret *params = obj;
-  params->ret = (obj_handle_t)MTLCopyAllDevices();
+  @autoreleasepool {
+    NSArray<id<MTLDevice>> *devices = MTLCopyAllDevices();
+    NSMutableArray<id<MTLDevice>> *supported = [NSMutableArray array];
+    for (id<MTLDevice> device in devices) {
+      if ([device supportsFamily:MTLGPUFamilyMetal4]) [supported addObject:device];
+    }
+    if (!supported.count) fprintf(stderr, "Mullion requires a Metal 4 device and macOS 26 or later.\n");
+    params->ret = (obj_handle_t)[supported copy];
+    [devices release];
+  }
   return STATUS_SUCCESS;
 }
 
@@ -5019,10 +5028,7 @@ CREATES(_MTLDevice_newLibraryWithSource)(void *obj) {
   // may predate what the source uses (a Wine loader linked against an old SDK gets MSL 2.4, without mesh shaders):
   // ask for the newest this macOS has
   MTLCompileOptions *options = [[MTLCompileOptions alloc] init];
-  if (@available(macOS 26.0, *))
-    options.languageVersion = MTLLanguageVersion4_0;
-  else
-    options.languageVersion = MTLLanguageVersion3_2;
+  options.languageVersion = MTLLanguageVersion4_0;
   params->ret_library = (obj_handle_t)[device newLibraryWithSource:source options:options error:&err];
   params->ret_error = (obj_handle_t)[err retain];
   [options release];

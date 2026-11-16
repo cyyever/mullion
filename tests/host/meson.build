@@ -125,3 +125,16 @@ test('host_frames', find_program('python3', native : true),
      args : files('frames.py') + [meson.project_source_root() / 'tools/frames.py'], suite : 'host')
 test('host_metal_target', find_program('python3', native : true), args : [files('metal_target.py'), d3d11_dll, macos_min],
      suite : 'host')
+
+# Requires a Metal device; the host suite intentionally needs no GPU.
+test('air_bitcode', executable('air_bitcode', 'air_bitcode.cpp',
+  include_directories : llvm_include_path_darwin,
+  dependencies : airconv_dep_darwin,
+  cpp_args : ['-x', 'objective-c++', '-fobjc-arc'],
+  link_args : ['-framework', 'Foundation', '-framework', 'Metal'],
+  native : true), suite : 'native-metal')
+
+test('air_attributes', executable('air_attributes', 'air_attributes.cpp',
+  include_directories : llvm_include_path_darwin,
+  dependencies : airconv_dep_darwin,
+  native : true), suite : 'host')

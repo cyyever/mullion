@@ -1,6 +1,6 @@
 #include "metallib_writer.hpp"
+#include "bitcode/air_bitcode_writer.hpp"
 #include "llvm/ADT/Triple.h"
-#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/Constants.h"
 
 using namespace llvm;
@@ -18,7 +18,7 @@ struct InputAttribute {
   // TODO: extend patch/control point here
 };
 
-void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
+llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
 
   SmallVector<char, 0> bitcode;
   SmallVector<char, 0> public_metadata;
@@ -27,9 +27,7 @@ void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
 
   uint32_t fn_count = 0;
 
-  raw_svector_ostream bitcode_stream(bitcode);
-  // without the module hash of ThinLTO, which nothing reads: the functions are named by the hash taken below
-  WriteBitcodeToFile(module, bitcode_stream, false, nullptr, false);
+  if (auto error = air::writeTypedBitcode(module, bitcode)) return error;
 
   auto hash =
     compute_sha256_hash((const uint8_t *)bitcode.data(), bitcode.size());
@@ -64,9 +62,9 @@ void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 6,
-          .languageVersionMajor = 3,
-          .languageVersionMinor = 1,
+          .airVersionMinor = 8,
+          .languageVersionMajor = 4,
+          .languageVersionMinor = 0,
         });
         while (fn->getNumOperands() > 3 && isa<MDTuple>(fn->getOperand(3).get())
         ) {
@@ -182,9 +180,9 @@ void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 6,
-          .languageVersionMajor = 3,
-          .languageVersionMinor = 1,
+          .airVersionMinor = 8,
+          .languageVersionMajor = 4,
+          .languageVersionMinor = 0,
         });
         function_def_stream << "ENDT";
         public_metadata_stream << value(4);
@@ -218,9 +216,9 @@ void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 6,
-          .languageVersionMajor = 3,
-          .languageVersionMinor = 1,
+          .airVersionMinor = 8,
+          .languageVersionMajor = 4,
+          .languageVersionMinor = 0,
         });
         function_def_stream << "ENDT";
 
@@ -313,9 +311,9 @@ void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 6,
-          .languageVersionMajor = 3,
-          .languageVersionMinor = 1,
+          .airVersionMinor = 8,
+          .languageVersionMajor = 4,
+          .languageVersionMinor = 0,
         });
         function_def_stream << "ENDT";
 
@@ -354,9 +352,9 @@ void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 6,
-          .languageVersionMajor = 3,
-          .languageVersionMinor = 1,
+          .airVersionMinor = 8,
+          .languageVersionMajor = 4,
+          .languageVersionMinor = 0,
         });
         function_def_stream << "ENDT";
 
@@ -414,6 +412,7 @@ void MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
   OS << public_metadata;
   OS << private_metadata;
   OS << bitcode;
+  return llvm::Error::success();
 }
 
 } // namespace mullion::metallib

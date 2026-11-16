@@ -251,7 +251,7 @@ void setup_temp_register(
   }
 }
 
-void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION metal_version) {
+void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION) {
   using namespace llvm;
   auto &context = module.getContext();
   auto createUnsignedInteger = [&](uint32_t s) {
@@ -261,37 +261,11 @@ void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION metal_v
 
   auto airVersion = module.getOrInsertNamedMetadata("air.version");
   auto airLangVersion = module.getOrInsertNamedMetadata("air.language_version");
-  switch (metal_version) {
-  case SM50_SHADER_METAL_320: {
-    airVersion->addOperand(
-        MDTuple::get(context, {createUnsignedInteger(2), createUnsignedInteger(7), createUnsignedInteger(0)})
-    );
-    airLangVersion->addOperand(MDTuple::get(
-        context, {createString("Metal"), createUnsignedInteger(3), createUnsignedInteger(2), createUnsignedInteger(0)}
-    ));
-    module.setTargetTriple(Triple("air64-apple-macosx15.0.0"));
-    break;
-  }
-  case SM50_SHADER_METAL_400: {
-    airVersion->addOperand(
-        MDTuple::get(context, {createUnsignedInteger(2), createUnsignedInteger(8), createUnsignedInteger(0)})
-    );
-    airLangVersion->addOperand(MDTuple::get(
-        context, {createString("Metal"), createUnsignedInteger(4), createUnsignedInteger(0), createUnsignedInteger(0)}
-    ));
-    module.setTargetTriple(Triple("air64_v28-apple-macosx26.0.0"));
-    break;
-  }
-  default: {
-    airVersion->addOperand(
-        MDTuple::get(context, {createUnsignedInteger(2), createUnsignedInteger(6), createUnsignedInteger(0)})
-    );
-    airLangVersion->addOperand(MDTuple::get(
-        context, {createString("Metal"), createUnsignedInteger(3), createUnsignedInteger(1), createUnsignedInteger(0)}
-    ));
-    break;
-  }
-  }
+  airVersion->addOperand(
+      MDTuple::get(context, {createUnsignedInteger(2), createUnsignedInteger(8), createUnsignedInteger(0)}));
+  airLangVersion->addOperand(MDTuple::get(
+      context, {createString("Metal"), createUnsignedInteger(4), createUnsignedInteger(0), createUnsignedInteger(0)}));
+  module.setTargetTriple(Triple("air64_v28-apple-macosx26.0.0"));
 }
 
 RegisterComponentType
@@ -611,16 +585,12 @@ llvm::Error convert_dxbc_pixel_shader(
     if (pso_data->late_tests)
       func_signature.UseLateFragmentTests();
   }
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
-    metal_version = sm50_common->metal_version;
     shader_flags = sm50_common->flags;
   }
-  // barycentrics and inputs read at each vertex are Metal 4's
-  if (shader_info->use_barycentrics || shader_info->vertex_value_reg_mask)
-    metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_ROOT_SIGNATURE_DATA *rootsig = nullptr;
   args_get_data<SM50_SHADER_ROOT_SIGNATURE, SM50_SHADER_ROOT_SIGNATURE_DATA>(pArgs, &rootsig);
 
@@ -1247,11 +1217,10 @@ llvm::Error convert_dxbc_compute_shader(
   auto func_signature = pShaderInternal->func_signature; // copy
   auto shader_info = &(pShaderInternal->shader_info);
 
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
-    metal_version = sm50_common->metal_version;
     shader_flags = sm50_common->flags;
   }
   // Apple's compiler on the M5 Ultra (macOS 27.3) aborts on a device-coherent texture access in Metal 4's AIR, and
@@ -1372,11 +1341,10 @@ llvm::Error convert_dxbc_vertex_shader(
   bool rasterization_disabled =
       args_get_data<SM50_SHADER_GS_PASS_THROUGH, SM50_SHADER_GS_PASS_THROUGH_DATA>(pArgs, &gs_passthrough) &&
       gs_passthrough->RasterizationDisabled;
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
-    metal_version = sm50_common->metal_version;
     shader_flags = sm50_common->flags;
   }
   SM50_SHADER_ROOT_SIGNATURE_DATA *rootsig = nullptr;
@@ -2273,7 +2241,6 @@ AIRCONV_API int SM50CompileRayDispatcher(
     return failed();
   }
   LLVMContext context;
-  context.setOpaquePointers(false);
   auto pModule = std::make_unique<Module>("shader.air", context);
   initializeModule(*pModule);
   if (auto err = mullion::dxbc::convert_ray_dispatcher(
@@ -2288,7 +2255,11 @@ AIRCONV_API int SM50CompileRayDispatcher(
   auto compiled = new SM50CompiledBitcodeInternal();
   raw_svector_ostream OS(compiled->vec);
   metallib::MetallibWriter writer;
-  writer.Write(*pModule, OS);
+  if (auto error = writer.Write(*pModule, OS)) {
+    errorOut << llvm::toString(std::move(error));
+    delete compiled;
+    return failed();
+  }
   *ppBitcode = (sm50_bitcode_t)compiled;
   return 0;
 }
@@ -2444,7 +2415,13 @@ AIRCONV_API int SM50Compile(
 
   metallib::MetallibWriter writer;
 
-  writer.Write(*pModule, OS);
+  if (auto error = writer.Write(*pModule, OS)) {
+    errorOut << llvm::toString(std::move(error));
+    delete compiled;
+    if (ppError)
+      *ppError = (sm50_error_t)errorObj.release();
+    return 1;
+  }
 
   pModule.reset();
 
@@ -2510,7 +2487,13 @@ AIRCONV_API int SM50CompileTessellationPipelineHull(
 
   metallib::MetallibWriter writer;
 
-  writer.Write(*pModule, OS);
+  if (auto error = writer.Write(*pModule, OS)) {
+    errorOut << llvm::toString(std::move(error));
+    delete compiled;
+    if (ppError)
+      *ppError = (sm50_error_t)errorObj.release();
+    return 1;
+  }
 
   pModule.reset();
 
@@ -2584,7 +2567,13 @@ AIRCONV_API int SM50CompileTessellationPipelineDomain(
 
   metallib::MetallibWriter writer;
 
-  writer.Write(*pModule, OS);
+  if (auto error = writer.Write(*pModule, OS)) {
+    errorOut << llvm::toString(std::move(error));
+    delete compiled;
+    if (ppError)
+      *ppError = (sm50_error_t)errorObj.release();
+    return 1;
+  }
 
   pModule.reset();
 
@@ -2650,7 +2639,13 @@ AIRCONV_API int SM50CompileGeometryPipelineVertex(
 
   metallib::MetallibWriter writer;
 
-  writer.Write(*pModule, OS);
+  if (auto error = writer.Write(*pModule, OS)) {
+    errorOut << llvm::toString(std::move(error));
+    delete compiled;
+    if (ppError)
+      *ppError = (sm50_error_t)errorObj.release();
+    return 1;
+  }
 
   pModule.reset();
 
@@ -2728,7 +2723,13 @@ AIRCONV_API int SM50CompileGeometryPipelineGeometry(
 
   metallib::MetallibWriter writer;
 
-  writer.Write(*pModule, OS);
+  if (auto error = writer.Write(*pModule, OS)) {
+    errorOut << llvm::toString(std::move(error));
+    delete compiled;
+    if (ppError)
+      *ppError = (sm50_error_t)errorObj.release();
+    return 1;
+  }
 
   pModule.reset();
 

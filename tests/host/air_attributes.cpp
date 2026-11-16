@@ -1,0 +1,86 @@
+#include "../../src/airconv/bitcode/air_bitcode_writer.hpp"
+#include "../../src/airconv/metallib_writer.hpp"
+#include "llvm/AsmParser/Parser.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/IR/Verifier.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/raw_ostream.h"
+#include <cstdlib>
+
+static void require(bool ok, const char *message) {
+  if (!ok) { llvm::errs() << message << "\n"; std::exit(1); }
+}
+
+static std::unique_ptr<llvm::Module> convert(llvm::StringRef ir, llvm::LLVMContext &context) {
+  llvm::SMDiagnostic diagnostic;
+  auto input = llvm::parseAssemblyString(ir, diagnostic, context);
+  if (!input) diagnostic.print("air_attributes", llvm::errs());
+  require(input && !llvm::verifyModule(*input, &llvm::errs()), "invalid test IR");
+  std::string original;
+  llvm::raw_string_ostream originalStream(original);
+  input->print(originalStream, nullptr);
+  llvm::SmallVector<char, 0> bytes;
+  if (auto error = mullion::air::writeTypedBitcode(*input, bytes)) {
+    llvm::errs() << llvm::toString(std::move(error)) << "\n";
+    std::exit(1);
+  }
+  std::string after;
+  llvm::raw_string_ostream afterStream(after);
+  input->print(afterStream, nullptr);
+  require(original == after, "serialization changed the optimizer's module");
+  auto output = llvm::parseBitcodeFile(llvm::MemoryBufferRef(llvm::StringRef(bytes.data(), bytes.size()), "AIR"), context);
+  if (!output) { llvm::errs() << llvm::toString(output.takeError()) << "\n"; std::exit(1); }
+  return std::move(*output);
+}
+
+int main() {
+  llvm::LLVMContext context;
+  auto values = convert(R"(
+    define noundef range(i32 0, 128) i32 @f(i32 noundef range(i32 0, 128) %x) norecurse {
+      ret i32 %x
+    }
+    define nofpclass(nan) float @fp(float nofpclass(nan) %x) { ret float %x }
+  )", context);
+  require(values->getFunction("f")->hasFnAttribute(llvm::Attribute::NoRecurse) &&
+          values->getFunction("f")->hasRetAttribute(llvm::Attribute::NoUndef) &&
+          !values->getFunction("f")->hasRetAttribute(llvm::Attribute::Range), "integer promise conversion failed");
+  require(values->getFunction("fp")->getAttributes().isEmpty(), "float promises survived");
+  auto captures = convert(R"(
+    define void @f(ptr captures(address) %p) { ret void }
+    define void @none(ptr captures(none) %p) { ret void }
+  )", context);
+  require(captures->getFunction("f")->getAttributes().isEmpty(), "unrepresentable capture promise survived");
+  require(captures->getFunction("none")->getAttributes().getParamAttr(0, llvm::Attribute::Captures).getCaptureInfo() ==
+              llvm::CaptureInfo::none(), "nocapture translation lost");
+  auto memory = convert(R"(
+    define void @f() memory(write) { ret void }
+    define void @none() memory(none) { ret void }
+    define void @read() memory(read) { ret void }
+    define void @arg(ptr %p) memory(argmem: readwrite) { ret void }
+    define void @restricted() convergent noduplicate { ret void }
+  )", context);
+  require(memory->getFunction("f")->getAttributes().isEmpty(), "empty memory group survived");
+  require(memory->getFunction("none")->getMemoryEffects().doesNotAccessMemory(), "readnone translation lost");
+  require(memory->getFunction("read")->getMemoryEffects().onlyReadsMemory(), "readonly translation lost");
+  require(memory->getFunction("arg")->getMemoryEffects().onlyAccessesArgPointees(), "argmem translation lost");
+  require(memory->getFunction("restricted")->hasFnAttribute(llvm::Attribute::Convergent) &&
+          memory->getFunction("restricted")->hasFnAttribute(llvm::Attribute::NoDuplicate), "execution restrictions lost");
+
+  for (auto ir : {"define void @f() null_pointer_is_valid { ret void }",
+                  "define void @f(ptr byval(i32) %p) { ret void }",
+                  "define void @f(ptr initializes((0, 4)) %p) { store i32 0, ptr %p ret void }"}) {
+    llvm::SMDiagnostic diagnostic;
+    auto module = llvm::parseAssemblyString(ir, diagnostic, context);
+    if (!module) diagnostic.print("air_attributes", llvm::errs());
+    require(module && !llvm::verifyModule(*module, &llvm::errs()), "invalid rejection fixture");
+    llvm::SmallVector<char, 0> bytes;
+    llvm::raw_svector_ostream output(bytes);
+    mullion::metallib::MetallibWriter writer;
+    auto error = writer.Write(*module, output);
+    require(bool(error), "unsupported semantic attribute was silently accepted");
+    auto message = llvm::toString(std::move(error));
+    require(message.find("AIR cannot encode attribute") != std::string::npos, "missing attribute diagnostic");
+    require(bytes.empty(), "failure wrote a partial metallib");
+  }
+  llvm::outs() << "PASS: AIR attribute round trips and unsupported-attribute errors\n";
+}

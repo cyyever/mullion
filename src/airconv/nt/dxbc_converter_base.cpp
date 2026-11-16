@@ -1596,7 +1596,7 @@ Converter::WritableResidency(
   auto From = ir.GetInsertBlock();
   auto Done = ir.GetInsertPoint() == From->end() ? llvm::BasicBlock::Create(ctx.llvm, "", From->getParent())
                                                  : llvm::SplitBlock(From, &*ir.GetInsertPoint());
-  if (auto Branch = From->getTerminator())
+  if (auto Branch = From->getTerminatorOrNull())
     Branch->eraseFromParent();
   auto Tiles = llvm::BasicBlock::Create(ctx.llvm, "residency_tiles", From->getParent(), Done);
   ir.SetInsertPoint(From);
@@ -1646,7 +1646,7 @@ Converter::ReadTexel(
   auto From = ir.GetInsertBlock();
   auto Done = ir.GetInsertPoint() == From->end() ? llvm::BasicBlock::Create(ctx.llvm, "", From->getParent())
                                                  : llvm::SplitBlock(From, &*ir.GetInsertPoint());
-  if (auto Branch = From->getTerminator())
+  if (auto Branch = From->getTerminatorOrNull())
     Branch->eraseFromParent();
   auto Three = llvm::BasicBlock::Create(ctx.llvm, "", From->getParent(), Done);
   ir.SetInsertPoint(From);
@@ -2522,11 +2522,11 @@ Converter::SampleImplicit(
   // `Other` reads where not; the branch, with the sample's value and residency joined after it, is at the insert point
   auto Choose = [&](llvm::Value *Fits, auto &&Other, bool Mergeable) {
     auto Whole = ir.CreateCall(QuadAll, {Fits});
-    Whole->addFnAttr(Attribute::ReadNone);
+    Whole->setMemoryEffects(MemoryEffects::none());
     auto Head = ir.GetInsertBlock();
     auto Tail = ir.GetInsertPoint() == Head->end() ? llvm::BasicBlock::Create(ctx.llvm, "", Head->getParent())
                                                    : SplitBlock(Head, &*ir.GetInsertPoint());
-    if (auto Branch = Head->getTerminator())
+    if (auto Branch = Head->getTerminatorOrNull())
       Branch->eraseFromParent();
     auto Own = llvm::BasicBlock::Create(ctx.llvm, "sample_implicit", Head->getParent(), Tail);
     auto Scaled = llvm::BasicBlock::Create(ctx.llvm, "sample_gradients", Head->getParent(), Tail);
@@ -2649,13 +2649,13 @@ Converter::MinMaxFilter(
         )
     );
     auto Any = ir.CreateCall(QuadAny, {Reduces});
-    Any->addFnAttr(Attribute::ReadNone);
+    Any->setMemoryEffects(MemoryEffects::none());
     Taken = Any;
   }
   auto Head = ir.GetInsertBlock();
   auto Tail = ir.GetInsertPoint() == Head->end() ? llvm::BasicBlock::Create(ctx.llvm, "", Head->getParent())
                                                  : SplitBlock(Head, &*ir.GetInsertPoint());
-  if (auto Branch = Head->getTerminator())
+  if (auto Branch = Head->getTerminatorOrNull())
     Branch->eraseFromParent();
   auto Reduce = llvm::BasicBlock::Create(ctx.llvm, "sample_minmax", Head->getParent(), Tail);
   ir.SetInsertPoint(Head);
@@ -2747,7 +2747,7 @@ Converter::MinMaxFilter(
     Reducer->addFnAttr(Attribute::Convergent);
     Reducer->addFnAttr(Attribute::NoUnwind);
     Reducer->addFnAttr(Attribute::WillReturn);
-    Reducer->addFnAttr(Attribute::ReadOnly);
+    Reducer->setMemoryEffects(MemoryEffects::readOnly());
     IRBuilderBase::InsertPointGuard Guard(ir);
     ir.SetInsertPoint(llvm::BasicBlock::Create(ctx.llvm, "entry", Reducer));
     TextureResourceHandle Own = Tex;
@@ -2993,7 +2993,7 @@ Converter::SamplingResidency(
   auto Head = ir.GetInsertBlock();
   auto Tail = ir.GetInsertPoint() == Head->end() ? llvm::BasicBlock::Create(ctx.llvm, "", Head->getParent())
                                                  : SplitBlock(Head, &*ir.GetInsertPoint());
-  if (auto Branch = Head->getTerminator())
+  if (auto Branch = Head->getTerminatorOrNull())
     Branch->eraseFromParent();
   auto Check = llvm::BasicBlock::Create(ctx.llvm, "sample_residency", Head->getParent(), Tail);
   ir.SetInsertPoint(Head);
@@ -3117,7 +3117,7 @@ Converter::Gather(
     auto Head = ir.GetInsertBlock();
     auto Tail = ir.GetInsertPoint() == Head->end() ? llvm::BasicBlock::Create(ctx.llvm, "", Head->getParent())
                                                    : SplitBlock(Head, &*ir.GetInsertPoint());
-    if (auto Branch = Head->getTerminator())
+    if (auto Branch = Head->getTerminatorOrNull())
       Branch->eraseFromParent();
     auto Exact = llvm::BasicBlock::Create(ctx.llvm, "gather_zero_reference", Head->getParent(), Tail);
     auto Native = llvm::BasicBlock::Create(ctx.llvm, "gather_compare", Head->getParent(), Tail);
@@ -3209,7 +3209,7 @@ Converter::ComparePointAtZero(
   auto Head = ir.GetInsertBlock();
   auto Tail = ir.GetInsertPoint() == Head->end() ? llvm::BasicBlock::Create(ctx.llvm, "", Head->getParent())
                                                  : SplitBlock(Head, &*ir.GetInsertPoint());
-  if (auto Branch = Head->getTerminator())
+  if (auto Branch = Head->getTerminatorOrNull())
     Branch->eraseFromParent();
   auto Exact = llvm::BasicBlock::Create(ctx.llvm, "sample_compare_zero", Head->getParent(), Tail);
   ir.SetInsertPoint(Head);
@@ -3267,7 +3267,7 @@ Converter::CustomBorder(
   auto Head = ir.GetInsertBlock();
   auto Tail = ir.GetInsertPoint() == Head->end() ? llvm::BasicBlock::Create(ctx.llvm, "", Head->getParent())
                                                  : SplitBlock(Head, &*ir.GetInsertPoint());
-  if (auto Branch = Head->getTerminator())
+  if (auto Branch = Head->getTerminatorOrNull())
     Branch->eraseFromParent();
   auto Custom = llvm::BasicBlock::Create(ctx.llvm, "custom_border", Head->getParent(), Tail);
   ir.SetInsertPoint(Head);
@@ -3806,7 +3806,7 @@ Converter::MaskedSumOfAbsDiff(llvm::Value *Ref, llvm::Value *Src, llvm::Value *A
 
   auto &Context = air.getContext();
   auto Attrs = AttributeList::get(
-      Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+      Context, {{~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
@@ -3894,7 +3894,7 @@ Converter::DomainGetPatchIndex(llvm::Value *WorkloadIndex, llvm::Value *DataPtr)
                 {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::readOnly())}}
   );
 
   SmallVector<Value *> Ops;
@@ -3920,7 +3920,7 @@ Converter::DomainGetLocation(llvm::Value *WorkloadIndex, llvm::Value *ThreadInde
                 {3U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::readOnly())}}
   );
 
   SmallVector<Value *> Ops;
@@ -3959,7 +3959,7 @@ Converter::DomainGetGroupLayout(
                 {4U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::readOnly())}}
   );
   SmallVector<Value *> Ops{
       First, End, Lane, DataPtr, Templates ? Templates : llvm::Constant::getNullValue(ir.getInt32Ty()->getPointerTo(1))
@@ -3986,7 +3986,7 @@ Converter::DomainGetGroupLocation(
                 {5U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::readOnly())}}
   );
   SmallVector<Value *> Ops{
       First, End, ThreadIndex, Layout, DataPtr,
@@ -4056,7 +4056,7 @@ Converter::DomainGetPrimitiveLocation(
                 {6U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::readOnly())}}
   );
 
   uint32_t Vertices = Primitive == TessellatorOutputPrimitive::point ? 1
@@ -4099,7 +4099,7 @@ Converter::DomainGetPieceLocation(
                 {6U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::readOnly())}}
   );
   SmallVector<Value *> Ops{
       WorkloadIndex, First, ThreadIndex, air.getInt(Count), air.getInt(PrimitiveVertices(Primitive)),

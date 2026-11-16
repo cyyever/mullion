@@ -616,11 +616,10 @@ convert_dxbc_geometry_shader(
   SM50_SHADER_STREAM_OUTPUT_DATA *so = nullptr;
   args_get_data<SM50_SHADER_STREAM_OUTPUT, SM50_SHADER_STREAM_OUTPUT_DATA>(pArgs, &so);
   uint32_t rasterized_stream = so ? so->rasterized_stream : 0;
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
-    metal_version = sm50_common->metal_version;
     shader_flags = sm50_common->flags;
   }
   SM50_SHADER_ROOT_SIGNATURE_DATA *rootsig = nullptr;
@@ -1827,7 +1826,7 @@ convert_null_geometry_shader(
   func_signature.DefineInput(air::InputMesh{1, 1, air::MeshOutputTopology::Point});
   auto [function, function_metadata] = func_signature.CreateFunction(name, context, module, 0, false);
   llvm::IRBuilder<> builder(llvm::BasicBlock::Create(context, "entry", function));
-  setup_metal_version(module, SM50_SHADER_METAL_310);
+  setup_metal_version(module, SM50_SHADER_METAL_400);
   builder.CreateRetVoid();
   module.getOrInsertNamedMetadata("air.mesh")->addOperand(function_metadata);
   return llvm::Error::success();
@@ -1890,11 +1889,7 @@ convert_pass_through_geometry_shader(
   // a patch reaches the rasterizer only through a tessellator or a geometry shader
   if (!own.count || primitive >= D3D11_SB_PRIMITIVE_1_CONTROL_POINT_PATCH)
     return llvm::make_error<UnsupportedFeature>("a primitive that only a geometry shader can take");
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
-  SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
-  if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common))
-    metal_version = sm50_common->metal_version;
-
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   air::AirType types(context);
   air::FunctionSignatureBuilder func_signature;
   uint32_t payload_idx =
@@ -2513,11 +2508,10 @@ convert_dxbc_vertex_for_geometry_shader(
   if (args_get_data<SM50_SHADER_PSO_GEOMETRY_SHADER, SM50_SHADER_PSO_GEOMETRY_SHADER_DATA>(pArgs, &pso_data)) {
     is_strip = pso_data->strip_topology;
   }
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
-    metal_version = sm50_common->metal_version;
     shader_flags = sm50_common->flags;
   }
   SM50_SHADER_ROOT_SIGNATURE_DATA *rootsig = nullptr;
