@@ -1253,6 +1253,8 @@ llvm::Error convert_dxbc_compute_shader(
 
   auto [function, function_metadata] =
     func_signature.CreateFunction(name, context, module, 0, false);
+  if (shader_flags & SM50_SHADER_FLAG_GUARD_CBUFFER_LOADS)
+    function->addFnAttr("mullion.guard-cbuffer-loads");
 
   auto entry_bb = llvm::BasicBlock::Create(context, "entry", function);
   auto epilogue_bb = llvm::BasicBlock::Create(context, "epilogue", function);
