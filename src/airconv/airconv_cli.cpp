@@ -75,13 +75,13 @@ static cl::opt<bool>
   OptLevelO2("O2", cl::desc("Optimization level 2. Similar to clang -O2. "));
 
 static cl::opt<bool> PreserveBitcodeUseListOrder(
-  "preserve-bc-uselistorder",
+  "air-preserve-bc-uselistorder",
   cl::desc("Preserve use-list order when writing LLVM bitcode."),
   cl::init(false), cl::Hidden
 );
 
 static cl::opt<bool> PreserveAssemblyUseListOrder(
-  "preserve-ll-uselistorder",
+  "air-preserve-ll-uselistorder",
   cl::desc("Preserve use-list order when writing LLVM assembly."),
   cl::init(false), cl::Hidden
 );
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
   }
 
   SM50_SHADER_COMMON_DATA data;
-  data.metal_version = SM50_SHADER_METAL_320;
+  data.metal_version = SM50_SHADER_METAL_400;
   data.flags = NoCustomBorder ? SM50_SHADER_FLAG_NO_CUSTOM_BORDER : SM50_SHADER_FLAG{};
   data.simd_width = 0; // no device to ask; a vertex shader's wave has no lane count here
   data.next = 0;
@@ -457,7 +457,10 @@ int main(int argc, char **argv) {
     M.print(Out->os(), nullptr, PreserveAssemblyUseListOrder);
   } else if (EmitMetallib) {
     mullion::metallib::MetallibWriter writer;
-    writer.Write(M, Out->os());
+    if (auto error = writer.Write(M, Out->os())) {
+      errs() << toString(std::move(error)) << '\n';
+      return 1;
+    }
   } else {
     WriteBitcodeToFile(
       M, Out->os(), PreserveBitcodeUseListOrder, nullptr, true

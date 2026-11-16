@@ -9,6 +9,9 @@
 #include "llvm/Support/raw_ostream.h"
 #include <cmath>
 #include <format>
+#include <algorithm>
+#include <array>
+#include <string_view>
 
 namespace llvm::air {
 
@@ -362,11 +365,10 @@ AIRBuilder::CreateSampleCommon(
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
           {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::Convergent)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -468,11 +470,10 @@ AIRBuilder::CreateSampleCmpCommon(
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
           {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::Convergent)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -555,10 +556,9 @@ AIRBuilder::CreateSampleGrad(
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
           {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -672,8 +672,8 @@ AIRBuilder::CreateRead(
     auto Fn = Head->getParent();
     auto Tail = builder.GetInsertPoint() == Head->end() ? BasicBlock::Create(getContext(), "", Fn)
                                                         : Head->splitBasicBlock(builder.GetInsertPoint());
-    if (Head->getTerminator())
-      Head->getTerminator()->eraseFromParent();
+    if (auto *Terminator = Head->getTerminatorOrNull())
+      Terminator->eraseFromParent();
     auto Single = BasicBlock::Create(getContext(), "", Fn, Tail);
     auto Multiple = BasicBlock::Create(getContext(), "", Fn, Tail);
     builder.SetInsertPoint(Head);
@@ -707,10 +707,9 @@ AIRBuilder::CreateRead(
       {
           {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -719,6 +718,21 @@ AIRBuilder::CreateRead(
 
   Tys.push_back(getTextureHandleType(Texture));
   Ops.push_back(Handle);
+
+  auto *Language = getModule()->getNamedMetadata("air.language_version");
+  const bool Metal4 = Language && Language->getNumOperands() &&
+      cast<ConstantInt>(cast<ConstantAsMetadata>(Language->getOperand(0)->getOperand(1))->getValue())->getZExtValue() >= 4;
+  if (Metal4) {
+    // AIR 2.8 texture reads take the implementation's dedicated read sampler.
+    auto ReadSampler = getModule()->getOrInsertFunction(
+        "air.get_read_sampler", FunctionType::get(getSamplerHandleType(), false),
+        AttributeList::get(Context, {
+            {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::inaccessibleMemOnly(ModRefInfo::Ref))},
+            {~0U, Attribute::get(Context, Attribute::NoUnwind)},
+            {~0U, Attribute::get(Context, Attribute::WillReturn)}}));
+    Tys.push_back(getSamplerHandleType());
+    Ops.push_back(builder.CreateCall(ReadSampler));
+  }
 
   if (TexInfo.is_depth) {
     Tys.push_back(getIntTy());
@@ -741,6 +755,13 @@ AIRBuilder::CreateRead(
   if (TexInfo.is_ms) {
     Tys.push_back(getIntTy());
     Ops.push_back(SampleIndexOrCubeFace);
+  }
+
+  if (Metal4 && !TexInfo.is_cube && !TexInfo.is_ms &&
+      (TexInfo.coord_dimension == 2 || TexInfo.coord_dimension == 3)) {
+    auto *OffsetType = getTextureRWPositionType(Texture);
+    Tys.push_back(OffsetType);
+    Ops.push_back(Constant::getNullValue(OffsetType));
   }
 
   if (TexInfo.is_mipmaped) {
@@ -848,10 +869,9 @@ AIRBuilder::CreateGather(
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
           {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -938,10 +958,9 @@ AIRBuilder::CreateGatherCompare(
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
           {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -1019,8 +1038,8 @@ AIRBuilder::CreateTextureQuery(const Texture &Texture, Value *Handle, Texture::Q
     auto Fn = Head->getParent();
     auto Tail = builder.GetInsertPoint() == Head->end() ? BasicBlock::Create(getContext(), "", Fn)
                                                         : Head->splitBasicBlock(builder.GetInsertPoint());
-    if (Head->getTerminator())
-      Head->getTerminator()->eraseFromParent();
+    if (auto *Terminator = Head->getTerminatorOrNull())
+      Terminator->eraseFromParent();
     auto Single = BasicBlock::Create(getContext(), "", Fn, Tail);
     auto Multiple = BasicBlock::Create(getContext(), "", Fn, Tail);
     builder.SetInsertPoint(Head);
@@ -1055,10 +1074,9 @@ AIRBuilder::CreateTextureQuery(const Texture &Texture, Value *Handle, Texture::Q
       {
           {1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -1104,11 +1122,10 @@ AIRBuilder::CreateCalculateLOD(const Texture &Texture, Value *Handle, Value *Sam
           {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
           {2U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
           {2U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
           {~0U, Attribute::get(Context, Attribute::AttrKind::Convergent)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
       }
   );
 
@@ -1184,7 +1201,7 @@ AIRBuilder::CreateGetNumSamples() {
       {
           {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
           {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-          {~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+          {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
       }
   );
 
@@ -1208,7 +1225,7 @@ AIRBuilder::CreateSamplePos(Value *SampleCount, Value *Index) {
   auto Attrs = AttributeList::get(
       Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())}}
   );
   auto Fn = getModule()->getOrInsertFunction(
       "mullion.sample_pos.i32", FunctionType::get(getFloatTy(2), {getIntTy(), getIntTy()}, false), Attrs
@@ -1363,7 +1380,7 @@ AIRBuilder::CreateFMA(Value *X, Value *Y, Value *Z) {
   }
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+      Context, {{~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
@@ -1404,7 +1421,7 @@ AIRBuilder::CreateDotProduct(Value *LHS, Value *RHS) {
 
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+      Context, {{~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
@@ -1430,7 +1447,7 @@ Value *
 AIRBuilder::CreateCountZero(Value *Val, bool TrailingZero) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+      Context, {{~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
@@ -1456,7 +1473,7 @@ Value *
 AIRBuilder::CreateConvertToFloat(Value *Val, Signedness SrcSign) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+      Context, {{~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
@@ -1477,7 +1494,7 @@ Value *
 AIRBuilder::CreateConvertToHalf(Value *Val, Signedness SrcSign) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+      Context, {{~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
@@ -1498,7 +1515,7 @@ Value *
 AIRBuilder::CreateConvertToInteger(Value *Val, Signedness Sign, uint32_t Bits) {
   auto &Context = getContext();
   auto Attrs = AttributeList::get(
-      Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)},
+      Context, {{~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
@@ -1548,8 +1565,7 @@ AIRBuilder::CreateDeviceCoherentLoad(Type *Ty, Value *Ptr) {
   auto Attrs = AttributeList::get(
       Context, {{1U, Attribute::getWithCaptureInfo(Context, CaptureInfo::none())},
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
-                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoFree)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoSync)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
@@ -1613,8 +1629,7 @@ AIRBuilder::CreateInterpolateAtCenter(Value *Interpoant, bool Perspective) {
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1633,8 +1648,7 @@ AIRBuilder::CreateInterpolateAtCentroid(Value *Interpoant, bool Perspective) {
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1694,8 +1708,7 @@ AIRBuilder::CreateInterpolateAtOffset(Value *Interpoant, Value *Offset, bool Per
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))}}
   );
 
   auto Fn = getModule()->getOrInsertFunction(
@@ -1714,8 +1727,7 @@ AIRBuilder::CreateGetVertexValue(Value *VertexValue, Type *Ty, Value *Index) {
                 {1U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly())},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadOnly)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::argMemOnly(ModRefInfo::Ref))}}
   );
   auto Fn = getModule()->getOrInsertFunction(
       "air.get_vertex_value" +
@@ -1959,7 +1971,7 @@ AIRBuilder::CreateFPUnOp(FPUnOp Op, Value *Operand, bool FastVariant) {
   auto Attrs = AttributeList::get(
       Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())}}
   );
   auto OperandType = Operand->getType();
 
@@ -2017,7 +2029,7 @@ AIRBuilder::CreateFPBinOp(FPBinOp Op, Value *LHS, Value *RHS, bool FastVariant) 
   auto Attrs = AttributeList::get(
       Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())}}
   );
   auto OperandType = LHS->getType();
 
@@ -2048,7 +2060,7 @@ AIRBuilder::CreateIntUnOp(IntUnOp Op, Value *Operand) {
   auto Attrs = AttributeList::get(
       Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())}}
   );
   auto OperandType = Operand->getType();
 
@@ -2076,7 +2088,7 @@ AIRBuilder::CreateIntBinOp(IntBinOp Op, Value *LHS, Value *RHS, bool Signed) {
   auto Attrs = AttributeList::get(
       Context, {{~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)},
-                {~0U, Attribute::get(Context, Attribute::AttrKind::ReadNone)}}
+                {~0U, Attribute::getWithMemoryEffects(Context, MemoryEffects::none())}}
   );
   auto OperandType = LHS->getType();
 
@@ -2116,47 +2128,35 @@ AIRBuilder::CreateAtomicRMW(AtomicRMWInst::BinOp Op, Value *Ptr, Value *Val) {
     debug << "invalid operation: atomicrmw: not a valid address space.\n";
     return nullptr; // TODO
   }
-  Signedness Sign = Signedness::Unsigned;
-  switch (Op) {
-  case llvm::AtomicRMWInst::Add:
-    FnName += "add";
-    break;
-  case llvm::AtomicRMWInst::Sub:
-    FnName += "sub";
-    break;
-  case llvm::AtomicRMWInst::And:
-    FnName += "and";
-    break;
-  case llvm::AtomicRMWInst::Or:
-    FnName += "or";
-    break;
-  case llvm::AtomicRMWInst::Xor:
-    FnName += "xor";
-    break;
-  case llvm::AtomicRMWInst::Max:
-    Sign = Signedness::Signed;
-    FnName += "max";
-    break;
-  case llvm::AtomicRMWInst::Min:
-    Sign = Signedness::Signed;
-    FnName += "min";
-    break;
-  case llvm::AtomicRMWInst::UMax:
-    FnName += "max";
-    break;
-  case llvm::AtomicRMWInst::UMin:
-    FnName += "min";
-    break;
-  case llvm::AtomicRMWInst::Xchg:
-    FnName += "xchg";
-    Sign = Signedness::DontCare;
-    break;
-  default:
-    FnName += "<invalid atomic op>";
-    break;
+  struct Operation {
+    AtomicRMWInst::BinOp Code;
+    std::string_view Name;
+    Signedness Sign;
+  };
+  static constexpr std::array Operations{
+      Operation{AtomicRMWInst::Add, "add", Signedness::Unsigned},
+      Operation{AtomicRMWInst::Sub, "sub", Signedness::Unsigned},
+      Operation{AtomicRMWInst::And, "and", Signedness::Unsigned},
+      Operation{AtomicRMWInst::Or, "or", Signedness::Unsigned},
+      Operation{AtomicRMWInst::Xor, "xor", Signedness::Unsigned},
+      Operation{AtomicRMWInst::Max, "max", Signedness::Signed},
+      Operation{AtomicRMWInst::Min, "min", Signedness::Signed},
+      Operation{AtomicRMWInst::UMax, "max", Signedness::Unsigned},
+      Operation{AtomicRMWInst::UMin, "min", Signedness::Unsigned},
+      Operation{AtomicRMWInst::Xchg, "xchg", Signedness::DontCare},
+  };
+  static_assert(std::ranges::all_of(Operations, [](const auto &Entry) {
+    return !Entry.Name.empty() && std::ranges::count(Operations, Entry.Code, &Operation::Code) == 1;
+  }), "atomic operation names must be nonempty and operation codes unique");
+  auto Entry = std::ranges::find(Operations, Op, &Operation::Code);
+  if (Entry == Operations.end()) {
+    debug << "invalid operation: unsupported atomicrmw.\n";
+    return nullptr;
   }
   auto TyOp = Val->getType();
-  FnName += getTypeOverloadSuffix(TyOp, Sign, TyPtr->getAddressSpace());
+  FnName += Entry->Name;
+  // AIR atomics overload on the value, not the pointer; global/local already names its address space.
+  FnName += getTypeOverloadSuffix(TyOp, Entry->Sign);
 
   auto &Context = getContext();
   auto Attrs = AttributeList::get(

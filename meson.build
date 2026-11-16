@@ -116,7 +116,7 @@ xcrun = find_program('xcrun')
 
 metalir_generator = generator(xcrun,
   output    : [ '@BASENAME@.air'],
-  arguments : [ '-sdk', 'macosx', 'metal', '-o', '@OUTPUT@', '-c', '@INPUT@', '@EXTRA_ARGS@'],
+  arguments : [ '-sdk', 'macosx', 'metal', '-o', '@OUTPUT@', '-c', '@INPUT@', '-std=metal4.0', '--target=air64-apple-macos26.0', '@EXTRA_ARGS@'],
 )
 
 metallib_generator = generator(xcrun,
@@ -207,10 +207,9 @@ if mullion_crossbuild
   add_project_arguments(['-arch', native_compiler_arch], language: 'c',  native: true)
   add_project_arguments(['-arch', native_compiler_arch], language: 'cpp',  native: true)
   add_project_link_arguments(['-arch', native_compiler_arch], language: 'cpp',  native: true)
-  # the oldest macOS whose APIs the Metal bridge uses without asking whether they are there (residency sets, row-major
-  # matrices in acceleration structures); what is newer is asked for
-  add_project_arguments('-mmacosx-version-min=15.0', language: ['c', 'cpp'], native: true)
-  add_project_link_arguments('-mmacosx-version-min=15.0', language: ['c', 'cpp'], native: true)
+  # Metal 4 is the minimum runtime contract.
+  add_project_arguments('-mmacosx-version-min=26.0', language: ['c', 'cpp'], native: true)
+  add_project_link_arguments('-mmacosx-version-min=26.0', language: ['c', 'cpp'], native: true)
 endif
 
 subdir('libs')

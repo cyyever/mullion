@@ -3,7 +3,7 @@
 // entire GPU such that other groups can see writes"
 // (https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-rwstructuredbuffer).
 // independent groups and memory barriers without sync keep identical compiled bytes with the correction on or
-// off (SM50_SHADER_FLAG_COHERENT_GROUP_SYNC). a device barrier already has the required scope. both Metal versions
+// off (SM50_SHADER_FLAG_COHERENT_GROUP_SYNC). a device barrier already has the required scope. Metal 4
 // are checked: 3.1 lowers to a barrier, 3.2 to a fence and a barrier. persistent checks the communicating groups'
 // written nodes and leaves; this checks selection without using timing to detect an unnecessary device fence.
 #include "d3d12_test.hpp"
@@ -96,7 +96,7 @@ main(int argc, char **argv) {
   for (UINT coherent = 0; coherent < 2; coherent++)
     for (UINT reads = 0; reads < 2; reads++)
       for (UINT sync = 0; sync < Barriers; sync++)
-        for (auto version : {SM50_SHADER_METAL_310, SM50_SHADER_METAL_320}) {
+        for (auto version : {SM50_SHADER_METAL_400}) {
           step("coherent %u, loop read %u, barrier %u, Metal %u", coherent, reads, sync, (UINT)version);
           sm50_shader_t shader{};
           sm50_error_t error{};

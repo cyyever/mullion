@@ -17,7 +17,7 @@ Mullion is a pre-release. Get it from [releases](https://github.com/dttdrv/mulli
 
 ## What you need
 
-- A Mac with Apple silicon, M1 or later, on macOS 15 or later.
+- A Mac with Apple silicon, M1 or later, on macOS 26 or later, with Metal 4 support.
 - Wine or CrossOver. Stock Wine works, without patches or DLL overrides.
 - A 64-bit game, or a 32-bit one that uses Direct3D 10 or 11. Direct3D 12 needs a 64-bit game.
 
@@ -63,7 +63,7 @@ has God of War Ragnarök and 3DMark too, with screenshots.
 
 | API | Feature level | |
 |---|---|---|
-| Direct3D 12 | up to 12_2 | On Metal 4 where the GPU has it, and on Metal 3 otherwise. |
+| Direct3D 12 | up to 12_2 | Requires Metal 4. |
 | Direct3D 11 | 11_1 | |
 | Direct3D 10 and 10.1 | 10_1 | Runs on the Direct3D 11 implementation. |
 
