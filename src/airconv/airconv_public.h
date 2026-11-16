@@ -580,6 +580,8 @@ enum SM50_SHADER_FLAG {
   /* no sampler reduces where Metal cannot (SM50_SAMPLER_REDUCTION): samples leave out the minimum and maximum filters'
      emulation */
   SM50_SHADER_FLAG_NO_MINMAX_FILTER = 1 << 9,
+  /* ICB compute pipelines report invalid reads through the shader-global constant-buffer zero row. */
+  SM50_SHADER_FLAG_GUARD_CBUFFER_LOADS = 1 << 10,
 };
 
 struct SM50_SHADER_COMMON_DATA {
