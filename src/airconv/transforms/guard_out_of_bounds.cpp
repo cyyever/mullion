@@ -2,28 +2,44 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstIterator.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 namespace llvm::air {
 
-// the select a bounds check made, which InstCombine may have turned to `select(outside, null, pointer)`
+// A null address suppresses an access. ICB compute pipelines also guard zero-row loads:
+// Metal shader validation reports invalid reads of the shader-global fallback with
+// supportIndirectCommandBuffers enabled, including for Apple-compiled MSL.
+static bool
+Fallback(Value *Pointer, bool Load) {
+  if (isa<ConstantPointerNull>(Pointer))
+    return true;
+  auto Global = dyn_cast<GlobalVariable>(Pointer->stripPointerCasts());
+  return Load && Global && Global->getName() == "mullion.zero_row" && Global->isConstant() &&
+         Global->hasInitializer() && Global->getInitializer()->isNullValue();
+}
+
 static SelectInst *
-Bounded(Value *Pointer) {
+Bounded(Value *Pointer, bool Load = false) {
+  // Scalar components can address a field of the selected row.
+  while (auto GEP = dyn_cast_or_null<GetElementPtrInst>(Pointer))
+    Pointer = GEP->getPointerOperand();
   auto Select = dyn_cast_or_null<SelectInst>(Pointer);
-  return Select && (isa<ConstantPointerNull>(Select->getFalseValue()) || isa<ConstantPointerNull>(Select->getTrueValue()))
-             ? Select
-             : nullptr;
+  return Select && (Fallback(Select->getFalseValue(), Load) || Fallback(Select->getTrueValue(), Load)) ? Select
+                                                                                                       : nullptr;
 }
 
 PreservedAnalyses
 GuardOutOfBoundsPass::run(Function &F, FunctionAnalysisManager &AM) {
+  const bool GuardConstants = F.hasFnAttribute("mullion.guard-cbuffer-loads");
+  F.removeFnAttr("mullion.guard-cbuffer-loads");
   SmallVector<std::pair<Instruction *, SelectInst *>> Accesses;
   SmallSetVector<SelectInst *, 8> Selects;
   for (auto &I : instructions(F)) {
     SelectInst *Select = nullptr;
     if (auto Pointer = getLoadStorePointerOperand(&I))
-      Select = Bounded(Pointer);
+      Select = Bounded(Pointer, GuardConstants && isa<LoadInst>(I));
     else if (auto RMW = dyn_cast<AtomicRMWInst>(&I))
       Select = Bounded(RMW->getPointerOperand());
     else if (auto Exchange = dyn_cast<AtomicCmpXchgInst>(&I))
@@ -37,7 +53,7 @@ GuardOutOfBoundsPass::run(Function &F, FunctionAnalysisManager &AM) {
   }
   for (auto [I, Select] : Accesses) {
     auto Head = I->getParent();
-    bool Inverted = isa<ConstantPointerNull>(Select->getTrueValue());
+    bool Inverted = Fallback(Select->getTrueValue(), GuardConstants && isa<LoadInst>(I));
     auto Inside = Inverted ? BinaryOperator::CreateNot(Select->getCondition(), "", I) : Select->getCondition();
     auto Then = SplitBlockAndInsertIfThen(Inside, I, false);
     auto Tail = I->getParent();
@@ -53,7 +69,7 @@ GuardOutOfBoundsPass::run(Function &F, FunctionAnalysisManager &AM) {
   for (auto Select : Selects)
     if (Select->use_empty())
       Select->eraseFromParent();
-  return Accesses.empty() ? PreservedAnalyses::all() : PreservedAnalyses::none();
+  return Accesses.empty() && !GuardConstants ? PreservedAnalyses::all() : PreservedAnalyses::none();
 }
 
 } // namespace llvm::air

@@ -138,3 +138,8 @@ test('air_attributes', executable('air_attributes', 'air_attributes.cpp',
   include_directories : llvm_include_path_darwin,
   dependencies : airconv_dep_darwin,
   native : true), suite : 'host')
+
+test('metal_icb_zero_row', executable('metal_icb_zero_row', 'metal_icb_zero_row.cpp',
+  cpp_args : ['-x', 'objective-c++', '-fobjc-arc'],
+  link_args : ['-framework', 'Foundation', '-framework', 'Metal'],
+  native : true), suite : 'native-metal')

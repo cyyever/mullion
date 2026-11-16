@@ -105,10 +105,9 @@ llvm::Value *
 Converter::LoadConstantBuffer(const ConstantBufferDescriptor &Buffer, llvm::Value *Row, int Component, mask_t Dwords) {
   auto TyIntVec4 = air.getIntTy(4);
   auto RowPointer = ir.CreateGEP(TyIntVec4, Buffer.Pointer, Row);
-  // rows past the bound buffer's size read 0 (D3D11.3 7.5); root CBVs carry no size. such a row's address is a row of
-  // zeros in the shader's own constant memory: Apple's compiler keeps a constant row's load a uniform load when only
-  // its address is chosen, where choosing the value it loaded (or the row) made each load the threads' own, about 25
-  // times the GPU time of a shader that reads hundreds of constant rows (tests/perf cbv_rows, dttdrv/mullion#32).
+  // Rows past the bound buffer's size read 0 (D3D11.3 7.5); root CBVs carry no size.
+  // Keep the zero-row select through optimization. For ICB compute pipelines, GuardOutOfBoundsPass
+  // lowers it to a guarded load to avoid Metal shader validation errors on shader-global reads.
   // MULLION_AIRCONV_SKIP=cbuffer-bounds leaves the check out, to measure what it costs (it is in the shader cache's key)
   static const bool skip = [] {
     auto names = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
