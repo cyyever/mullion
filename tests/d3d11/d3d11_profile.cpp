@@ -284,6 +284,10 @@ int main(int argc, char **argv) {
     if (!expect(path != nullptr, "Wine path conversion failed"))
       return verdict();
     SetEnvironmentVariableA("MULLION_DIAG_PATH", path);
+    SetEnvironmentVariableA("MULLION_TRACE_DIR", path);
+    SetEnvironmentVariableA("MULLION_SHADER_DUMP_PATH", nullptr);
+    const bool trace_shaders = setting && !strcmp(setting, "profile");
+    SetEnvironmentVariableA("MULLION_TRACE_SHADER", trace_shaders ? "heavy" : nullptr);
     HeapFree(GetProcessHeap(), 0, path);
     SetEnvironmentVariableA("MULLION_DIAG", setting);
     std::string command = std::string("\"") + exe + "\" child \"" + directory + "\"";
@@ -314,6 +318,24 @@ int main(int argc, char **argv) {
     facts >> burst;
     expect(bool(facts) && burst > 0, "counter capacity facts missing");
     facts.close();
+    const auto shader_dir = std::filesystem::path(directory) / "shaders";
+    if (trace_shaders) {
+      std::set<std::string> expected, dumped;
+      for (auto *blob : {vs.Get(), ps[0].Get(), ps[1].Get(), cs.Get()})
+        expected.emplace((const char *)blob->GetBufferPointer(), blob->GetBufferSize());
+      if (expect(std::filesystem::exists(shader_dir), "shader dumps missing")) {
+        for (const auto &entry : std::filesystem::directory_iterator(shader_dir)) {
+          std::ifstream file(entry.path(), std::ios::binary);
+          dumped.emplace(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        }
+      }
+      expect(dumped == expected, "shader dumps differ from original DXBC");
+    } else {
+      expect(!std::filesystem::exists(shader_dir), "shader dumps written while tracing is off");
+    }
+    std::ifstream trace_file(std::filesystem::path(directory) / "mullion.log");
+    const std::string trace_text((std::istreambuf_iterator<char>(trace_file)), {});
+    trace_file.close();
     using Key = std::pair<std::string, UINT64>;
     std::map<Key, std::vector<std::string>> buffers;
     std::map<Key, std::array<UINT64, 4>> calibrations;
@@ -545,6 +567,15 @@ int main(int argc, char **argv) {
       }
     }
     std::error_code error;
+    if (trace_shaders) {
+      for (const auto &pass : passes) {
+        for (const auto &run : fields(pass[6], '|')) {
+          auto key = run.substr(0, run.find('*'));
+          expect(trace_text.find("D3D11 " + key + " ") != std::string::npos,
+                 "profile pipeline missing shader mapping: %s", key.c_str());
+        }
+      }
+    }
     std::filesystem::remove_all(directory, error);
     expect(!error, "temporary directory removal failed");
   }

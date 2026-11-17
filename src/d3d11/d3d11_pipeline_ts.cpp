@@ -199,6 +199,7 @@ public:
           err.description().getUTF8String());
     }
 
+    TraceGraphicsPipeline(state_rasterization_.handle, *description);
     return this;
   }
 
