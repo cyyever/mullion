@@ -4,3 +4,7 @@
 [submodule "include/native/directx"]
 	path = include/native/directx
 	url = https://github.com/misyltoad/mingw-directx-headers
+[submodule "tests/engines/unity-graphics"]
+	path = tests/engines/unity-graphics
+	url = https://github.com/Unity-Technologies/Graphics.git
+	branch = 6000.1/staging
