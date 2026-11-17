@@ -6,6 +6,7 @@
 #include "d3d11_shader.hpp"
 #include "d3d11_state_object.hpp"
 #include "util_hash.hpp"
+#include "log/trace.hpp"
 
 struct MTL_GRAPHICS_PIPELINE_DESC {
   ManagedShader VertexShader;
@@ -214,5 +215,16 @@ CreateGeometryPipeline(MTLD3D11Device *pDevice, MTL_GRAPHICS_PIPELINE_DESC *pDes
 
 std::unique_ptr<MTLCompiledTessellationMeshPipeline>
 CreateTessellationMeshPipeline(MTLD3D11Device *pDevice, MTL_GRAPHICS_PIPELINE_DESC *pDesc);
+
+// The Metal handle is the Render:<handle> key in the pass profiler.
+inline void TraceGraphicsPipeline(uint64_t handle, const MTL_GRAPHICS_PIPELINE_DESC &desc) {
+  if (!handle || !mullion::trace::On(mullion::trace::Shader))
+    return;
+  auto hash = [](const ManagedShader &shader) { return shader ? shader->sha1().string() : "none"; };
+  mullion::trace::Write(mullion::trace::Shader, mullion::str::format(
+      "D3D11 Render:", handle, " VS=", hash(desc.VertexShader), " PS=", hash(desc.PixelShader),
+      " GS=", hash(desc.GeometryShader), " HS=", hash(desc.HullShader), " DS=", hash(desc.DomainShader),
+      " samples=", desc.SampleCount));
+}
 
 }; // namespace mullion

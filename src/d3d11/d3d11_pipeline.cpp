@@ -109,6 +109,7 @@ public:
       return this;
     }
 
+    TraceGraphicsPipeline(state_.handle, *description);
     TRACE("Compiled 1 PSO");
 
     return this;
@@ -147,7 +148,7 @@ class MTLCompiledComputePipelineImpl
     : public MTLCompiledComputePipeline {
 public:
   MTLCompiledComputePipelineImpl(MTLD3D11Device *pDevice, ManagedShader shader)
-      : device_(pDevice) {
+      : device_(pDevice), shader_hash_(shader->sha1()) {
     ComputeShader = shader->get_shader(ShaderVariantDefault{});
     uint32_t total_tgsize = shader->reflection().ThreadgroupSize[0] *
                             shader->reflection().ThreadgroupSize[1] *
@@ -185,6 +186,7 @@ public:
       return this;
     }
 
+    TRACE_IN(Shader, "D3D11 Compute:", state_.handle, " CS=", shader_hash_.string());
     TRACE("Compiled 1 PSO");
 
     return this;
@@ -201,6 +203,7 @@ private:
   MTLD3D11Device *device_;
   std::atomic_bool ready_;
   CompiledShader *ComputeShader;
+  Sha1Digest shader_hash_;
   WMT::Reference<WMT::ComputePipelineState> state_;
   bool tgsize_is_multiple_of_sgwidth;
 };
