@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <cstring>
 #include <thread>
 
 static const char source[] = R"(
@@ -22,18 +23,31 @@ float4 ps(V v):SV_Target {
  return float4(c.rgb*c.a,c.a);
 })";
 
+static const char mixed_source[] = R"(
+struct V { float4 pos:SV_Position; float4 color:COLOR; float2 uv:TEXCOORD0;
+           float4 unused1:TEXCOORD1; float4 unused2:TEXCOORD2; };
+Texture2D image:register(t0);
+SamplerState ordinary:register(s0);
+SamplerState reduction:register(s1);
+float4 ps(V v):SV_Target {
+ float4 c=image.Sample(ordinary,v.uv)*float4(v.color.rgb,round(v.color.a*255)/255);
+ return float4(c.rgb*c.a,c.a)*0.75 + image.Sample(reduction,v.uv)*0.25;
+})";
+
 int main(int argc, char **argv) {
+  const bool mixed = argc > 1 && std::strcmp(argv[1], "--mixed") == 0;
   ComPtr<ID3D11Device> device;
   ComPtr<ID3D11DeviceContext> ctx;
   CHECK(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
                           nullptr, 0, D3D11_SDK_VERSION, &device, nullptr,
                           &ctx));
-  auto vs_code = compile(source, "vs", "vs"),
-       ps_code = compile(source, "ps", "ps");
+  auto vs_code = compile(source, "vs", "vs");
+  auto ps_code = mixed ? compile(mixed_source, "ps", "ps") : compile(source, "ps", "ps");
   if (!vs_code || !ps_code)
     return 1;
+  printf("mixed=%d ps_bytes=%zu\n", mixed, size_t(ps_code->GetBufferSize()));
   std::vector<char> original;
-  if (argc > 1) {
+  if (argc > 1 && !mixed) {
     std::ifstream f(argv[1], std::ios::binary);
     original.assign(std::istreambuf_iterator<char>(f), {});
     if (original.empty())
@@ -79,6 +93,12 @@ int main(int argc, char **argv) {
   sd.MaxLOD = D3D11_FLOAT32_MAX;
   ComPtr<ID3D11SamplerState> sampler;
   CHECK(device->CreateSamplerState(&sd, &sampler));
+  ComPtr<ID3D11SamplerState> reduction;
+  if (mixed) {
+    sd.Filter = D3D11_FILTER_MINIMUM_MIN_MAG_MIP_LINEAR;
+    CHECK(device->CreateSamplerState(&sd, &reduction));
+    ctx->PSSetSamplers(1, 1, reduction.GetAddressOf());
+  }
   D3D11_BLEND_DESC bd{};
   auto &b = bd.RenderTarget[0];
   b.BlendEnable = TRUE;
@@ -146,6 +166,10 @@ int main(int argc, char **argv) {
         hash =
             (hash ^ ((unsigned char *)mapped.pData)[y * mapped.RowPitch + x]) *
             1099511628211ull;
+    if (frame == 0) {
+      const auto row = static_cast<const unsigned char *>(mapped.pData) + 540 * mapped.RowPitch;
+      printf("center=%02x%02x%02x%02x left=%02x%02x%02x%02x\n", row[3840],row[3841],row[3842],row[3843],row[0],row[1],row[2],row[3]);
+    }
     ctx->Unmap(staging.Get(), 0);
     if (frame && hash != baseline)
       return 1;

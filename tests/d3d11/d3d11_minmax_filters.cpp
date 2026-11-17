@@ -176,7 +176,7 @@ main(int argc, char **argv) {
       }
   // runs of samples whose branches the converter joins where they have one sampler (MergeMinMaxBranchesPass): one
   // that reduces beside one that averages, either way round, and two that reduce differently
-  for (float4 slots : {float4{0, 4}, float4{4, 1}, float4{1, 0}})
+  for (float4 slots : {float4{4, 4}, float4{0, 4}, float4{4, 1}, float4{1, 0}, float4{4, 4}, float4{4, 0}, float4{1, 4}})
     for (float level : {0.5f, 1.0f}) {
       add(6, 2, UINT(slots[0]), {0.3f, 0.4f}, {}, {}, {level, 0, slots[1]});
       add(7, 2, UINT(slots[0]), {0.3f, 0.4f}, {level * 2 / 8}, {0, level * 2 / 8}, {0, 0, slots[1]});
