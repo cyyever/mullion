@@ -9,6 +9,9 @@
 #include "DXBCParser/d3d12tokenizedprogramformat.hpp"
 #include "mullion_tasks.hpp"
 #include "log/log.hpp"
+#include "log/trace.hpp"
+#include "util_env.hpp"
+#include <fstream>
 #include "sha1/sha1_util.hpp"
 #include "util_md5.hpp"
 #include "../d3d10/d3d10_shader.hpp"
@@ -137,23 +140,28 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     }
     virtual const Sha1Digest &sha1() { return sha1_; };
 
-#ifdef MULLION_DEBUG
-    void *bytecode;
-    size_t bytecode_length;
+    std::string dump_bytecode_;
 
-    virtual void dump() {
-      std::fstream dump_out;
-      dump_out.open("shader_dump_" + sha1_.string() + ".cso",
-                    std::ios::out | std::ios::binary);
-      if (dump_out) {
-        dump_out.write((char *)bytecode, bytecode_length);
+    void dump() override {
+      if (dump_bytecode_.empty())
+        return;
+      auto directory = env::getEnvVar("MULLION_SHADER_DUMP_PATH");
+      if (directory.empty()) {
+        directory = trace::WindowsDirectory();
+        if (directory.empty())
+          return;
+        directory += "/shaders";
       }
-      dump_out.close();
-      WARN("shader dumped to ./shader_dump_" + sha1_.string() + ".cso");
+      env::createDirectory(directory);
+      auto path = directory + "/" + sha1_.string() + ".dxbc";
+      std::ofstream output(path, std::ios::binary);
+      output.write(dump_bytecode_.data(), dump_bytecode_.size());
+      output.close();
+      if (!output)
+        ERR("D3D11 shader dump failed: ", path);
+      else
+        TRACE_IN(Shader, "D3D11 shader ", sha1_.string(), " dumped to ", path);
     }
-#else
-    virtual void dump() {}
-#endif
 
     virtual WMT::Reference<WMT::DispatchData> find_cached_variant(Sha1Digest &variant_digest) final {
       auto reader = cache->scache_.getReader();
@@ -263,10 +271,13 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
       if (result != shaders_.end()) {
         return shaders_.at(sha1).get();
       }
+      if (trace::Heavy(trace::Shader)) {
+        shader->dump_bytecode_.assign((const char *)pBytecode, BytecodeLength);
+        shader->dump();
+        std::string().swap(shader->dump_bytecode_);
+      }
 #ifdef MULLION_DEBUG
-      shader->bytecode = malloc(BytecodeLength);
-      shader->bytecode_length = BytecodeLength;
-      memcpy(shader->bytecode, pBytecode, BytecodeLength);
+      shader->dump_bytecode_.assign((const char *)pBytecode, BytecodeLength);
 #endif
       return shaders_.emplace(sha1, std::move(shader)).first->second.get();
     }

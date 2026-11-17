@@ -180,6 +180,8 @@ public:
       if (state_mesh_[1] == nullptr)
         ERR("Failed to create mesh PSO: ", err.description().getUTF8String());
     }
+    TraceGraphicsPipeline(state_mesh_[0].handle, *description);
+    TraceGraphicsPipeline(state_mesh_[1].handle, *description);
     return this;
   }
 
