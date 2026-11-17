@@ -1,4 +1,5 @@
 #include <string_view>
+#include <array>
 #include <unordered_map>
 #include <mutex>
 #include "dxbc_converter.hpp"
@@ -2256,6 +2257,8 @@ struct InitializedShader {
   unsigned references;
 };
 std::mutex initialized_mutex;
+// Bound synchronization storage independently of the shader corpus. Only cache misses take these locks.
+std::array<std::mutex, 256> initialization_locks;
 std::unordered_map<std::string_view, mullion::dxbc::SM50ShaderInternal *> initialized_by_bytecode;
 std::unordered_map<mullion::dxbc::SM50ShaderInternal *, std::unique_ptr<InitializedShader>> initialized;
 } // namespace
@@ -2272,7 +2275,7 @@ AIRCONV_API int SM50Initialize(
   if (!share || !pBytecode || !BytecodeSize || !ppShader)
     return SM50InitializeUncached(pBytecode, BytecodeSize, ppShader, pRefl, ppError);
   std::string_view bytecode(static_cast<const char *>(pBytecode), BytecodeSize);
-  {
+  auto cached = [&] {
     std::lock_guard lock(initialized_mutex);
     if (auto found = initialized_by_bytecode.find(bytecode); found != initialized_by_bytecode.end()) {
       auto &entry = *initialized.at(found->second);
@@ -2282,9 +2285,17 @@ AIRCONV_API int SM50Initialize(
       if (ppError)
         *ppError = nullptr;
       *ppShader = found->second;
-      return 0;
+      return true;
     }
-  }
+    return false;
+  };
+  if (cached())
+    return 0;
+  // A prefix hash only chooses a lock; cache identity still compares the entire bytecode.
+  // Never hold initialized_mutex while waiting or parsing; recheck after another caller publishes.
+  std::lock_guard parsing(initialization_locks[std::hash<std::string_view>{}(bytecode.substr(0, 64)) % initialization_locks.size()]);
+  if (cached())
+    return 0;
   MTL_SHADER_REFLECTION reflection{};
   if (int ret = SM50InitializeUncached(pBytecode, BytecodeSize, ppShader, &reflection, ppError))
     return ret;
