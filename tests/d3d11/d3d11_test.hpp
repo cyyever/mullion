@@ -29,8 +29,9 @@ compile(const char (&hlsl)[N], const char *entry, const char *stage, const std::
   std::vector<std::string> names, values;
   std::vector<D3D_SHADER_MACRO> macros;
   for (auto &d : defines) {
-    names.push_back(d.substr(0, d.find('=')));
-    values.push_back(d.substr(d.find('=') + 1));
+    const auto separator = d.find('=');
+    names.push_back(d.substr(0, separator));
+    values.push_back(separator == std::string::npos ? "1" : d.substr(separator + 1));
   }
   for (size_t i = 0; i < defines.size(); i++)
     macros.push_back({names[i].c_str(), values[i].c_str()});
