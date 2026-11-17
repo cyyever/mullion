@@ -65,3 +65,10 @@ test('metal_icb_zero_row', executable('metal_icb_zero_row', 'metal_icb_zero_row.
   cpp_args : ['-x', 'objective-c++', '-fobjc-arc'],
   link_args : ['-framework', 'Foundation', '-framework', 'Metal'],
   native : true), suite : 'native-metal')
+
+# The query-based rule requires a clang-tidy built with custom-check support.
+air_tidy = find_program('clang-tidy', native : true, required : false)
+if air_tidy.found()
+  test('host_air_tidy', find_program('python3', native : true),
+       args : [files('air_tidy.py'), air_tidy.full_path()], suite : 'host', timeout : 90)
+endif

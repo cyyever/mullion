@@ -1,0 +1,14 @@
+Checks: '-*,custom-air-write-error'
+CustomChecks:
+  - Name: air-write-error
+    Query: |
+      match cxxMemberCallExpr(
+        callee(cxxMethodDecl(hasName("mullion::metallib::MetallibWriter::Write"))),
+        anyOf(hasParent(compoundStmt()),
+              hasParent(exprWithCleanups(hasParent(compoundStmt()))),
+              hasParent(cxxBindTemporaryExpr(hasParent(exprWithCleanups(hasParent(compoundStmt()))))))
+      ).bind("call")
+    Diagnostic:
+      - BindName: call
+        Message: 'Handle the AIR serialization error before publishing the compiled library.'
+        Level: Warning
