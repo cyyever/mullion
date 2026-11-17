@@ -1,4 +1,5 @@
 #include <mutex>
+#include <optional>
 #include <set>
 #include <cstdlib>
 #include <cstring>
@@ -354,8 +355,12 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
   PB.registerLoopAnalyses(LAM);
   PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-  // llvm::StandardInstrumentations SI(true);
-  // SI.registerCallbacks(PIC, &FAM);
+  // Diagnostic-only: LLVM checks after each pass and names the pass that broke the IR.
+  std::optional<StandardInstrumentations> diagnostics;
+  if (auto value = getenv("MULLION_VERIFY_EACH"); value && std::strcmp(value, "1") == 0) {
+    diagnostics.emplace(M.getContext(), false, true);
+    diagnostics->registerCallbacks(PIC, &MAM);
+  }
 
   ModulePassManager MPM;
 
@@ -426,14 +431,12 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
         temp[0] == '3' ? OptimizationLevel::O3 : OptimizationLevel::O2, ThinOrFullLTOPhase::None
     )));
 
-  // MPM.addPass(VerifierPass());
-
   // Optimize the IR!
   MPM.run(M, MAM);
   ContractOutsidePosition(M);
   AvoidNarrowedSignBitCounts(M);
   AvoidConstantDividends(M);
-  return true;
+  return !verifyModule(M, &Error);
 }
 
 void

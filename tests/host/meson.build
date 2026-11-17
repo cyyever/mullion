@@ -150,3 +150,8 @@ if air_tidy.found()
   test('host_air_tidy', find_program('python3', native : true),
        args : [files('air_tidy.py'), air_tidy.full_path()], suite : 'host', timeout : 90)
 endif
+
+optimization_test = executable('host_optimization', 'optimization.cpp',
+  include_directories : llvm_include_path_darwin, dependencies : airconv_dep_darwin, native : true)
+test('host_optimization', optimization_test, suite : 'host')
+test('host_optimization_verify_each', optimization_test, env : ['MULLION_VERIFY_EACH=1'], suite : 'host')
