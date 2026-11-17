@@ -13,7 +13,9 @@ foreach name : ['blending', 'block_values', 'clear_values', 'constant_updates', 
        executable('d3d11_' + name, ['d3d11_' + name + '.cpp'] + d3d11_test_sources.get(name, []),
                   dependencies : d3d11_test_deps + d3d11_test_links.get(name, []),
                   cpp_args : d3d11_test_args.get(name, [])),
-       env : ['MULLION_SHADER_CACHE=0'], timeout : 600)
+       env : ['MULLION_SHADER_CACHE=0'],
+       suite : name in ['shared_fence', 'fence_reached', 'fence_event_handles'] ? ['unity'] : [],
+       timeout : 600)
 endforeach
 if test_d3d12
   on12 = executable('d3d11_on12', 'd3d11_on12.cpp',
