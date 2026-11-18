@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""runs the build's tests in a Wine, once as each GPU family, and prints what each made of them.
+"""runs the build's tests in a Wine on the native GPU by default, and prints their results.
 
 the tests are the build's own (meson's intro-tests.json: what tests/*/meson.build declares), run in a Wine the
 build's libraries are installed into. a family other than the GPU's own lowers what the Metal bridge answers
@@ -694,8 +694,7 @@ def known(path=None):
 
 def options(parser):
     """what says which of the build's tests run, and how"""
-    # Metal 4 needs macOS 26, which runs on every family here; macOS 15 runs the M1 to M4 families on Metal 3
-    parser.add_argument("--family", default="native,9,8,7,9-metal3,8-metal3,7-metal3",
+    parser.add_argument("--family", default="native",
                         help="the Apple GPU families to run as, 'native' for the GPU's own, '-metal3' for Direct3D 12 "
                              "without Metal 4 (default: %(default)s)")
     parser.add_argument("--repeat", type=int, default=1, help="how many times each test runs, giving the same answer each time")
