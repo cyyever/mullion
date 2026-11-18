@@ -75,7 +75,8 @@ static int testPipeline(llvm::Attribute::AttrKind promise) {
     for (auto &block : *module->getFunction("fragment_main"))
       for (auto &inst : block)
         if (auto *call = llvm::dyn_cast<llvm::CallBase>(&inst))
-          call->addFnAttr(promise);
+          if (promise != llvm::Attribute::Speculatable)
+            call->addFnAttr(promise);
     llvm::SmallVector<char, 0> bytes;
     llvm::raw_svector_ostream output(bytes);
     mullion::metallib::MetallibWriter writer;
