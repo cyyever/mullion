@@ -2,6 +2,9 @@
 #include "DXILBitcodeWriter.h"
 #include "DirectXIRPasses/DXILDebugInfo.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Verifier.h"
+#include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Constants.h"
@@ -57,6 +60,10 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
   // LLVM optimizes opaque pointers. AIR requires typed pointers and casts at
   // each differently typed use; keep those serialization-only casts off the
   // module used by the optimizer and the caller.
+  std::string verification;
+  llvm::raw_string_ostream diagnostics(verification);
+  if (llvm::verifyModule(module, &diagnostics))
+    return llvm::createStringError(llvm::inconvertibleErrorCode(), "Invalid input AIR IR: " + verification);
   auto m = llvm::CloneModule(module);
   // Opaque-pointer constant GEPs can use a different element type than their
   // global. Materialize them so the typed AIR casts below also reach their bases.
@@ -68,6 +75,48 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
           if (auto *expression = llvm::dyn_cast<llvm::ConstantExpr>(operand.get()))
             expressions.push_back(expression);
   llvm::convertUsersOfConstantsToInstructions(expressions, nullptr, true, true);
+
+  // Metal's object shader lowering fails on byte-array pointer arithmetic
+  // combined with payload writes. Preserve the stride using an integer element.
+  llvm::SmallPtrSet<const llvm::Function *, 4> objectFunctions;
+  if (auto *objects = m->getNamedMetadata("air.object"))
+    for (auto *entry : objects->operands())
+      objectFunctions.insert(llvm::cast<llvm::Function>(
+          llvm::cast<llvm::ConstantAsMetadata>(entry->getOperand(0))->getValue()));
+  for (auto &f : *m)
+    for (auto &b : f)
+      for (auto &i : b) {
+        if (!objectFunctions.contains(&f))
+          continue;
+        auto *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(&i);
+        if (!gep || gep->getNumIndices() != 1 || gep->getPointerAddressSpace() != 1)
+          continue;
+        if (gep->getSourceElementType()->isIntegerTy(8)) {
+          auto *offset = gep->getOperand(1);
+          auto zeros = llvm::computeKnownBits(offset, m->getDataLayout()).countMinTrailingZeros();
+          if (zeros >= 1) {
+            unsigned shift = std::min(zeros, 2u);
+            auto *element = llvm::IntegerType::get(m->getContext(), 8u << shift);
+            llvm::IRBuilder<> builder(gep);
+            gep->setOperand(1, builder.CreateAShr(offset, shift, "air.element.offset", true));
+            gep->setSourceElementType(element);
+            gep->setResultElementType(element);
+          }
+        }
+        auto *array = llvm::dyn_cast<llvm::ArrayType>(gep->getSourceElementType());
+        if (!array || !array->getElementType()->isIntegerTy(8))
+          continue;
+        auto bytes = array->getNumElements();
+        if (bytes != 2 && bytes != 4 && bytes != 8)
+          continue;
+        auto *element = llvm::IntegerType::get(m->getContext(), bytes * 8);
+        gep->setSourceElementType(element);
+        gep->setResultElementType(element);
+      }
+
+  verification.clear();
+  if (llvm::verifyModule(*m, &diagnostics))
+    return llvm::createStringError(llvm::inconvertibleErrorCode(), "Invalid prepared AIR IR: " + verification);
 
   // LLVM 23 dropped the size operand from lifetime markers. AIR still reads
   // the typed-pointer signature (i64 size, i8* address); emitting the new form
@@ -94,32 +143,6 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
     call->eraseFromParent();
     if (original->use_empty()) original->eraseFromParent();
   }
-
-  // Metal's object shader lowering fails on byte-array pointer arithmetic
-  // combined with payload writes. Preserve the stride using an integer element.
-  llvm::SmallPtrSet<const llvm::Function *, 4> objectFunctions;
-  if (auto *objects = m->getNamedMetadata("air.object"))
-    for (auto *entry : objects->operands())
-      objectFunctions.insert(llvm::cast<llvm::Function>(
-          llvm::cast<llvm::ConstantAsMetadata>(entry->getOperand(0))->getValue()));
-  for (auto &f : *m)
-    for (auto &b : f)
-      for (auto &i : b) {
-        if (!objectFunctions.contains(&f))
-          continue;
-        auto *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(&i);
-        if (!gep || gep->getNumIndices() != 1 || gep->getPointerAddressSpace() != 1)
-          continue;
-        auto *array = llvm::dyn_cast<llvm::ArrayType>(gep->getSourceElementType());
-        if (!array || !array->getElementType()->isIntegerTy(8))
-          continue;
-        auto bytes = array->getNumElements();
-        if (bytes != 2 && bytes != 4 && bytes != 8)
-          continue;
-        auto *element = llvm::IntegerType::get(m->getContext(), bytes * 8);
-        gep->setSourceElementType(element);
-        gep->setResultElementType(element);
-      }
 
   llvm::SmallVector<llvm::Instruction *> insts;
   // Remove unsupported optimization promises before enumerating attribute groups,

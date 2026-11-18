@@ -3,6 +3,7 @@
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -81,6 +82,19 @@ int main() {
     auto message = llvm::toString(std::move(error));
     require(message.find("AIR cannot encode attribute") != std::string::npos, "missing attribute diagnostic");
     require(bytes.empty(), "failure wrote a partial metallib");
+  }
+  {
+    llvm::SMDiagnostic diagnostic;
+    auto invalid = llvm::parseAssemblyString("define i32 @broken() { ret i32 1 }", diagnostic, context);
+    require(bool(invalid), "invalid verifier fixture");
+    invalid->getFunction("broken")->getEntryBlock().getTerminator()->setOperand(
+        0, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 1));
+    llvm::SmallVector<char, 0> bytes;
+    auto error = mullion::air::writeTypedBitcode(*invalid, bytes);
+    require(bool(error), "invalid return type reached AIR serialization");
+    auto message = llvm::toString(std::move(error));
+    require(message.find("Invalid input AIR IR") != std::string::npos, "missing verifier diagnostic");
+    require(bytes.empty(), "invalid IR wrote partial bitcode");
   }
   llvm::outs() << "PASS: AIR attribute round trips and unsupported-attribute errors\n";
 }
