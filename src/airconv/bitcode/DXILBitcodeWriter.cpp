@@ -2266,6 +2266,10 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
   unsigned AbbrevToUse = 0;
   VE.setInstructionID(&I);
   switch (I.getOpcode()) {
+  case Instruction::Freeze:
+    Code = bitc::FUNC_CODE_INST_FREEZE;
+    pushValueAndType(I.getOperand(0), InstID, Vals);
+    break;
   default:
     if (Instruction::isCast(I.getOpcode())) {
       Code = bitc::FUNC_CODE_INST_CAST;
