@@ -3055,20 +3055,16 @@ convert_dxil(
           ir.CreateStore(index, element_of(staged_index, {a(1), ir.getInt32(i)}));
       }
       break;
-    case GetMeshPayload:
-    case DispatchMesh: {
-      // the payload is the stage's, in its own address space: a mesh shader reads it in place, an amplification
-      // shader copies its own there and sets how many mesh threadgroups follow
-      auto local = op == DispatchMesh ? a(4) : call;
-      auto type = GetPointedType(local);
+    case GetMeshPayload: {
+      auto type = GetPointedType(call);
       auto payload = ir.CreateBitCast(
           ctx.resource.payload, type->getPointerTo(ctx.resource.payload->getType()->getPointerAddressSpace())
       );
-      if (op == GetMeshPayload) {
-        if (auto err = retarget(call, payload))
-          return std::move(err);
-        break;
-      }
+      if (auto err = retarget(call, payload))
+        return std::move(err);
+      break;
+    }
+    case DispatchMesh: {
       // DispatchMesh is a group barrier, and takes its arguments from the group's first thread (Mesh Shader spec,
       // "DispatchMesh intrinsic"): the threads build the payload together, and one sends it. a payload built in
       // place needs neither: Metal starts an object threadgroup's mesh grid once all its threads are through
@@ -3077,8 +3073,14 @@ convert_dxil(
       ir.SetInsertPoint(SplitBlockAndInsertIfThen(
           ir.CreateICmpEQ(ctx.resource.thread_id_in_group_flat_arg, ir.getInt32(0)), call, false
       ));
-      if (!direct_payload)
+      if (!direct_payload) {
+        auto local = a(4);
+        auto type = GetPointedType(local);
+        auto payload = ir.CreateBitCast(
+            ctx.resource.payload, type->getPointerTo(ctx.resource.payload->getType()->getPointerAddressSpace())
+        );
         ir.CreateStore(ir.CreateLoad(type, local), payload);
+      }
       // a conservative mesh shader grows each D3D group's triangles in slices, threadgroups along x
       Value *grid = UndefValue::get(FixedVectorType::get(ir.getInt32Ty(), 3));
       for (unsigned i = 0; i < 3; i++)
