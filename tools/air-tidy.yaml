@@ -1,4 +1,4 @@
-Checks: '-*,custom-air-write-error,performance-for-range-copy,bugprone-use-after-move,readability-redundant-control-flow'
+Checks: '-*,custom-air-write-error,performance-for-range-copy,bugprone-use-after-move,readability-redundant-control-flow,modernize-*,-modernize-use-trailing-return-type,-modernize-avoid-c-arrays'
 CustomChecks:
   - Name: air-write-error
     Query: |
