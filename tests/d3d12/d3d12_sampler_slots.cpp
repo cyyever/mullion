@@ -3,14 +3,15 @@
 // (1024 there, as the Metal feature set tables give Apple7 and Apple8 for samplers a stage reaches from an argument
 // buffer, against 500 K from Apple9). a full sampler heap (D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE) of samplers
 // that differ in MinLOD by the GPU's own step of 1/64 makes past 1024 distinct Metal samplers, each with its cube
-// twin, and far below 500 K. emulated as Apple7 or Apple8 (MULLION_GPU_FAMILY) the log names 1024 once; any other GPU
-// says it at most once, with a limit below what was made.
+// twin, and far below 500 K. Query the device capacity for native and emulated families alike: a low-capacity
+// device logs its limit once; a device with enough slots reports no exhaustion.
 // past the limit a sampler samples as the held one of its filters and address modes nearest in LOD clamps. three of
 // MIRROR, the only samplers of that mode, are made first, at MinLOD 6, 2 and 9, and one at MinLOD 3 after the heap is
 // full: it reads the mip a MinLOD 2 sampler reads where the limit is passed, and mip 3 where it is not. the first or
 // the last of the three would read mip 6 or 9. the texture's mips hold their numbers, and SampleLevel asks for mip 0,
 // which the sampler's MinLOD clamps (D3D11.3 7.18.11).
 #include "d3d12_test.hpp"
+#include "../../src/winemetal/winemetal.h"
 #include <fstream>
 #include <iterator>
 
@@ -40,12 +41,24 @@ main(int argc, char **argv) {
   CHECK(SetEnvironmentVariableA("MULLION_LOG_PATH", directory) ? S_OK : E_FAIL);
   CHECK(GetModuleFileNameA(nullptr, exe, sizeof(exe)) ? S_OK : E_FAIL);
   GetEnvironmentVariableA("MULLION_GPU_FAMILY", family, sizeof(family));
-  const bool emulated = !strcmp(family, "7") || !strcmp(family, "8");
 
   step("fill a sampler heap with samplers one LOD step apart");
   ComPtr<ID3D12Device> device;
   CHECK(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device)));
+  auto metal = GetModuleHandleA("winemetal.dll");
+  auto all = reinterpret_cast<decltype(&WMTCopyAllDevices)>(GetProcAddress(metal, "WMTCopyAllDevices"));
+  auto count_devices = reinterpret_cast<decltype(&NSArray_count)>(GetProcAddress(metal, "NSArray_count"));
+  auto at = reinterpret_cast<decltype(&NSArray_object)>(GetProcAddress(metal, "NSArray_object"));
+  auto capacity = reinterpret_cast<decltype(&MTLDevice_maxArgumentBufferSamplerCount)>(
+      GetProcAddress(metal, "MTLDevice_maxArgumentBufferSamplerCount"));
+  auto release = reinterpret_cast<decltype(&NSObject_release)>(GetProcAddress(metal, "NSObject_release"));
+  CHECK(all && count_devices && at && capacity && release ? S_OK : E_FAIL);
+  auto devices = all();
+  CHECK(devices && count_devices(devices) ? S_OK : E_FAIL);
+  const auto sampler_limit = capacity(at(devices, 0));
+  release(devices);
   const UINT count = D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE, steps = 64, lods = 14 * steps + 1;
+  const bool limited = sampler_limit < 2 * lods;
   D3D12_DESCRIPTOR_HEAP_DESC heap_desc{D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, count,
                                        D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE};
   ComPtr<ID3D12DescriptorHeap> heap;
@@ -148,7 +161,7 @@ main(int argc, char **argv) {
   CHECK(readback->Map(0, nullptr, (void **)&read));
   for (UINT i = 0; i < std::size(held); i++)
     expect(read[i] == held[i], "the held sampler at MinLOD %g read mip %g", held[i], read[i]);
-  expect(read[std::size(held)] == (emulated ? held[1] : probe), "family %s: the sampler at MinLOD %g read mip %g",
+  expect(read[std::size(held)] == (limited ? held[1] : probe), "family %s: the sampler at MinLOD %g read mip %g",
          family, probe, read[std::size(held)]);
   readback->Unmap(0, nullptr);
 
@@ -161,7 +174,7 @@ main(int argc, char **argv) {
   size_t first = lines.find(said);
   unsigned limit = first == std::string::npos ? 0 : std::stoul(lines.substr(first + sizeof(said) - 1));
   expect(first == std::string::npos || lines.find(said, first + 1) == std::string::npos, "said more than once");
-  expect(emulated ? limit == 1024 : limit < 2 * lods, "family %s: the limit said is %u", family, limit);
+  expect(limited ? limit == sampler_limit : limit == 0, "family %s: the limit said is %u", family, limit);
   file.close();
   DeleteFileA(path.c_str());
   heap = nullptr;
