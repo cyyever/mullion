@@ -151,7 +151,7 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
     EarlyFPM.addPass(LowerExpectIntrinsicPass());
     EarlyFPM.addPass(SimplifyCFGPass());
     EarlyFPM.addPass(SROAPass(SROAOptions()));
-    EarlyFPM.addPass(EarlyCSEPass());
+    EarlyFPM.addPass(EarlyCSEPass(true /* UseMemorySSA */));
     MPM.addPass(createModuleToFunctionPassAdaptor(std::move(EarlyFPM), true /* ? */));
   }
 
