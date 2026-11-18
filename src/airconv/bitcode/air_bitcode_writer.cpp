@@ -7,6 +7,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/ReplaceConstant.h"
 #include <vector>
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Support/Endian.h"
 
@@ -93,6 +94,32 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
     call->eraseFromParent();
     if (original->use_empty()) original->eraseFromParent();
   }
+
+  // Metal's object shader lowering fails on byte-array pointer arithmetic
+  // combined with payload writes. Preserve the stride using an integer element.
+  llvm::SmallPtrSet<const llvm::Function *, 4> objectFunctions;
+  if (auto *objects = m->getNamedMetadata("air.object"))
+    for (auto *entry : objects->operands())
+      objectFunctions.insert(llvm::cast<llvm::Function>(
+          llvm::cast<llvm::ConstantAsMetadata>(entry->getOperand(0))->getValue()));
+  for (auto &f : *m)
+    for (auto &b : f)
+      for (auto &i : b) {
+        if (!objectFunctions.contains(&f))
+          continue;
+        auto *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(&i);
+        if (!gep || gep->getNumIndices() != 1 || gep->getPointerAddressSpace() != 1)
+          continue;
+        auto *array = llvm::dyn_cast<llvm::ArrayType>(gep->getSourceElementType());
+        if (!array || !array->getElementType()->isIntegerTy(8))
+          continue;
+        auto bytes = array->getNumElements();
+        if (bytes != 2 && bytes != 4 && bytes != 8)
+          continue;
+        auto *element = llvm::IntegerType::get(m->getContext(), bytes * 8);
+        gep->setSourceElementType(element);
+        gep->setResultElementType(element);
+      }
 
   llvm::SmallVector<llvm::Instruction *> insts;
   // Remove unsupported optimization promises before enumerating attribute groups,
