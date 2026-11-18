@@ -54,9 +54,9 @@ public:
   }
 
   template <typename T>
-  auto integer(T value, bool is_signed = false) {
+  auto integer(T value) {
     return metadata(ConstantAsMetadata::get(
-      ConstantInt::get(context, APInt{32, static_cast<uint32_t>(value), is_signed})));
+      ConstantInt::get(context, APInt{32, static_cast<uint32_t>(value)})));
   }
 
   auto BuildTuple() const {
