@@ -142,6 +142,29 @@ classifyPointerType(const Value *V, PointerTypeMap &Map) {
       return Resource;
     }
   }
+  // Recover device buffer elements from their typed accesses instead of
+  // introducing byte pointers into Metal's object payload lowering.
+  bool objectShader = false;
+  if (auto *Inst = dyn_cast<Instruction>(V))
+    if (auto *Objects = Inst->getModule()->getNamedMetadata("air.object"))
+      for (auto *Entry : Objects->operands())
+        objectShader |= cast<ConstantAsMetadata>(Entry->getOperand(0))->getValue() == Inst->getFunction();
+  if (!PointeeTy && objectShader && V->getType()->getPointerAddressSpace() == 1) {
+    for (auto *U : V->users()) {
+      auto *Use = U;
+      if (auto *Cast = dyn_cast<BitCastInst>(Use); Cast && Cast->hasOneUse())
+        Use = *Cast->user_begin();
+      if (auto *GEP = dyn_cast<GetElementPtrInst>(Use))
+        PointeeTy = GEP->getSourceElementType();
+      else if (auto *Load = dyn_cast<LoadInst>(Use))
+        PointeeTy = Load->getType();
+      else if (auto *Store = dyn_cast<StoreInst>(Use))
+        PointeeTy = Store->getValueOperand()->getType();
+      if (PointeeTy && (PointeeTy->isIntegerTy() || PointeeTy->isFloatingPointTy()))
+        break;
+      PointeeTy = nullptr;
+    }
+  }
   // If we were unable to determine the pointee type, set to i8
   // If we were able to determine the pointee type as ptr, set to i8*
   if (!PointeeTy)
