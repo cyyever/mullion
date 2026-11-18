@@ -34,7 +34,8 @@ static int testPipeline(llvm::Attribute::AttrKind promise) {
         ret float %value
       }
       define <4 x float> @fragment_main(ptr addrspace(2) nofree %buffer) nocallback nocreateundeforpoison {
-        %bits = load i32, ptr addrspace(2) %buffer, align 4
+        %loaded = load i32, ptr addrspace(2) %buffer, align 4
+        %bits = freeze i32 %loaded
         %slot = alloca i32, align 4
         call void @llvm.lifetime.start.p0(ptr %slot)
         store i32 %bits, ptr %slot, align 4
