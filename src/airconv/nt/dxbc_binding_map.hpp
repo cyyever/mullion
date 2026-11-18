@@ -52,7 +52,7 @@ using RangeId = uint32_t;
 
 class BindingMap {
 public:
-  virtual ~BindingMap() {};
+  virtual ~BindingMap() = default;
   virtual std::optional<ConstantBufferDescriptor>
   GetConstantBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) = 0;
   virtual std::optional<SamplerDescriptor>
