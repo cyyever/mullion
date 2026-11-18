@@ -36,14 +36,17 @@ RWStructuredBuffer<float4> floats2 : register(u3);
 // sincos, exp and log, are held to the same bound
 constexpr float kTranscendental = 0.0008f;
 
-static uint32_t
+static constexpr uint32_t
 reverse_bits(uint32_t value) {
   value = ((value & 0x55555555u) << 1) | ((value >> 1) & 0x55555555u);
   value = ((value & 0x33333333u) << 2) | ((value >> 2) & 0x33333333u);
   value = ((value & 0x0f0f0f0fu) << 4) | ((value >> 4) & 0x0f0f0f0fu);
   value = ((value & 0x00ff00ffu) << 8) | ((value >> 8) & 0x00ff00ffu);
-  return (value << 24) | ((value & 0x0000ff00u) << 8) | ((value >> 8) & 0x0000ff00u) | (value >> 24);
+  return (value << 16) | (value >> 16);
 }
+
+static_assert(reverse_bits(1) == 0x80000000u);
+static_assert(reverse_bits(0x01234567u) == 0xe6a2c480u);
 
 // D3D11.3 floating point rules: denorms are flushed to sign-preserved zero on input to float math
 static float
