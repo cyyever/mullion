@@ -16,6 +16,7 @@
 #include <vector>
 #include <cstdint>
 #include <type_traits>
+#include <utility>
 #include "unknwn.h"
 
 namespace mullion::str {
@@ -120,7 +121,7 @@ size_t transcodeString(D *dstBegin, size_t dstLength, const S *srcBegin,
                        size_t srcLength) {
   size_t totalLength = 0;
 
-  auto dstEnd = dstBegin + dstLength;
+  auto dstEnd = dstBegin ? dstBegin + dstLength : nullptr;
   auto srcEnd = srcBegin + srcLength;
 
   while (srcBegin < srcEnd) {
@@ -185,7 +186,7 @@ void format1(std::stringstream &str, const T &arg, const Tx &...args) {
 template <typename... Args> std::string format(const Args &...args) {
   std::stringstream stream;
   format1(stream, args...);
-  return stream.str();
+  return std::move(stream).str();
 }
 
 inline void strlcpy(char *dst, const char *src, size_t count) {

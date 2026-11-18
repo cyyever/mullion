@@ -195,9 +195,9 @@ std::string fromws(const WCHAR *ws) {
   size_t dstLen = transcodeString<char>(nullptr, 0, ws, srcLen);
 
   std::string result;
-  result.resize(dstLen);
-
-  transcodeString(result.data(), dstLen, ws, srcLen);
+  result.resize_and_overwrite(dstLen, [&](char *data, size_t size) noexcept {
+    return transcodeString(data, size, ws, srcLen);
+  });
 
   return result;
 }
@@ -207,9 +207,9 @@ std::wstring tows(const char *mbs) {
   size_t dstLen = transcodeString<wchar_t>(nullptr, 0, mbs, srcLen);
 
   std::wstring result;
-  result.resize(dstLen);
-
-  transcodeString(result.data(), dstLen, mbs, srcLen);
+  result.resize_and_overwrite(dstLen, [&](wchar_t *data, size_t size) noexcept {
+    return transcodeString(data, size, mbs, srcLen);
+  });
 
   return result;
 }
