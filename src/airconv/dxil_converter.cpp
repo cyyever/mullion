@@ -4349,7 +4349,7 @@ convert_dxil(
       auto mode = constant(a(1));
       auto vty = a(2)->getType();
       auto clamp = [&](Value *v, int64_t low, int64_t high) {
-        auto lo = ConstantInt::get(vty, low), hi = ConstantInt::get(vty, high);
+        auto lo = ConstantInt::getSigned(vty, low), hi = ConstantInt::getSigned(vty, high);
         return ir.CreateSelect(ir.CreateICmpSLT(v, lo), lo, ir.CreateSelect(ir.CreateICmpSGT(v, hi), hi, v));
       };
       Value *packed = ir.getInt32(0);
