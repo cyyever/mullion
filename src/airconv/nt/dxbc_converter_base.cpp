@@ -1390,22 +1390,20 @@ Converter::operator()(const InstIntegerBinaryOpWithTwoDst &bin) {
       StoreOperand(bin.dst_low, ir.CreateMul(Src0Lo, Src1Lo));
     break;
   }
-  case IntegerBinaryOpWithTwoDst::UDiv:
+  case IntegerBinaryOpWithTwoDst::UDiv: {
+    // LLVM division by zero is undefined even when a select discards its result.
+    auto divide = [&](Value *dividend, Value *divisor, bool remainder) {
+      auto zero = ir.CreateIsNull(divisor);
+      auto safe = ir.CreateSelect(zero, ConstantInt::get(divisor->getType(), 1), divisor);
+      auto result = remainder ? ir.CreateURem(dividend, safe) : ir.CreateUDiv(dividend, safe);
+      return ir.CreateSelect(zero, ConstantInt::getAllOnesValue(divisor->getType()), result);
+    };
     if (!IsNull(bin.dst_hi))
-      StoreOperand(
-          bin.dst_hi,
-          ir.CreateSelect(
-              ir.CreateIsNull(Src1Hi), ConstantInt::getAllOnesValue(Src1Hi->getType()), ir.CreateUDiv(Src0Hi, Src1Hi)
-          )
-      );
+      StoreOperand(bin.dst_hi, divide(Src0Hi, Src1Hi, false));
     if (!IsNull(bin.dst_low))
-      StoreOperand(
-          bin.dst_low,
-          ir.CreateSelect(
-              ir.CreateIsNull(Src1Lo), ConstantInt::getAllOnesValue(Src1Lo->getType()), ir.CreateURem(Src0Lo, Src1Lo)
-          )
-      );
+      StoreOperand(bin.dst_low, divide(Src0Lo, Src1Lo, true));
     break;
+  }
   case IntegerBinaryOpWithTwoDst::UAddCarry: {
     if (!IsNull(bin.dst_hi))
       StoreOperand(bin.dst_hi, ir.CreateAdd(Src0Hi, Src1Hi));
