@@ -13,7 +13,7 @@
 #ifndef LLVM_TARGET_DIRECTX_POINTERTYPEANALYSIS_H
 #define LLVM_TARGET_DIRECTX_POINTERTYPEANALYSIS_H
 
-#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/TypedPointerType.h"
 #include "llvm/IR/Value.h"
@@ -22,8 +22,8 @@ namespace llvm {
 
 namespace airbitcode {
 
-// Store the underlying type and the number of pointer indirections
-using PointerTypeMap = DenseMap<const Value *, Type *>;
+// Preserve insertion order: the writer enumerates these types into serialized IDs.
+using PointerTypeMap = MapVector<const Value *, Type *>;
 
 /// An analysis to compute the \c PointerTypes for pointers in a \c Module.
 /// Since this analysis is only run during codegen and the new pass manager
