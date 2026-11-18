@@ -1,10 +1,11 @@
-Checks: '-*,custom-air-write-error'
+Checks: '-*,custom-air-write-error,performance-for-range-copy,bugprone-use-after-move,readability-redundant-control-flow'
 CustomChecks:
   - Name: air-write-error
     Query: |
       match cxxMemberCallExpr(
         callee(cxxMethodDecl(hasName("mullion::metallib::MetallibWriter::Write"))),
         anyOf(hasParent(compoundStmt()),
+              hasParent(cxxBindTemporaryExpr(hasParent(explicitCastExpr(hasType(voidType()))))),
               hasParent(exprWithCleanups(hasParent(compoundStmt()))),
               hasParent(cxxBindTemporaryExpr(hasParent(exprWithCleanups(hasParent(compoundStmt()))))))
       ).bind("call")
