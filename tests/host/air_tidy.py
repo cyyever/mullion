@@ -13,8 +13,10 @@ result = subprocess.run(
 )
 output = result.stdout + result.stderr
 print(output, end="")
-expected = {i for i, line in enumerate(source.read_text().splitlines(), 1) if "EXPECT_WARNING" in line}
-actual = {int(line) for line in re.findall(r"air_tidy.cpp:(\d+):\d+: warning:.*\[custom-air-write-error\]", output)}
+expected = {(i, line.split("// EXPECT: ")[1].strip())
+            for i, line in enumerate(source.read_text().splitlines(), 1) if "// EXPECT: " in line}
+actual = {(int(line), check) for line, check in
+          re.findall(r"air_tidy.cpp:(\d+):\d+: warning:.*\[([^\]]+)\]", output)}
 if result.returncode or actual != expected or "error:" in output:
     raise SystemExit(f"AIR tidy failed: expected {expected}, got {actual}, exit {result.returncode}")
-print("PASS: discarded AIR error diagnosed; handled and unrelated calls accepted")
+print("PASS: expected clang-tidy diagnostics matched")
