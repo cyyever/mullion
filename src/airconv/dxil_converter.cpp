@@ -3472,7 +3472,7 @@ convert_dxil(
       if (feedback)
         mask |= op == RawBufferLoad ? constant(a(4)) : (mask & kMaskAll ? 0 : kMaskAll);
       Value *residency = ir.getInt32(0);
-      auto units = [&](Value *base, bool inside) {
+      auto units = [&](Value *base, bool inside, Value *within = nullptr) {
         Value *v = UndefValue::get(FixedVectorType::get(element, 4));
         for (unsigned i = 0; i < 4; i++) {
           if (!(mask & (1u << i)))
@@ -3493,6 +3493,8 @@ convert_dxil(
               continue;
             }
             Value *piece = dxbc.LoadBufferValue(b, unit, ptr, inside);
+            if (within)
+              piece = ir.CreateSelect(within, piece, ConstantInt::get(unit, 0));
             loaded = ir.CreateOr(loaded, ir.CreateShl(ir.CreateZExt(piece, element), shift));
           }
           if (!store)
@@ -3512,8 +3514,10 @@ convert_dxil(
         auto at = ir.CreateUDiv(ir.CreateAdd(ir.CreateMul(a(2), ir.getInt32(stride)), inner), ir.getInt32(unit_bytes));
         auto within =
             ir.CreateICmpULT(a(2), ir.CreateUDiv(dxbc.DecodeRawBufferByteLength(b.Metadata), ir.getInt32(stride)));
-        auto v = units(ir.CreateZExt(ir.CreateSelect(within, at, ir.getInt32(0)), ir.getInt64Ty()), true);
-        ret = to_struct(ty, ir.CreateSelect(within, v, Constant::getNullValue(v->getType())), residency);
+        // Select each memory unit before assembling wide values. Keeping i32 atomic results
+        // narrow also avoids Metal's failing i64 select/re-extract codegen.
+        auto v = units(ir.CreateZExt(ir.CreateSelect(within, at, ir.getInt32(0)), ir.getInt64Ty()), true, within);
+        ret = to_struct(ty, v, residency);
         break;
       }
       // one bound for a load of several units where its last unit is inside
