@@ -20,7 +20,6 @@ main() {
   const std::string payload(4096, 'x');
   check(mullion::str::format("shader:", payload, '/', 17), "shader:" + payload + "/17");
   check(mullion::str::format(std::string("a\0b", 3), 7), std::string("a\0b7", 4));
-
   // UTF-8 / UTF-16 / UTF-32 transcoding including 4-byte supplementary-plane code points (U+1F600).
   const std::string utf8 = "a\xC3\xA9\xE4\xB8\xAD\xF0\x9F\x98\x80z";
   const std::wstring wide = L"a\u00E9\u4E2D\U0001F600z";
@@ -71,7 +70,6 @@ main() {
   }
   if (mullion::str::encodeChar<char>(nullptr, nullptr, 0x110000) != 0)
     failures++, std::printf("invalid utf8 codepoint 0x110000 should return 0\n");
-
   std::printf("%s: %u wrong results\n", failures ? "failed" : "passed", failures);
   return failures != 0;
 }

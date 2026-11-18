@@ -265,7 +265,7 @@ size_t transcodeString(D *dstBegin, size_t dstLength, const S *srcBegin,
                        size_t srcLength) {
   size_t totalLength = 0;
 
-  auto dstEnd = dstBegin + dstLength;
+  auto dstEnd = dstBegin ? dstBegin + dstLength : nullptr;
   auto srcEnd = srcBegin + srcLength;
 
   while (srcBegin < srcEnd) {
