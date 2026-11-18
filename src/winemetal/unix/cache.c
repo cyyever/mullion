@@ -26,7 +26,7 @@ struct reader_connection {
 
 // how many connections a reader keeps open between lookups: those of more threads than that looking up at once are
 // opened and closed around their lookups
-enum { kReaderConnections = 8 };
+enum { kReaderConnections = 8, kBusyTimeoutMs = 100 };
 
 @interface CacheReader () {
   NSString *_dbPath;
@@ -49,6 +49,7 @@ reader_open(NSString *path, NSString *sql, struct reader_connection *connection)
     sqlite3_close(connection->db);
     return false;
   }
+  sqlite3_busy_timeout(connection->db, kBusyTimeoutMs);
   if (sqlite3_prepare_v2(connection->db, sql.UTF8String, -1, &connection->stmt, NULL) != SQLITE_OK) {
     NSLog(@"[CacheReader] Failed to prepare SELECT: %s", sqlite3_errmsg(connection->db));
     sqlite3_close(connection->db);
@@ -245,6 +246,7 @@ writes(void) {
       return nil;
     }
 
+    sqlite3_busy_timeout(_db, kBusyTimeoutMs);
     sqlite3_stmt *mode = NULL;
     int rc = sqlite3_prepare_v2(_db, "PRAGMA journal_mode=WAL;", -1, &mode, NULL);
     if (rc == SQLITE_OK)
