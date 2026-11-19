@@ -51,7 +51,7 @@ static cl::opt<std::string> RootSignature(
 );
 
 static cl::opt<SM50_SHADER_METAL_VERSION> MetalVersion(
-  "metal-version", cl::init(SM50_SHADER_METAL_320), cl::desc("Convert for a device of this Metal version"),
+  "metal-version", cl::init(SM50_SHADER_METAL_400), cl::desc("Convert for a device of this Metal version"),
   cl::values(
     clEnumValN(SM50_SHADER_METAL_310, "310", "Metal 3.1"), clEnumValN(SM50_SHADER_METAL_320, "320", "Metal 3.2"),
     clEnumValN(SM50_SHADER_METAL_400, "400", "Metal 4")

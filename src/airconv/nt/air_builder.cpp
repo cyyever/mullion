@@ -784,13 +784,6 @@ AIRBuilder::CreateRead(
     Ops.push_back(SampleIndexOrCubeFace);
   }
 
-  if (Metal4 && !TexInfo.is_cube && !TexInfo.is_ms &&
-      (TexInfo.coord_dimension == 2 || TexInfo.coord_dimension == 3)) {
-    auto *OffsetType = getTextureRWPositionType(Texture);
-    Tys.push_back(OffsetType);
-    Ops.push_back(Constant::getNullValue(OffsetType));
-  }
-
   if (TexInfo.is_mipmaped) {
     Tys.push_back(getIntTy());
     Ops.push_back(Level);
