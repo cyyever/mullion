@@ -77,6 +77,18 @@ int main() {
   require(memory->getFunction("restricted")->hasFnAttribute(llvm::Attribute::Convergent) &&
           memory->getFunction("restricted")->hasFnAttribute(llvm::Attribute::NoDuplicate), "execution restrictions lost");
 
+  for (auto tuple : {"!{}", "!{i32 2}", "!{i32 2, !\"nine\", i32 0}", "!{i32 2, null, i32 0}",
+                     "!{i32 2, i32 65536, i32 0}", "!{i32 3, i32 9, i32 0}"}) {
+    llvm::SMDiagnostic diagnostic;
+    auto module = llvm::parseAssemblyString(std::string("!air.version = !{!0}\n!0 = ") + tuple, diagnostic, context);
+    require(module && !llvm::verifyModule(*module, &llvm::errs()), "expected LLVM-valid AIR metadata fixture");
+    llvm::SmallVector<char, 0> bytes;
+    llvm::raw_svector_ostream output(bytes);
+    auto error = mullion::metallib::MetallibWriter{}.Write(*module, output);
+    require(bool(error), "invalid AIR version accepted");
+    require(llvm::toString(std::move(error)).find("air.version") != std::string::npos, "missing version diagnostic");
+    require(bytes.empty(), "invalid version wrote a partial metallib");
+  }
   for (auto ir : {"define void @f() null_pointer_is_valid { ret void }",
                   "define void @f(ptr byval(i32) %p) { ret void }",
                   "define void @f(ptr initializes((0, 4)) %p) { store i32 0, ptr %p ret void }"}) {

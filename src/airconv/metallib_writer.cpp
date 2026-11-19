@@ -21,8 +21,21 @@ llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
 
   // The container and its bitcode must advertise the same AIR version.
   unsigned airMinor = 9;
-  if (auto *version = module.getNamedMetadata("air.version"); version && version->getNumOperands())
-    airMinor = mdconst::extract<ConstantInt>(version->getOperand(0)->getOperand(1))->getZExtValue();
+  if (auto *version = module.getNamedMetadata("air.version")) {
+    if (version->getNumOperands() != 1 || version->getOperand(0)->getNumOperands() != 3)
+      return createStringError("air.version requires one major/minor/patch tuple");
+    auto *tuple = version->getOperand(0);
+    for (const auto &operand : tuple->operands()) {
+      auto *number = mdconst::dyn_extract_or_null<ConstantInt>(operand.get());
+      if (!number || !number->getType()->isIntegerTy(32))
+        return createStringError("air.version components must be i32 constants");
+    }
+    auto major = mdconst::extract<ConstantInt>(tuple->getOperand(0))->getZExtValue();
+    auto minor = mdconst::extract<ConstantInt>(tuple->getOperand(1))->getZExtValue();
+    if (major != 2 || minor > UINT16_MAX)
+      return createStringError("air.version cannot be represented by this metallib writer");
+    airMinor = minor;
+  }
 
   SmallVector<char, 0> bitcode;
   SmallVector<char, 0> public_metadata;
