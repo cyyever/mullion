@@ -99,10 +99,7 @@ test('host_shader_store',
                 native : true),
      suite : 'host', timeout : 120)
 # converted texture reads and atomics through Apple's verifier, which xcrun finds beside Metal's compiler
-test('host_texel_forms',
-     executable('host_texel_forms', 'texel_forms.cpp', dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
-     suite : 'host', timeout : 300)
+test('host_texel_forms', texel_forms, suite : 'host', timeout : 300)
 # SHA-1's digests; where the native compiler targets Arm, its blocks go through the ARMv8 SHA-1 instructions as an Arm build's do
 test('host_sha1', executable('host_sha1', 'sha1.cpp', '../../src/util/sha1/sha1.c',
                            include_directories : include_directories('../../src/util'), override_options : ['cpp_std=c++20'],

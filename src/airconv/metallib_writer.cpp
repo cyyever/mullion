@@ -20,6 +20,11 @@ struct InputAttribute {
 
 llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
 
+  // The container and its bitcode must advertise the same AIR version.
+  unsigned airMinor = 9;
+  if (auto *version = module.getNamedMetadata("air.version"); version && version->getNumOperands())
+    airMinor = mdconst::extract<ConstantInt>(version->getOperand(0)->getOperand(1))->getZExtValue();
+
   SmallVector<char, 0> bitcode;
   SmallVector<char, 0> public_metadata;
   SmallVector<char, 0> private_metadata;
@@ -62,7 +67,7 @@ llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 8,
+          .airVersionMinor = uint16_t(airMinor),
           .languageVersionMajor = 4,
           .languageVersionMinor = 0,
         });
@@ -180,7 +185,7 @@ llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 8,
+          .airVersionMinor = uint16_t(airMinor),
           .languageVersionMajor = 4,
           .languageVersionMinor = 0,
         });
@@ -216,7 +221,7 @@ llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 8,
+          .airVersionMinor = uint16_t(airMinor),
           .languageVersionMajor = 4,
           .languageVersionMinor = 0,
         });
@@ -311,7 +316,7 @@ llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 8,
+          .airVersionMinor = uint16_t(airMinor),
           .languageVersionMajor = 4,
           .languageVersionMinor = 0,
         });
@@ -352,7 +357,7 @@ llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
         });
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
-          .airVersionMinor = 8,
+          .airVersionMinor = uint16_t(airMinor),
           .languageVersionMajor = 4,
           .languageVersionMinor = 0,
         });
@@ -398,7 +403,7 @@ llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
   header.VersionMinor = 7;
   header.OS = OS::MTLBOS_macOS;
   // the macOS the module is for, as its target triple names it: Apple's metallib writes the triple's
-  // (MetalLibObjectWriter::writeHeader, Triple::getOSVersion), which Metal 4's AIR has as 26.0
+  // (MetalLibObjectWriter::writeHeader, Triple::getOSVersion)
   auto os = Triple(module.getTargetTriple()).getOSVersion();
   header.OSVersionMajor = os.getMajor();
   header.OSVersionMinor = os.getMinor().value_or(0);
