@@ -420,6 +420,10 @@ PointerTypeAnalysis::run(const Module &M) {
         continue;
       if (A.getArgNo() == 0)
         Map[&A] = resourceType(M.getContext(), Kind, A.getType()->getPointerAddressSpace());
+      else if (N.starts_with("air.atomic_compare_exchange_weak_explicit_"))
+        // The expected-value pointer uses the same texel type as the desired value.
+        // The declaration has no memory accesses from which to infer that type.
+        Map[&A] = TypedPointerType::get(F.getArg(A.getArgNo() + 1)->getType(), A.getType()->getPointerAddressSpace());
       else if (A.getArgNo() == 1 && (N.contains("sample_") || N.contains("gather_") || N.contains("read_")))
         Map[&A] = resourceType(M.getContext(), "sampler", A.getType()->getPointerAddressSpace());
     }

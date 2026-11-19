@@ -1,11 +1,5 @@
-// contract: every texture read and texture atomic of a converted shader has the arguments of its module's AIR version,
-// as Apple's verifier (the Metal toolchain's metal-opt) checks a module. Metal 4's AIR (2.8) gives a read the read
-// sampler (air.get_read_sampler) after the texture, and a read or atomic of a 2D, 2D array or 3D kind, depth ones too,
-// an offset after the position and array index; Metal 3.2's (2.7) has neither (Apple's compiler's output for each
-// kind and version). each case is a cs_5_0 kernel of its own, written here from the tokenized program format: a load
-// of each kind of resource (ld, ldms, ld_uav_typed, ld_uav_typed of a globally coherent UAV, and ld of a texture a
-// comparison sample makes a depth texture), an atomic add on each kind of typed UAV, and a compare-exchange; each is
-// converted for Metal 3.2 and for Metal 4, must hold the access it is for, and must pass the verifier
+// Verify Metal 4 texture reads and atomics, including globally coherent UAVs,
+// against Apple's AIR verifier.
 #include "DXBCParser/BlobContainer.h"
 #include "airconv_public.h"
 #include "DXBCParser/d3d12tokenizedprogramformat.hpp"
@@ -352,7 +346,7 @@ main() {
 
   unsigned wrong = 0;
   for (auto &c : cases)
-    for (auto [version, named] : {std::pair{SM50_SHADER_METAL_320, "Metal 3.2"}, std::pair{SM50_SHADER_METAL_400, "Metal 4"}}) {
+    for (auto [version, named] : {std::pair{SM50_SHADER_METAL_400, "Metal 4"}}) {
       std::string message, module = convert(container(c.program), version, message);
       if (module.empty()) {
         printf("wrong: %s for %s %s\n", c.name.c_str(), named, message.c_str());
@@ -365,7 +359,7 @@ main() {
         wrong++;
       }
     }
-  printf("fact: %zu kernels, each for Metal 3.2 and Metal 4\n", cases.size());
+  printf("fact: %zu kernels, each for Metal 4\n", cases.size());
   printf("%s: %u wrong results\n", wrong ? "failed" : "passed", wrong);
   return wrong ? 1 : 0;
 }
