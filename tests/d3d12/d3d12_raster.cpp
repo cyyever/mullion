@@ -165,7 +165,8 @@ int main(int argc, char **argv) {
   device->GetCopyableFootprints(&td, 0, 1, 0, &footprint, nullptr, nullptr, &bytes);
   const UINT64 slot = (bytes + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) / D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT *
                       D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
-  auto readback = buffer(device.Get(), D3D12_HEAP_TYPE_READBACK, slot * all.size(), D3D12_RESOURCE_STATE_COPY_DEST);
+  constexpr size_t batch_size = 256;
+  auto readback = buffer(device.Get(), D3D12_HEAP_TYPE_READBACK, slot * batch_size, D3D12_RESOURCE_STATE_COPY_DEST);
   if (!expect(!!readback, "readback buffer was not created"))
     return verdict();
   ComPtr<ID3D12CommandQueue> queue;
@@ -178,120 +179,125 @@ int main(int argc, char **argv) {
   ComPtr<ID3D12GraphicsCommandList> list;
   CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr, IID_PPV_ARGS(&list)));
   for (unsigned path = 0; path < 3; path++) {
-    if (path) {
-      CHECK(allocator->Reset());
-      CHECK(list->Reset(allocator.Get(), nullptr));
-    }
-    CHECK(forget(readback.Get()));
-    std::vector<ComPtr<ID3D12GraphicsCommandList>> bundles;
-    for (size_t i = 0; i < all.size(); i++) {
-      const auto &c = all[i];
-      step("path %u case %zu: %s", path, i, c.name.c_str());
-      std::array<unsigned, 14> key{c.mode,
-                                   c.shape,
-                                   c.cull,
-                                   c.ccw,
-                                   c.wire,
-                                   c.depth_clip,
-                                   c.multisample,
-                                   c.aa,
-                                   c.additive,
-                                   c.geometry,
-                                   c.conservative,
-                                   c.inner,
-                                   std::bit_cast<unsigned>(c.bias_scale),
-                                   std::bit_cast<unsigned>(c.bias_clamp)};
-      auto &pso = pipelines[key];
-      if (!pso) {
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
-        pd.pRootSignature = rs.Get();
-        pd.VS = bytecode(codes[c.mode]);
-        if (c.geometry)
-          pd.GS = bytecode(gs_code[c.mode][c.shape - 1]);
-        pd.PS = bytecode(c.inner ? inner : ps);
-        pd.InputLayout = {elements, UINT(std::size(elements))};
-        pd.RasterizerState = {c.wire ? D3D12_FILL_MODE_WIREFRAME : D3D12_FILL_MODE_SOLID,
-                              c.cull == raster::NoCull      ? D3D12_CULL_MODE_NONE
-                              : c.cull == raster::CullFront ? D3D12_CULL_MODE_FRONT
-                                                            : D3D12_CULL_MODE_BACK};
-        pd.RasterizerState.FrontCounterClockwise = c.ccw;
-        pd.RasterizerState.DepthClipEnable = c.depth_clip;
-        pd.RasterizerState.MultisampleEnable = c.multisample;
-        pd.RasterizerState.AntialiasedLineEnable = c.aa;
-        pd.RasterizerState.SlopeScaledDepthBias = c.bias_scale;
-        pd.RasterizerState.DepthBiasClamp = c.bias_clamp;
-        pd.RasterizerState.ConservativeRaster =
-            c.conservative ? D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON : D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-        if (c.additive) {
-          auto &blend = pd.BlendState.RenderTarget[0];
-          blend.BlendEnable = TRUE;
-          blend.SrcBlend = blend.DestBlend = blend.SrcBlendAlpha = blend.DestBlendAlpha = D3D12_BLEND_ONE;
-          blend.BlendOp = blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    for (size_t first = 0; first < all.size(); first += batch_size) {
+      const size_t last = std::min(first + batch_size, all.size());
+      if (path || first) {
+        if (path == 1)
+          CHECK(bundle_allocator->Reset());
+        CHECK(allocator->Reset());
+        CHECK(list->Reset(allocator.Get(), nullptr));
+      }
+      CHECK(forget(readback.Get()));
+      std::vector<ComPtr<ID3D12GraphicsCommandList>> bundles;
+      for (size_t i = first; i < last; i++) {
+        const auto &c = all[i];
+        step("path %u case %zu: %s", path, i, c.name.c_str());
+        std::array<unsigned, 14> key{c.mode,
+                                     c.shape,
+                                     c.cull,
+                                     c.ccw,
+                                     c.wire,
+                                     c.depth_clip,
+                                     c.multisample,
+                                     c.aa,
+                                     c.additive,
+                                     c.geometry,
+                                     c.conservative,
+                                     c.inner,
+                                     std::bit_cast<unsigned>(c.bias_scale),
+                                     std::bit_cast<unsigned>(c.bias_clamp)};
+        auto &pso = pipelines[key];
+        if (!pso) {
+          D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+          pd.pRootSignature = rs.Get();
+          pd.VS = bytecode(codes[c.mode]);
+          if (c.geometry)
+            pd.GS = bytecode(gs_code[c.mode][c.shape - 1]);
+          pd.PS = bytecode(c.inner ? inner : ps);
+          pd.InputLayout = {elements, UINT(std::size(elements))};
+          pd.RasterizerState = {c.wire ? D3D12_FILL_MODE_WIREFRAME : D3D12_FILL_MODE_SOLID,
+                                c.cull == raster::NoCull      ? D3D12_CULL_MODE_NONE
+                                : c.cull == raster::CullFront ? D3D12_CULL_MODE_FRONT
+                                                              : D3D12_CULL_MODE_BACK};
+          pd.RasterizerState.FrontCounterClockwise = c.ccw;
+          pd.RasterizerState.DepthClipEnable = c.depth_clip;
+          pd.RasterizerState.MultisampleEnable = c.multisample;
+          pd.RasterizerState.AntialiasedLineEnable = c.aa;
+          pd.RasterizerState.SlopeScaledDepthBias = c.bias_scale;
+          pd.RasterizerState.DepthBiasClamp = c.bias_clamp;
+          pd.RasterizerState.ConservativeRaster =
+              c.conservative ? D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON : D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+          if (c.additive) {
+            auto &blend = pd.BlendState.RenderTarget[0];
+            blend.BlendEnable = TRUE;
+            blend.SrcBlend = blend.DestBlend = blend.SrcBlendAlpha = blend.DestBlendAlpha = D3D12_BLEND_ONE;
+            blend.BlendOp = blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+          }
+          pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+          pd.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+          pd.SampleDesc = {1, 0};
+          pd.PrimitiveTopologyType = c.shape == raster::Point  ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT
+                                     : c.shape == raster::Line ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
+                                                               : D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+          pd.NumRenderTargets = 1;
+          pd.RTVFormats[0] = td.Format;
+          CHECK(device->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pso)));
         }
-        pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        pd.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-        pd.SampleDesc = {1, 0};
-        pd.PrimitiveTopologyType = c.shape == raster::Point  ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT
-                                   : c.shape == raster::Line ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
-                                                             : D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pd.NumRenderTargets = 1;
-        pd.RTVFormats[0] = td.Format;
-        CHECK(device->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pso)));
+        D3D12_VIEWPORT vp{c.viewport.x, c.viewport.y, c.viewport.w, c.viewport.h, c.viewport.low, c.viewport.high};
+        D3D12_RECT rect{c.rect.left, c.rect.top, c.rect.right, c.rect.bottom};
+        // D3D12 always scissors; emulate the D3D10/11 disabled setting with the target's full rectangle.
+        if (!c.scissor)
+          rect = {0, 0, raster::width, raster::height};
+        list->RSSetViewports(1, &vp);
+        list->RSSetScissorRects(1, &rect);
+        list->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
+        list->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+        const float clear[raster::lanes] = {};
+        list->ClearRenderTargetView(rtv, clear, 0, nullptr);
+        ComPtr<ID3D12GraphicsCommandList> bundle;
+        if (path == 1)
+          CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, bundle_allocator.Get(), pso.Get(),
+                                          IID_PPV_ARGS(&bundle)));
+        auto commands = path == 1 ? bundle.Get() : list.Get();
+        commands->SetGraphicsRootSignature(rs.Get());
+        commands->SetPipelineState(pso.Get());
+        D3D12_VERTEX_BUFFER_VIEW view{vb->GetGPUVirtualAddress() + i * vertex_bytes, vertex_bytes,
+                                      sizeof(raster::Vertex)};
+        commands->IASetVertexBuffers(0, 1, &view);
+        commands->IASetPrimitiveTopology(
+            c.shape == raster::Point ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST
+            : c.shape == raster::Line
+                ? (c.strip ? D3D_PRIMITIVE_TOPOLOGY_LINESTRIP : D3D_PRIMITIVE_TOPOLOGY_LINELIST)
+                : (c.strip ? D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST));
+        if (path == 2)
+          commands->ExecuteIndirect(signature.Get(), 1, args.Get(), i * sizeof(D3D12_DRAW_ARGUMENTS), nullptr, 0);
+        else
+          commands->DrawInstanced(c.vertices.size(), c.instances, 0, 0);
+        if (bundle) {
+          CHECK(bundle->Close());
+          list->ExecuteBundle(bundle.Get());
+          bundles.push_back(bundle);
+        }
+        transition(list.Get(), target.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        D3D12_TEXTURE_COPY_LOCATION from{target.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX},
+            into{readback.Get(), D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, {.PlacedFootprint = footprint}};
+        into.PlacedFootprint.Offset = (i - first) * slot;
+        list->CopyTextureRegion(&into, 0, 0, 0, &from, nullptr);
+        transition(list.Get(), target.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
       }
-      D3D12_VIEWPORT vp{c.viewport.x, c.viewport.y, c.viewport.w, c.viewport.h, c.viewport.low, c.viewport.high};
-      D3D12_RECT rect{c.rect.left, c.rect.top, c.rect.right, c.rect.bottom};
-      // D3D12 always scissors; emulate the D3D10/11 disabled setting with the target's full rectangle.
-      if (!c.scissor)
-        rect = {0, 0, raster::width, raster::height};
-      list->RSSetViewports(1, &vp);
-      list->RSSetScissorRects(1, &rect);
-      list->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
-      list->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
-      const float clear[raster::lanes] = {};
-      list->ClearRenderTargetView(rtv, clear, 0, nullptr);
-      ComPtr<ID3D12GraphicsCommandList> bundle;
-      if (path == 1)
-        CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, bundle_allocator.Get(), pso.Get(),
-                                        IID_PPV_ARGS(&bundle)));
-      auto commands = path == 1 ? bundle.Get() : list.Get();
-      commands->SetGraphicsRootSignature(rs.Get());
-      commands->SetPipelineState(pso.Get());
-      D3D12_VERTEX_BUFFER_VIEW view{vb->GetGPUVirtualAddress() + i * vertex_bytes, vertex_bytes,
-                                    sizeof(raster::Vertex)};
-      commands->IASetVertexBuffers(0, 1, &view);
-      commands->IASetPrimitiveTopology(
-          c.shape == raster::Point ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST
-          : c.shape == raster::Line
-              ? (c.strip ? D3D_PRIMITIVE_TOPOLOGY_LINESTRIP : D3D_PRIMITIVE_TOPOLOGY_LINELIST)
-              : (c.strip ? D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST));
-      if (path == 2)
-        commands->ExecuteIndirect(signature.Get(), 1, args.Get(), i * sizeof(D3D12_DRAW_ARGUMENTS), nullptr, 0);
-      else
-        commands->DrawInstanced(c.vertices.size(), c.instances, 0, 0);
-      if (bundle) {
-        CHECK(bundle->Close());
-        list->ExecuteBundle(bundle.Get());
-        bundles.push_back(bundle);
+      CHECK(submit(device.Get(), queue.Get(), list.Get()));
+      char *mapped;
+      CHECK(readback->Map(0, nullptr, reinterpret_cast<void **>(&mapped)));
+      for (size_t i = first; i < last; i++) {
+        step("read path %u case %zu: %s", path, i, all[i].name.c_str());
+        if (all[i].conservative)
+          raster_conservative::compare(all[i], options.ConservativeRasterizationTier, mapped + (i - first) * slot,
+                                       footprint.Footprint.RowPitch);
+        else
+          raster::compare(all[i], mapped + (i - first) * slot, footprint.Footprint.RowPitch, false, true);
       }
-      transition(list.Get(), target.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
-      D3D12_TEXTURE_COPY_LOCATION from{target.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX},
-          into{readback.Get(), D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, {.PlacedFootprint = footprint}};
-      into.PlacedFootprint.Offset = i * slot;
-      list->CopyTextureRegion(&into, 0, 0, 0, &from, nullptr);
-      transition(list.Get(), target.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+      readback->Unmap(0, nullptr);
     }
-    CHECK(submit(device.Get(), queue.Get(), list.Get()));
-    char *mapped;
-    CHECK(readback->Map(0, nullptr, reinterpret_cast<void **>(&mapped)));
-    for (size_t i = 0; i < all.size(); i++) {
-      step("read path %u case %zu: %s", path, i, all[i].name.c_str());
-      if (all[i].conservative)
-        raster_conservative::compare(all[i], options.ConservativeRasterizationTier, mapped + i * slot,
-                                     footprint.Footprint.RowPitch);
-      else
-        raster::compare(all[i], mapped + i * slot, footprint.Footprint.RowPitch, false, true);
-    }
-    readback->Unmap(0, nullptr);
   }
   return verdict();
 }
