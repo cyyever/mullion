@@ -2269,7 +2269,7 @@ struct BytecodeKey {
   bool operator==(const BytecodeKey &) const = default;
   explicit BytecodeKey(std::string_view bytecode) :
       size(bytecode.size()),
-      xx(llvm::xxHash64(llvm::StringRef(bytecode.data(), bytecode.size()))),
+      xx(llvm::xxh3_64bits(llvm::StringRef(bytecode.data(), bytecode.size()))),
       std(std::hash<std::string_view>{}(bytecode)) {}
 };
 struct BytecodeKeyHash {

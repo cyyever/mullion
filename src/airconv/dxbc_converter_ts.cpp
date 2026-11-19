@@ -204,7 +204,7 @@ tessellation_payload_type(
 // a native draw's group of patches in its buffer (SM50_BINDING_INDEX_TESSELLATION_PATCHES), after the header
 llvm::Value *
 native_patches(llvm::IRBuilder<> &builder, llvm::Value *buffer, llvm::StructType *type, llvm::Value *group) {
-  auto bytes = builder.CreateBitCast(buffer, builder.getInt8PtrTy((uint32_t)air::AddressSpace::device));
+  auto bytes = builder.CreateBitCast(buffer, llvm::PointerType::get(builder.getContext(), (uint32_t)air::AddressSpace::device));
   auto first = builder.CreateBitCast(
       builder.CreateConstGEP1_32(builder.getInt8Ty(), bytes, SM50_TESSELLATION_HEADER),
       type->getPointerTo((uint32_t)air::AddressSpace::device)
