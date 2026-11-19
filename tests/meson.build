@@ -31,6 +31,14 @@ configure_file(input : 'host/resource_cases.py', output : 'resource_cases.hpp',
 # as the library builds D3D12 (src/meson.build)
 test_d3d12 = get_option('enable_d3d12') and cpu_family != 'x86'
 if test_d3d12
+  metalfx_reference = executable('host_metalfx_reference', 'host/metalfx_reference.cpp',
+    cpp_args : ['-x', 'objective-c++', '-fobjc-arc'],
+    link_args : ['-framework', 'Foundation', '-framework', 'Metal', '-framework', 'MetalFX', '-Wl,-adhoc_codesign'],
+    native : true)
+  metalfx_reference_image = custom_target('metalfx_reference_image',
+    output : 'metalfx-denoised-reference.rgba',
+    command : [metalfx_reference, '@OUTPUT@'],
+    build_by_default : true, build_always_stale : true)
   levels = run_command(cpp.cmd_array() + ['-E', '-P', '-x', 'c++', '-include', 'd3dcommon.h', '/dev/null'],
                        check: true).stdout().split('enum D3D_FEATURE_LEVEL')[1].split('{')[1].split('}')[0]
   names = []

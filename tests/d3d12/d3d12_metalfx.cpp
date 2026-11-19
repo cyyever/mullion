@@ -26,6 +26,7 @@
 #include <cmath>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <vector>
@@ -285,6 +286,14 @@ main(int argc, char **argv) {
     for (UINT i = 0; i < out_width * out_height; i++)
       image.insert(image.end(), want, want + 4);
     UINT off = apart(read, image);
+    if (off) {
+      unsigned shown = 0;
+      for (size_t i = 0; i < read.size() && shown < 8; ++i)
+        if (i % 4 != 3 && std::abs(int(read[i]) - int(image[i])) > 1) {
+          printf("different pixel %zu,%zu channel %zu: %u, want %u\n", i / 4 % out_width, i / 4 / out_width, i % 4, read[i], image[i]);
+          ++shown;
+        }
+    }
     expect(!off, "%u of %u channels are not the input's color (first texel %u,%u,%u)", off, out_width * out_height * 3,
            read[0], read[1], read[2]);
     return true;
@@ -448,6 +457,63 @@ main(int argc, char **argv) {
   given = &motion;
   given_scale[0] = given_scale[1] = 1;
 
+  // Execute the denoiser, rather than only advertising/creating an NGX feature.
+  auto diffuse = texture(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R16G16B16A16_FLOAT, width, height, target, input);
+  auto specular = texture(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R16G16B16A16_FLOAT, width, height, target, input);
+  auto normals = texture(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R16G16B16A16_FLOAT, width, height, target, input);
+  auto roughness = texture(DXGI_FORMAT_R16_FLOAT, DXGI_FORMAT_R16_FLOAT, width, height, target, input);
+  CHECK(diffuse.resource && specular.resource && normals.resource && roughness.resource ? S_OK : E_FAIL);
+  const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+  auto gbuffer = [&] {
+    const float white[] = {1, 1, 1, 1}, black[] = {0, 0, 0, 0}, normal[] = {0, 0, 1, 0.5f}, rough[] = {0.5f, 0, 0, 0};
+    for (auto [t, value] : {std::pair{&diffuse, white}, {&specular, black}, {&normals, normal}, {&roughness, rough}}) {
+      transition(list.Get(), t->resource.Get(), input, D3D12_RESOURCE_STATE_RENDER_TARGET);
+      list->ClearRenderTargetView(t->rtv, value, 0, nullptr);
+      transition(list.Get(), t->resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, input);
+    }
+  };
+  std::vector<BYTE> denoised_reference;
+  if (const char *reference = getenv("MULLION_METALFX_REFERENCE")) {
+    std::string path = reference;
+    if (!path.empty() && path.front() == '/') path = "Z:" + path;
+    std::ifstream file(path, std::ios::binary);
+    denoised_reference.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+  }
+  auto denoised_image = [&](const std::vector<BYTE> &read) {
+    if (!expect(read.size() == out_width * out_height * 4 && denoised_reference.size() == read.size(),
+                "native denoiser reference or bridge image is missing"))
+      return;
+    expect(!apart(read, denoised_reference), "%u channels differ from native MetalFX denoising", apart(read, denoised_reference));
+  };
+  if (ext->SupportsDenoisedUpscale()) {
+    IMTLD3D12Upscaler *denoised = nullptr;
+    for (bool packed_roughness : {false, true})
+      for (BOOL reset : {TRUE, FALSE}) {
+        step("MetalFX denoised frame, roughness %s, %s", packed_roughness ? "in normal alpha" : "separate", reset ? "reset" : "history");
+        auto record = [&] {
+          gbuffer();
+          MTL_DENOISED_UPSCALE_D3D12_DESC desc{};
+          desc.Color = color.resource.Get();
+          desc.Output = output.resource.Get();
+          desc.Depth = depth.resource.Get();
+          desc.MotionVector = motion.resource.Get();
+          desc.ExposureTexture = exposure.resource.Get();
+          desc.DiffuseAlbedo = diffuse.resource.Get();
+          desc.SpecularAlbedo = specular.resource.Get();
+          desc.Normals = normals.resource.Get();
+          desc.Roughness = roughness.resource.Get();
+          desc.RoughnessInNormalAlpha = packed_roughness;
+          desc.PreExposure = desc.MotionVectorScaleX = desc.MotionVectorScaleY = 1;
+          desc.InReset = reset;
+          memcpy(desc.WorldToView, identity, sizeof(identity));
+          memcpy(desc.ViewToClip, identity, sizeof(identity));
+          return SUCCEEDED(ext->DenoisedUpscale(&desc, &denoised));
+        };
+        denoised_image(upscaled(frames[0], frames[0], 0, record));
+      }
+    if (denoised) denoised->Destroy();
+  }
+
   // DLSS through Mullion's NGX core (src/nvngx/nvngx_d3d12.cpp), called as a game's NGX library calls it, where the
   // build has it: resources set as resources or, as Streamline sets them, as plain pointers, and DLSS's defaults for
   // what a game leaves out (no exposure texture; a pre-exposure of 0, or none, for no pre-exposure)
@@ -596,8 +662,23 @@ main(int argc, char **argv) {
   auto made = create(list.Get(), NVNGX_FEATURE_RAYRECONSTRUCTION, params, &denoiser);
   expect(made == (ext->SupportsDenoisedUpscale() ? NVNGX_RESULT_OK : NVNGX_RESULT_FEATURE_NOT_SUPPORTED),
          "Ray Reconstruction's creation answered %#x", made);
-  if (denoiser)
+  if (denoiser) {
+    params->Set("Depth", depth.resource.Get());
+    params->Set("MotionVectors", motion.resource.Get());
+    params->Set("DLSS.Input.DiffuseAlbedo", diffuse.resource.Get());
+    params->Set("DLSS.Input.SpecularAlbedo", specular.resource.Get());
+    params->Set("GBuffer.Normals", normals.resource.Get());
+    params->Set("GBuffer.Roughness", roughness.resource.Get());
+    params->Set("WorldToViewMatrix", (void *)identity);
+    params->Set("ViewToClipMatrix", (void *)identity);
+    params->Set("DLSS.Pre.Exposure", 1.0f);
+    step("NGX Ray Reconstruction evaluates a frame");
+    denoised_image(upscaled(frames[0], frames[0], 0, [&] {
+      gbuffer();
+      return evaluate(list.Get(), denoiser, params, nullptr) == NVNGX_RESULT_OK;
+    }));
     release(denoiser);
+  }
   destroy(params);
   expect(shutdown(device.Get()) == NVNGX_RESULT_OK, "NGX did not shut down");
   return verdict();
