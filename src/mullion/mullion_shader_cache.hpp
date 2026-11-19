@@ -96,7 +96,7 @@ private:
   // those read or stored in this process
   mullion::shared_mutex reflections_mutex_;
   std::unordered_map<Sha1Digest, ShaderReflection> reflections_;
-  std::shared_mutex archived_mutex_;
+  mullion::shared_mutex archived_mutex_;
   std::unordered_set<Sha1Digest> archived_;
 
   WMT::Reference<WMT::CacheWriter> scache_writer_;
