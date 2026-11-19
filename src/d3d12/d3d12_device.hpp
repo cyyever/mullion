@@ -648,6 +648,7 @@ public:
   // when an indirect command buffer draws them, so none is set
   bool unbiased = false;
   bool fragment_depth_bias = false;
+  bool clamp_hardware_bias = false;
   uint32_t depth_bias_unorm_max = 0;
   // the samples a pass without targets rasterizes (RasterSampleCount of ForcedSampleCount), 0 for its targets'
   uint32_t forced_sample_count;
