@@ -88,6 +88,9 @@ airconv_src += airconv_shaders_header
 build_airconv_for_windows = get_option('build_airconv_for_windows')
 
 if build_airconv_for_windows
+  if not fs.is_file(meson.project_source_root() / 'toolchains/llvm/include/llvm/Config/llvm-config.h')
+    error('Windows airconv requires Windows-target LLVM 23 headers and libraries in toolchains/llvm; macOS LLVM libraries cannot be linked into a PE executable.')
+  endif
 
 llvm_include_path = include_directories('../../toolchains/llvm/include') # FIXME: in favor of path relative to project
 
@@ -106,7 +109,7 @@ airconv_dep = declare_dependency(
 
 lib_d3dcompiler = cpp.find_library('d3dcompiler_47')
 
-executable('airconv', airconv_src + airconv_cli_src,
+airconv_windows = executable('airconv', airconv_src + airconv_cli_src,
   include_directories : [ mullion_include_path, llvm_include_path ],
   cpp_args            : [ airconv_args, '-DWIN_EXPORT' ],
   dependencies        : [ dxbc_parser_dep, lib_d3dcompiler ],
