@@ -92,3 +92,10 @@ foreach t : [['d3d12_sdk_configuration', [], ['d3d12_metal4_passes', [], ['d3d12
     endif
   endforeach
 endforeach
+
+dxc_official_header = configure_file(output : 'dxc_official_cases.hpp',
+  command : [find_program('python3', native : true), files('../dxc_cases.py'),
+             files('../engines/directx-shader-compiler/tools/clang/unittests/HLSLExec/ShaderOpArithTable.xml')], capture : true)
+dxc_official = executable('d3d12_dxc_official', ['d3d12_dxc_official.cpp', dxc_official_header],
+  dependencies : d3d12_test_deps)
+test('d3d12_dxc_official_dxil', dxc_official, args : ['dxil'], suite : 'microsoft-dxc', timeout : 120)
