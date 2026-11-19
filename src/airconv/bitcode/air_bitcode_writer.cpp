@@ -16,6 +16,67 @@
 
 namespace mullion::air {
 namespace {
+// LLVM validates IR types; mesh capacities and topology are AIR metadata contracts.
+llvm::Error verifyMeshOutputs(const llvm::Module &module) {
+  auto *meshes = module.getNamedMetadata("air.mesh");
+  if (!meshes)
+    return llvm::Error::success();
+  for (auto *entry : meshes->operands()) {
+    if (!entry->getNumOperands())
+      return llvm::createStringError("AIR mesh entry has no function");
+    auto *function = llvm::mdconst::dyn_extract_or_null<llvm::Function>(entry->getOperand(0));
+    if (!function)
+      return llvm::createStringError("AIR mesh entry has no function");
+    llvm::SmallPtrSet<const llvm::MDNode *, 16> visited;
+    llvm::SmallVector<const llvm::MDNode *, 16> pending{entry};
+    const llvm::MDNode *info = nullptr;
+    while (!pending.empty()) {
+      auto *node = pending.pop_back_val();
+      if (!visited.insert(node).second)
+        continue;
+      auto *tag = node->getNumOperands() ? llvm::dyn_cast_or_null<llvm::MDString>(node->getOperand(0)) : nullptr;
+      if (tag && tag->getString() == "air.mesh_type_info") {
+        if (info)
+          return llvm::createStringError("AIR mesh has multiple output declarations");
+        info = node;
+      }
+      for (auto &operand : node->operands())
+        if (auto *child = llvm::dyn_cast_or_null<llvm::MDNode>(operand))
+          pending.push_back(child);
+    }
+    if (!info || info->getNumOperands() != 6)
+      return llvm::createStringError("AIR mesh requires an output capacity and topology declaration");
+    auto *vertices = llvm::mdconst::dyn_extract_or_null<llvm::ConstantInt>(info->getOperand(3));
+    auto *primitives = llvm::mdconst::dyn_extract_or_null<llvm::ConstantInt>(info->getOperand(4));
+    auto *topology = llvm::dyn_cast_or_null<llvm::MDString>(info->getOperand(5));
+    if (!vertices || !primitives || !vertices->getType()->isIntegerTy(32) ||
+        !primitives->getType()->isIntegerTy(32) || vertices->getZExtValue() > 256 || primitives->getZExtValue() > 512)
+      return llvm::createStringError("AIR mesh output capacity exceeds 256 vertices or 512 primitives");
+    unsigned corners = topology && topology->getString() == "air.point" ? 1
+                       : topology && topology->getString() == "air.line" ? 2
+                       : topology && topology->getString() == "air.triangle" ? 3 : 0;
+    if (!corners)
+      return llvm::createStringError("AIR mesh has an invalid output topology");
+    for (auto &block : *function)
+      for (auto &instruction : block) {
+        auto *call = llvm::dyn_cast<llvm::CallBase>(&instruction);
+        auto *callee = call ? call->getCalledFunction() : nullptr;
+        if (!callee)
+          continue;
+        auto exceeds = [&](unsigned argument, uint64_t limit) {
+          auto *value = argument < call->arg_size() ? llvm::dyn_cast<llvm::ConstantInt>(call->getArgOperand(argument)) : nullptr;
+          return value && value->getValue().uge(limit);
+        };
+        if (callee->getName() == "air.set_index_mesh" &&
+            (exceeds(1, corners * primitives->getZExtValue()) || exceeds(2, vertices->getZExtValue())))
+          return llvm::createStringError("AIR mesh constant index exceeds its declared output capacity");
+        if (callee->getName() == "air.set_primitive_count_mesh" && exceeds(1, primitives->getZExtValue() + 1))
+          return llvm::createStringError("AIR mesh primitive count exceeds its declared output capacity");
+      }
+  }
+  return llvm::Error::success();
+}
+
 template <typename T> llvm::Error prepareAIRAttributes(T &value) {
   // These promises may be discarded after optimization. Keep semantic and ABI
   // attributes, including convergent and the memory effects translated by AIR.
@@ -64,6 +125,8 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
   llvm::raw_string_ostream diagnostics(verification);
   if (llvm::verifyModule(module, &diagnostics))
     return llvm::createStringError(llvm::inconvertibleErrorCode(), "Invalid input AIR IR: " + verification);
+  if (auto error = verifyMeshOutputs(module))
+    return error;
   auto m = llvm::CloneModule(module);
   // Opaque-pointer constant GEPs can use a different element type than their
   // global. Materialize them so the typed AIR casts below also reach their bases.
