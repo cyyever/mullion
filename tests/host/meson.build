@@ -148,3 +148,9 @@ optimization_test = executable('host_optimization', 'optimization.cpp',
   include_directories : llvm_include_path_darwin, dependencies : airconv_dep_darwin, native : true)
 test('host_optimization', optimization_test, suite : 'host')
 test('host_optimization_verify_each', optimization_test, env : ['MULLION_VERIFY_EACH=1'], suite : 'host')
+
+# Native control for the line-coverage algorithm before integrating it into AIR conversion.
+test('metal_lines', executable('metal_lines', 'metal_lines.cpp',
+  cpp_args : ['-x', 'objective-c++', '-fobjc-arc'],
+  link_args : ['-framework', 'Foundation', '-framework', 'Metal'],
+  native : true), suite : 'native-metal')
