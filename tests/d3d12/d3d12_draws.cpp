@@ -1,3 +1,4 @@
+#include <bit>
 // contract: what a draw leaves alone, and what it reads where nothing is bound.
 // - the planes a depth stencil view holds read only (D3D12_DSV_FLAGS: "depth values are read only", "stencil values
 //   are read only") keep their values under a pipeline that writes both; the other plane is written, and the depth
@@ -160,7 +161,7 @@ main(int argc, char **argv) {
     list->RSSetScissorRects(1, &rect);
   };
   auto constants = [&](float z, UINT value) {
-    const UINT words[2] = {*reinterpret_cast<const UINT *>(&z), value};
+    const UINT words[2] = {std::bit_cast<UINT>(z), value};
     list->SetGraphicsRoot32BitConstants(0, 2, words, 0);
   };
   list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

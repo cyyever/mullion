@@ -162,7 +162,8 @@ Converter::LoadOperand(const SrcOperandImmediateConstantBuffer &SrcOp, mask_t Ma
 
 llvm::Value *
 Converter::LoadOperand(const SrcOperandImmediate32 &SrcOp, mask_t Mask) {
-  llvm::SmallVector<llvm::Constant *> Constants;
+  std::array<llvm::Constant *, 4> Constants{};
+  unsigned Count = 0;
   switch (SrcOp._.read_type) {
   case OperandDataType::Float:
     switch (Mask) {
@@ -177,7 +178,7 @@ Converter::LoadOperand(const SrcOperandImmediate32 &SrcOp, mask_t Mask) {
     default:
       for (int i = 0; i < 4; i++) {
         if (Mask & (1 << i)) {
-          Constants.push_back(air.getFloat(SrcOp.fvalue[i]));
+          Constants[Count++] = air.getFloat(SrcOp.fvalue[i]);
         }
       }
       break;
@@ -196,7 +197,7 @@ Converter::LoadOperand(const SrcOperandImmediate32 &SrcOp, mask_t Mask) {
     default:
       for (int i = 0; i < 4; i++) {
         if (Mask & (1 << i)) {
-          Constants.push_back(air.getInt(SrcOp.uvalue[i]));
+          Constants[Count++] = air.getInt(SrcOp.uvalue[i]);
         }
       }
       break;
@@ -216,7 +217,7 @@ Converter::LoadOperand(const SrcOperandImmediate32 &SrcOp, mask_t Mask) {
     default:
       for (int i = 0; i < 4; i++) {
         if (Mask & (1 << i)) {
-          Constants.push_back(air.getHalf(SrcOp.uvalue[i]));
+          Constants[Count++] = air.getHalf(SrcOp.uvalue[i]);
         }
       }
       break;
@@ -225,7 +226,7 @@ Converter::LoadOperand(const SrcOperandImmediate32 &SrcOp, mask_t Mask) {
   default:
     llvm_unreachable("unhandled operand data type");
   }
-  return llvm::ConstantVector::get(Constants);
+  return llvm::ConstantVector::get(llvm::ArrayRef(Constants.data(), Count));
 }
 
 llvm::Value *
@@ -561,7 +562,7 @@ Converter::LoadBuffer(const SrcOperandTGSM &SrcOp) {
 
   llvm::Value *IntPtr = llvm::ConstantExpr::getInBoundsGetElementPtr(tgsm_h->getValueType(), tgsm_h, ir.getInt32(0));
 
-  IntPtr = ir.CreatePointerCast(IntPtr, ir.getInt32Ty()->getPointerTo(tgsm_h->getAddressSpace()));
+  IntPtr = ir.CreatePointerCast(IntPtr, llvm::PointerType::get(ir.getInt32Ty()->getContext(), tgsm_h->getAddressSpace()));
 
   return std::optional<BufferResourceHandle>({IntPtr, nullptr, stride, SrcOp.read_swizzle, false});
 }
@@ -571,7 +572,7 @@ Converter::LoadBuffer(const AtomicOperandTGSM &DstOp) {
 
   llvm::Value *IntPtr = llvm::ConstantExpr::getInBoundsGetElementPtr(tgsm_h->getValueType(), tgsm_h, ir.getInt32(0));
 
-  IntPtr = ir.CreatePointerCast(IntPtr, ir.getInt32Ty()->getPointerTo(tgsm_h->getAddressSpace()));
+  IntPtr = ir.CreatePointerCast(IntPtr, llvm::PointerType::get(ir.getInt32Ty()->getContext(), tgsm_h->getAddressSpace()));
 
   return std::optional<AtomicBufferResourceHandle>({IntPtr, nullptr, stride, DstOp.mask, false});
 }
@@ -2833,9 +2834,9 @@ Converter::MinMaxFilter(
       ir.SetInsertPoint(Custom);
       // clamped to the format's range (7.18.9.1)
       auto TyBorder = StructType::get(ctx.llvm, {air.getSamplerHandleType(), ir.getInt64Ty(), air.getFloatTy(4)});
-      auto Ptr = ir.CreateIntToPtr(Border, TyBorder->getPointerTo(2));
+      auto Ptr = ir.CreateIntToPtr(Border, llvm::PointerType::get(TyBorder->getContext(), 2));
       auto Range =
-          ir.CreateLoad(air.getFloatTy(2), ir.CreatePointerCast(Own.Range, air.getFloatTy(2)->getPointerTo(2)));
+          ir.CreateLoad(air.getFloatTy(2), ir.CreatePointerCast(Own.Range, llvm::PointerType::get(air.getFloatTy(2)->getContext(), 2)));
       Value *Value = FMin(
           FMax(
               ir.CreateLoad(TyBorder->getElementType(2), ir.CreateStructGEP(TyBorder, Ptr, 2)),
@@ -3275,9 +3276,9 @@ Converter::CustomBorder(
   // the color, clamped to the texture format's range (D3D11.3 7.18.9.1)
   ir.SetInsertPoint(Custom);
   auto TyBorder = StructType::get(ctx.llvm, {air.getSamplerHandleType(), ir.getInt64Ty(), air.getFloatTy(4)});
-  auto Ptr = ir.CreateIntToPtr(Border, TyBorder->getPointerTo(2));
+  auto Ptr = ir.CreateIntToPtr(Border, llvm::PointerType::get(TyBorder->getContext(), 2));
   auto White = ir.CreateLoad(TyBorder->getElementType(0), ir.CreateStructGEP(TyBorder, Ptr, 0));
-  auto Range = ir.CreateLoad(air.getFloatTy(2), ir.CreatePointerCast(Tex.Range, air.getFloatTy(2)->getPointerTo(2)));
+  auto Range = ir.CreateLoad(air.getFloatTy(2), ir.CreatePointerCast(Tex.Range, llvm::PointerType::get(air.getFloatTy(2)->getContext(), 2)));
   auto Clamp = [&](llvm::Value *V) {
     auto Bound = [&](uint64_t i) {
       auto B = ir.CreateExtractElement(Range, i);
@@ -4023,7 +4024,7 @@ Converter::DomainGenerateGroup(
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
-  auto TyBehind = ir.getInt32Ty()->getPointerTo(3);
+  auto TyBehind = llvm::PointerType::get(ir.getInt32Ty()->getContext(), 3);
   SmallVector<Value *> Ops{
       First, End, DataPtr, air.getMeshHandle(), Behind ? Behind : llvm::Constant::getNullValue(TyBehind), Lane,
       Templates ? Templates : llvm::Constant::getNullValue(ir.getInt32Ty()->getPointerTo(1))
@@ -4136,7 +4137,7 @@ Converter::DomainGeneratePiece(
                 {~0U, Attribute::get(Context, Attribute::AttrKind::NoUnwind)},
                 {~0U, Attribute::get(Context, Attribute::AttrKind::WillReturn)}}
   );
-  auto TyBehind = ir.getInt32Ty()->getPointerTo(3);
+  auto TyBehind = llvm::PointerType::get(ir.getInt32Ty()->getContext(), 3);
   SmallVector<Value *> Ops{
       WorkloadIndex, First, air.getInt(Count), air.getInt(PrimitiveVertices(Primitive)), DataPtr, air.getMeshHandle(),
       Behind ? Behind : llvm::Constant::getNullValue(TyBehind)
@@ -4175,7 +4176,7 @@ Converter::DomainGeneratePrimitives(
   Tys.push_back(air.getMeshHandleType());
   Ops.push_back(air.getMeshHandle());
   // threadgroup memory
-  Tys.push_back(ir.getInt32Ty()->getPointerTo(3));
+  Tys.push_back(llvm::PointerType::get(ir.getInt32Ty()->getContext(), 3));
   Ops.push_back(Behind ? Behind : llvm::Constant::getNullValue(Tys.back()));
 
   std::string FnName = "mullion.domain_generate_primitives";

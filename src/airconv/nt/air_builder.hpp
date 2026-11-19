@@ -84,7 +84,7 @@ public:
   };
 
   enum ResourceKind kind;
-  enum SampleType sample_type;
+  enum SampleType sample_type = {};
   enum MemoryAccess memory_access;
   Value *SingleSample = nullptr;
   // true where each of a multisample texture's samples stands for two of D3D's (SM50_TEXTURE_MULTISAMPLE_METADATA_PAIRED)
@@ -590,15 +590,15 @@ public:
 
   Type *
   getSamplerHandleType() {
-    return getOrCreateStructType("struct._sampler_t")->getPointerTo(2);
+    return llvm::PointerType::get(getOrCreateStructType("struct._sampler_t")->getContext(), 2);
   }
   Type *
   getMeshHandleType() {
-    return getOrCreateStructType("struct._mesh_t")->getPointerTo(7);
+    return llvm::PointerType::get(getOrCreateStructType("struct._mesh_t")->getContext(), 7);
   }
   Type *
   getMeshGridPropsType() {
-    return getOrCreateStructType("struct._mesh_grid_properties_t")->getPointerTo(3);
+    return llvm::PointerType::get(getOrCreateStructType("struct._mesh_grid_properties_t")->getContext(), 3);
   }
 
   Value *

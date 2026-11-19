@@ -361,6 +361,7 @@ read_control_flow(
               {.range_id = RangeID, .lower_bound = LB, .size = RangeSize, .space = Inst.m_ConstantBufferDecl.Space},
           .size_in_vec4 = CBufferSize,
           .arg_index = 0, // set it later
+          .arg_metadata_index = 0,
       };
       break;
     }

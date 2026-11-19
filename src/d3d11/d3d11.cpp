@@ -275,7 +275,7 @@ extern "C" HRESULT __stdcall D3D11On12CreateDevice(
     ERR("D3D11On12CreateDevice: not a Mullion D3D12 device");
     return E_INVALIDARG;
   }
-  if (NodeMask && ((NodeMask & (NodeMask - 1)) || std::countr_zero(NodeMask) >= d3d12->GetNodeCount()))
+  if (NodeMask && ((NodeMask & (NodeMask - 1)) || UINT(std::countr_zero(NodeMask)) >= d3d12->GetNodeCount()))
     return E_INVALIDARG;
   std::vector<Com<ID3D12CommandQueue>> queues;
   for (UINT i = 0; i < NumQueues; i++) {

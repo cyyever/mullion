@@ -296,7 +296,7 @@ AIRBuilder::CreateAtomicCmpXchg(
   Value *Ptr = builder.CreateConstGEP1_64(TyTexel, Alloca, 0u);
   builder.CreateStore(CmpVec4, Ptr);
 
-  Tys.push_back(TyTexel->getPointerTo());
+  Tys.push_back(llvm::PointerType::get(TyTexel->getContext(), 0));
   Ops.push_back(Alloca);
 
   Tys.push_back(TyTexel);
@@ -325,8 +325,7 @@ AIRBuilder::CreateAtomicCmpXchg(
 Type *
 AIRBuilder::getTextureHandleType(Texture::ResourceKind Kind) {
   assert(Kind <= Texture::last_resource_kind);
-  return getOrCreateStructType(std::format("struct._{}_t", TextureInfo[Kind].air_symbol_suffix))
-      ->getPointerTo(1);
+  return llvm::PointerType::get(getOrCreateStructType(std::format("struct._{}_t", TextureInfo[Kind].air_symbol_suffix))->getContext(), 1);
 };
 
 Type *

@@ -151,7 +151,7 @@ CoarseShading::Enter(Function *function, IRBuilder<> &ir, llvm::air::AIRBuilder 
   auto tx = ir.CreateLShr(x, 4), ty = ir.CreateLShr(y, 4);
   auto inside = ir.CreateAnd(ir.CreateICmpULT(tx, image_width), ir.CreateICmpULT(ty, image_height));
   auto image = function->getArg(image_);
-  auto bytes = ir.CreateBitCast(image, ir.getInt8Ty()->getPointerTo(image->getType()->getPointerAddressSpace()));
+  auto bytes = ir.CreateBitCast(image, llvm::PointerType::get(ir.getInt8Ty()->getContext(), image->getType()->getPointerAddressSpace()));
   auto at = ir.CreateSelect(inside, ir.CreateAdd(ir.CreateMul(ty, image_width), tx), ir.getInt32(0));
   auto tile = ir.CreateSelect(
       inside, ir.CreateZExt(ir.CreateLoad(ir.getInt8Ty(), ir.CreateGEP(ir.getInt8Ty(), bytes, {at})), i32),
@@ -383,7 +383,7 @@ CoarseShading::Finish() {
     auto kept = branch->getSuccessor(1);
     auto block = discard_->getParent();
     std::vector<llvm::Instruction *> dead{cast<llvm::Instruction>(branch->getCondition())};
-    BranchInst::Create(kept, branch);
+    UncondBrInst::Create(kept, branch->getIterator());
     branch->eraseFromParent();
     block->eraseFromParent();
     discard_ = nullptr;
@@ -414,12 +414,12 @@ CoarseShading::Finish() {
     auto writes = ir.CreateAnd(leads_, ir.CreateNot(ir.CreateLoad(i1, discarded_)));
     auto then = SplitBlockAndInsertIfThen(writes, write, false);
     auto tail = write->getParent();
-    write->moveBefore(then);
+    write->moveBefore(then->getIterator());
     if (write->getType()->isVoidTy())
       continue;
     IRBuilder<> before_branch(head->getTerminator());
     auto otherwise = skipped(before_branch, write);
-    auto phi = PHINode::Create(write->getType(), 2, "", &tail->front());
+    auto phi = PHINode::Create(write->getType(), 2, "", tail->begin());
     write->replaceAllUsesWith(phi);
     phi->addIncoming(write, then->getParent());
     phi->addIncoming(otherwise, head);

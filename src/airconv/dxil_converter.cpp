@@ -518,7 +518,7 @@ lower_bound_handles(Module &M) {
         create,
         {ConstantInt::get(i32, CreateHandle), ConstantInt::get(i8, cls), ConstantInt::get(i32, id),
          call->getArgOperand(2), call->getArgOperand(3)},
-        "", call
+        "", call->getIterator()
     );
     drop_annotations(call, handle);
     call->replaceAllUsesWith(handle);
@@ -598,7 +598,7 @@ lower_heap_handles(Module &M) {
           create,
           {ConstantInt::get(i32, CreateHandle), ConstantInt::get(i8, cls), ConstantInt::get(i32, range->second),
            call->getArgOperand(1), call->getArgOperand(3)},
-          "", annotate
+          "", annotate->getIterator()
       );
       annotate->replaceAllUsesWith(handle);
       annotate->eraseFromParent();
@@ -625,7 +625,7 @@ expand_constant_uses(Value *value) {
       expand_constant_uses(expr);
       for (auto &use : make_early_inc_range(expr->uses())) {
         auto expanded = expr->getAsInstruction();
-        expanded->insertBefore(cast<llvm::Instruction>(use.getUser()));
+        expanded->insertBefore(cast<llvm::Instruction>(use.getUser())->getIterator());
         use.set(expanded);
       }
       expr->destroyConstant();
@@ -802,10 +802,10 @@ ray_context_type(LLVMContext &ctx) {
   auto vector = ArrayType::get(f32, 3), matrix = ArrayType::get(f32, 12);
   return StructType::create(
       ctx,
-      {table->getPointerTo(1), i32->getPointerTo(2), i64->getPointerTo(2), i64->getPointerTo(2), i64,
+      {llvm::PointerType::get(table->getContext(), 1), llvm::PointerType::get(i32->getContext(), 2), llvm::PointerType::get(i64->getContext(), 2), llvm::PointerType::get(i64->getContext(), 2), i64,
        PointerType::get(ctx, 0), ArrayType::get(i32, 3), i32, vector, f32, vector, f32, vector, i32, vector, i32,
        matrix, matrix, i32, i32, i32, i32, f32, i32, i32, i32, i32, i32, i32, i32, ArrayType::get(i32, 8),
-       i64->getPointerTo(2)},
+       llvm::PointerType::get(i64->getContext(), 2)},
       "mullion.ray_context"
   );
 }
@@ -919,7 +919,7 @@ if (auto resources = M.getNamedMetadata("dx.resources")) {
         auto how = opcode(consumer);
         bool compared = how == SampleCmp || how == SampleCmpLevelZero || how == TextureGatherCmp ||
                         how == SampleCmpLevel || how == SampleCmpGrad || how == SampleCmpBias;
-        bool sampled = llvm::any_of(consumer->args(), [&](auto &arg) { return handle_of(arg, SamplerClass); });
+        bool sampled = std::ranges::any_of(consumer->args(), [&](auto &arg) { return handle_of(arg, SamplerClass); });
         // feedback is written with atomics, which read
         // and an acceleration structure is read by the query or the ray it starts
         bool read = !consumer->getType()->isVoidTy() ||
@@ -1318,7 +1318,7 @@ read_dxil(
     shader->writes_resources |= used_ops.count(op) != 0;
   // a SIMD group's lane and width are inputs of every Metal stage but vertex, for the operations that read them
   auto used = [&](std::initializer_list<uint32_t> ops) {
-    return llvm::any_of(ops, [&](auto op) { return used_ops.count(op); });
+    return std::ranges::any_of(ops, [&](auto op) { return used_ops.count(op); });
   };
   bool compute = shader->shader_type == D3D11_SB_COMPUTE_SHADER;
   if (shader->shader_type != D3D10_SB_VERTEX_SHADER &&
@@ -1693,23 +1693,23 @@ convert_dxil(
         ctx.resource.ray_context
             ? (Value *)new BitCastInst(
                   ctx.resource.ray_arguments[argument.getArgNo()], argument.getType(), "",
-                  &*entry_bb.getFirstInsertionPt()
+                  entry_bb.getFirstInsertionPt()
               )
             : argument.getType()->isPointerTy()
                   ? (Value *)new AllocaInst(
-                        GetPointedType(&argument), 0, "", &*entry_bb.getFirstInsertionPt()
+                        GetPointedType(&argument), 0, "", entry_bb.getFirstInsertionPt()
                     )
                   : UndefValue::get(argument.getType())
     );
   for (auto &I : make_early_inc_range(*body))
     if (isa<AllocaInst>(I))
-      I.moveBefore(&*entry_bb.getFirstInsertionPt());
+      I.moveBefore(entry_bb.getFirstInsertionPt());
   // Explicitly transfer ownership: LLVM 23 moveBefore only splices within the source function.
   for (auto &BB : make_early_inc_range(*F)) {
     ctx.function->splice(epilogue->getIterator(), F, BB.getIterator());
     assert(BB.getParent() == ctx.function && "DXIL block must move to the AIR function");
     if (auto ret = dyn_cast<ReturnInst>(BB.getTerminator())) {
-      BranchInst::Create(epilogue, ret);
+      UncondBrInst::Create(epilogue, ret->getIterator());
       ret->eraseFromParent();
     }
   }
@@ -1785,7 +1785,7 @@ convert_dxil(
       IRBuilder<> b(&*ctx.function->getEntryBlock().getFirstInsertionPt());
       auto payload = b.CreateBitCast(
           ctx.resource.payload,
-          sent->getValueType()->getPointerTo(ctx.resource.payload->getType()->getPointerAddressSpace())
+          llvm::PointerType::get(sent->getValueType()->getContext(), ctx.resource.payload->getType()->getPointerAddressSpace())
       );
       if (auto err = retarget(sent, payload))
         return std::move(err);
@@ -1818,10 +1818,10 @@ convert_dxil(
     auto &b = ctx.builder;
     auto i64 = b.getInt64Ty();
     auto address = b.CreateLoad(
-        i64, b.CreateGEP(i64, b.CreateBitCast(ray_value(RayDispatch), i64->getPointerTo(2)),
+        i64, b.CreateGEP(i64, b.CreateBitCast(ray_value(RayDispatch), llvm::PointerType::get(i64->getContext(), 2)),
                          b.getInt32(offsetof(SM50_RAY_DISPATCH, atomic_locks) / sizeof(uint64_t)))
     );
-    return b.CreateIntToPtr(address, b.getInt32Ty()->getPointerTo(1));
+    return b.CreateIntToPtr(address, llvm::PointerType::get(b.getInt32Ty()->getContext(), 1));
   };
   // the runtime's functions are called by name, as a Metal function calls an extern [[visible]] one: every ray
   // tracing pipeline links them, and with no call through the table between them and the kernel, Metal can compile
@@ -1853,7 +1853,7 @@ convert_dxil(
   auto ray_verdict = [&](CallInst *call, SM50_RAY_VERDICT verdict) {
     ctx.builder.CreateStore(ctx.builder.getInt32(verdict), ray_field(RayVerdict));
     if (auto end = dyn_cast<UnreachableInst>(call->getParent()->getTerminator())) {
-      BranchInst::Create(epilogue, end);
+      UncondBrInst::Create(epilogue, end->getIterator());
       end->eraseFromParent();
     }
   };
@@ -1870,7 +1870,7 @@ convert_dxil(
     auto ty = StructType::getTypeByName(ctx.llvm, name);
     return ty ? ty : StructType::create(ctx.llvm, name);
   };
-  auto ray_query_ty = opaque("struct._intersection_query_t")->getPointerTo();
+  auto ray_query_ty = llvm::PointerType::get(opaque("struct._intersection_query_t")->getContext(), 0);
   auto ray_query_call = [&](const std::string &name, Type *ret, ArrayRef<Value *> args) {
     std::vector<Type *> tys;
     for (auto v : args)
@@ -2192,7 +2192,7 @@ convert_dxil(
   // CalculateLOD, whose next operand is its clamped flag (DXIL.rst); an array index follows the logical coordinates
   auto sample = [&](CallInst *call, Handle &tex, Handle &smp, unsigned coord_first, unsigned slots = 4) {
     auto &info = llvm::air::AIRBuilder::getTextureInfo(tex.texture->Logical);
-    auto logical = count(air.getTextureSampleCoordType(Texture{.kind = tex.texture->Logical}));
+    auto logical = count(air.getTextureSampleCoordType(Texture{.kind = tex.texture->Logical, .memory_access = {}}));
     auto ty = air.getTextureSampleCoordType(tex.texture->Texture);
     auto array = logical < slots ? arg(call, coord_first + logical) : nullptr;
     return std::tuple{
@@ -2253,7 +2253,7 @@ convert_dxil(
     if (!b.StructureStride && !inside)
       index = ir.CreateAnd(index, ir.getInt64(UINT32_MAX / (unit->getPrimitiveSizeInBits() / 8)));
     auto space = b.Pointer->getType()->getPointerAddressSpace();
-    auto ptr = ir.CreateGEP(unit, ir.CreatePointerCast(b.Pointer, unit->getPointerTo(space)), {index});
+    auto ptr = ir.CreateGEP(unit, ir.CreatePointerCast(b.Pointer, llvm::PointerType::get(unit->getContext(), space)), {index});
     if (!b.Bounds() || inside)
       return ptr;
     auto units = ir.CreateUDiv(dxbc.DecodeRawBufferByteLength(b.Metadata), ir.getInt32(unit->getPrimitiveSizeInBits() / 8));
@@ -2497,7 +2497,7 @@ convert_dxil(
       // Read and write each half atomically: a stale read under the lock would lose another thread's step.
       auto i32 = ir.getInt32Ty();
       auto half = [=, &ir](unsigned i) {
-        return ir.CreateConstGEP1_32(i32, ir.CreateBitCast(ptr, i32->getPointerTo(ptr->getType()->getPointerAddressSpace())), i);
+        return ir.CreateConstGEP1_32(i32, ir.CreateBitCast(ptr, llvm::PointerType::get(i32->getContext(), ptr->getType()->getPointerAddressSpace())), i);
       };
       // Apple7/8 compilers fail on a 64-bit word built from two atomic loads. Native min/max64 support
       // does not avoid this failure; read each half with an atomic OR of 0 in the emulated path.
@@ -2530,7 +2530,7 @@ convert_dxil(
     auto i32 = ir.getInt32Ty();
     if (op == AtomicRMWInst::Sub)
       v = ir.CreateNeg(v);
-    auto low = ir.CreateBitCast(ptr, i32->getPointerTo(ptr->getType()->getPointerAddressSpace()));
+    auto low = ir.CreateBitCast(ptr, llvm::PointerType::get(i32->getContext(), ptr->getType()->getPointerAddressSpace()));
     auto high = ir.CreateConstGEP1_32(i32, low, 1);
     auto lo = ir.CreateTrunc(v, i32), hi = ir.CreateTrunc(ir.CreateLShr(v, 32), i32);
     auto kind = *split_kind(op);
@@ -3084,7 +3084,7 @@ convert_dxil(
     case GetMeshPayload: {
       auto type = GetPointedType(call);
       auto payload = ir.CreateBitCast(
-          ctx.resource.payload, type->getPointerTo(ctx.resource.payload->getType()->getPointerAddressSpace())
+          ctx.resource.payload, llvm::PointerType::get(type->getContext(), ctx.resource.payload->getType()->getPointerAddressSpace())
       );
       if (auto err = retarget(call, payload))
         return std::move(err);
@@ -3103,7 +3103,7 @@ convert_dxil(
         auto local = a(4);
         auto type = GetPointedType(local);
         auto payload = ir.CreateBitCast(
-            ctx.resource.payload, type->getPointerTo(ctx.resource.payload->getType()->getPointerAddressSpace())
+            ctx.resource.payload, llvm::PointerType::get(type->getContext(), ctx.resource.payload->getType()->getPointerAddressSpace())
         );
         ir.CreateStore(ir.CreateLoad(type, local), payload);
       }
@@ -3236,15 +3236,15 @@ convert_dxil(
       auto offset = ir.CreateZExt(a(2), ir.getInt64Ty());
       auto space = buffer.Pointer->getType()->getPointerAddressSpace();
       Value *pointer = ir.CreateGEP(
-          ir.getInt8Ty(), ir.CreatePointerCast(buffer.Pointer, ir.getInt8Ty()->getPointerTo(space)), offset
+          ir.getInt8Ty(), ir.CreatePointerCast(buffer.Pointer, llvm::PointerType::get(ir.getInt8Ty()->getContext(), space)), offset
       );
       if (buffer.Metadata) {
         auto end = ir.CreateAdd(offset, ir.getInt64(ctx.module.getDataLayout().getTypeStoreSize(ty).getFixedValue()));
-        auto zero = ir.CreatePointerCast(dxbc.ZeroRow(), ir.getInt8Ty()->getPointerTo(space));
+        auto zero = ir.CreatePointerCast(dxbc.ZeroRow(), llvm::PointerType::get(ir.getInt8Ty()->getContext(), space));
         pointer = ir.CreateSelect(ir.CreateICmpULE(end, buffer.Metadata), pointer, zero);
       }
       ret = ir.CreateAlignedLoad(
-          ty, ir.CreatePointerCast(pointer, ty->getPointerTo(space)),
+          ty, ir.CreatePointerCast(pointer, llvm::PointerType::get(ty->getContext(), space)),
           std::min(Align(constant(a(3))), getKnownAlignment(buffer.Pointer, ctx.module.getDataLayout()))
       );
       break;
@@ -3394,7 +3394,7 @@ convert_dxil(
         }
       }
       auto [value, residency] = read(sampler, reference);
-      bool feedback = llvm::any_of(call->users(), [](User *user) {
+      bool feedback = std::ranges::any_of(call->users(), [](User *user) {
         auto extract = dyn_cast<ExtractValueInst>(user);
         return !extract || extract->getIndices().front() == 4;
       });
@@ -4522,7 +4522,7 @@ convert_dxil(
       // a hit that ends the search stops the shader that reported it (DXR spec, "Intersection shaders - procedural
       // primitive geometry")
       auto stop = SplitBlockAndInsertIfThen(ir.CreateICmpNE(ray_value(RayEnded), ir.getInt32(0)), call, true);
-      BranchInst::Create(epilogue, stop);
+      UncondBrInst::Create(epilogue, stop->getIterator());
       stop->eraseFromParent();
       ir.SetInsertPoint(call);
       break;
@@ -4565,16 +4565,16 @@ convert_dxil(
       // null structure, at address 0, misses every ray (DXR spec, "Additional SRV type"): it is the structure of
       // nothing, whose header is before the lock table
       auto i64 = ir.getInt64Ty();
-      auto structure_ty = opaque("struct._instance_acceleration_structure_t")->getPointerTo(1);
+      auto structure_ty = llvm::PointerType::get(opaque("struct._instance_acceleration_structure_t")->getContext(), 1);
       auto address = ir.CreatePtrToInt(handles[a(2)].buffer->Pointer, i64);
       auto locks = atomic_locks();
       if (!locks)
         return make_error<UnsupportedFeature>("TraceRayInline without a lock table");
       auto nothing = ir.CreateSub(ir.CreatePtrToInt(locks, i64), ir.getInt64(SM50_NULL_ACCELERATION_STRUCTURE_HEADER_SIZE));
       auto header = ir.CreateIntToPtr(
-          ir.CreateSelect(ir.CreateICmpEQ(address, ir.getInt64(0)), nothing, address), i64->getPointerTo(1)
+          ir.CreateSelect(ir.CreateICmpEQ(address, ir.getInt64(0)), nothing, address), llvm::PointerType::get(i64->getContext(), 1)
       );
-      auto structure = ir.CreateLoad(structure_ty, ir.CreateBitCast(header, structure_ty->getPointerTo(1)));
+      auto structure = ir.CreateLoad(structure_ty, ir.CreateBitCast(header, llvm::PointerType::get(structure_ty->getContext(), 1)));
       ir.CreateStore(ir.CreateLoad(i64, ir.CreateConstGEP1_32(i64, header, 1)), ray_query(a(1), &RayQuery::instances));
       auto flags = ir.CreateOr(a(3), ray_query(a(1), &RayQuery::constant_flags));
       ir.CreateStore(flags, ray_query(a(1), &RayQuery::flags));
@@ -4635,7 +4635,7 @@ convert_dxil(
           ir.CreateLoad(ir.getInt64Ty(), ray_query(a(1), &RayQuery::instances)),
           ir.CreateAdd(ir.CreateMul(ir.CreateZExt(index, ir.getInt64Ty()), ir.getInt64(instance_size)), ir.getInt64(table_offset))
       );
-      ret = ir.CreateLoad(ir.getInt32Ty(), ir.CreateIntToPtr(address, ir.getInt32Ty()->getPointerTo(1)));
+      ret = ir.CreateLoad(ir.getInt32Ty(), ir.CreateIntToPtr(address, llvm::PointerType::get(ir.getInt32Ty()->getContext(), 1)));
       break;
     }
     default: {
@@ -4665,7 +4665,7 @@ convert_dxil(
     }
     }
     if (skipped && ret) {
-      auto phi = PHINode::Create(ty, 2, "", &call->getParent()->front());
+      auto phi = PHINode::Create(ty, 2, "", call->getParent()->begin());
       phi->addIncoming(ret, ir.GetInsertBlock());
       phi->addIncoming(Constant::getNullValue(ty), skipped);
       ret = phi;
@@ -5128,16 +5128,14 @@ convert_dxil_mesh_stage(
           FixedVectorType::get(builder.getInt32Ty(), 3),
           builder.CreateBitCast(
               function->getArg(payload_idx),
-              FixedVectorType::get(builder.getInt32Ty(), 3)->getPointerTo(
-                  function->getArg(payload_idx)->getType()->getPointerAddressSpace()
-              )
+              llvm::PointerType::get(FixedVectorType::get(builder.getInt32Ty(), 3)->getContext(), function->getArg(payload_idx)->getType()->getPointerAddressSpace())
           )
       );
     }
   }
   if (origin) {
     auto i32 = builder.getInt32Ty();
-    auto words = builder.CreateBitCast(function->getArg(raster_scale), i32->getPointerTo((unsigned)air::AddressSpace::constant));
+    auto words = builder.CreateBitCast(function->getArg(raster_scale), llvm::PointerType::get(i32->getContext(), (unsigned)air::AddressSpace::constant));
     for (unsigned i = 0; i < 3; i++) {
       auto first = builder.CreateLoad(i32, builder.CreateConstGEP1_32(i32, words, SM50_RASTER_SCALE_MESH_ORIGIN + i));
       group = builder.CreateInsertElement(group, builder.CreateAdd(builder.CreateExtractElement(group, i), first), i);
@@ -5243,7 +5241,7 @@ convert_dxil_ray_shader(
   auto context_ty = ray_context_type(context);
   auto i8p = llvm::PointerType::get(context, 0);
   auto function = llvm::Function::Create(
-      llvm::FunctionType::get(llvm::Type::getVoidTy(context), {context_ty->getPointerTo(), i8p, i8p}, false),
+      llvm::FunctionType::get(llvm::Type::getVoidTy(context), {llvm::PointerType::get(context_ty->getContext(), 0), i8p, i8p}, false),
       llvm::GlobalValue::ExternalLinkage, name, module
   );
   auto entry_bb = llvm::BasicBlock::Create(context, "entry", function);
@@ -5275,7 +5273,7 @@ convert_dxil_ray_shader(
   if (local)
     bind_rootsig_arguments(
         *local, builder,
-        builder.CreateIntToPtr(field(RayLocalArguments), llvm::Type::getInt64Ty(context)->getPointerTo(1)),
+        builder.CreateIntToPtr(field(RayLocalArguments), llvm::PointerType::get(llvm::Type::getInt64Ty(context)->getContext(), 1)),
         local_rootsig->static_samplers ? builder.CreateIntToPtr(
                                              builder.getInt64(local_rootsig->static_samplers),
                                              context_ty->getElementType(RayStaticSamplers)
@@ -5340,9 +5338,9 @@ convert_ray_dispatcher(
   auto context_ty = ray_context_type(context);
   llvm::Type *i8p = llvm::PointerType::get(context, 0), *i32 = llvm::Type::getInt32Ty(context);
   auto void_ty = llvm::Type::getVoidTy(context);
-  auto shader_ty = llvm::FunctionType::get(void_ty, {context_ty->getPointerTo(), i8p, i8p}, false);
+  auto shader_ty = llvm::FunctionType::get(void_ty, {llvm::PointerType::get(context_ty->getContext(), 0), i8p, i8p}, false);
   auto function = llvm::Function::Create(
-      llvm::FunctionType::get(void_ty, {i32, context_ty->getPointerTo(), i8p, i8p}, false),
+      llvm::FunctionType::get(void_ty, {i32, llvm::PointerType::get(context_ty->getContext(), 0), i8p, i8p}, false),
       llvm::GlobalValue::ExternalLinkage, names[dispatcher], module
   );
   auto md = [&](std::initializer_list<llvm::Metadata *> nodes) { return llvm::MDNode::get(context, nodes); };
@@ -5379,7 +5377,7 @@ convert_ray_dispatcher(
         "air.get_function_pointer_visible_function_table", llvm::FunctionType::get(i8p, {table_ty, i32}, false)
     );
     auto shaders_table = builder.CreateLoad(table_ty, builder.CreateStructGEP(context_ty, ray_context, RayShaders));
-    auto shader = builder.CreateBitCast(builder.CreateCall(lookup, {shaders_table, slot}), shader_ty->getPointerTo());
+    auto shader = builder.CreateBitCast(builder.CreateCall(lookup, {shaders_table, slot}), llvm::PointerType::get(shader_ty->getContext(), 0));
     builder.CreateCall(shader_ty, shader, {ray_context, function->getArg(2), function->getArg(3)});
   }
   builder.CreateRetVoid();

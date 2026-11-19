@@ -1,3 +1,4 @@
+#include <ranges>
 #include "air_signature.hpp"
 #include "airconv_error.hpp"
 #include "dxbc_converter.hpp"
@@ -238,10 +239,9 @@ setup_domain_patch(
   );
   resource_map.input.ptr_float4 = builder.CreateBitCast(
       resource_map.input.ptr_int4,
-      llvm::ArrayType::get(
+      llvm::PointerType::get(llvm::ArrayType::get(
           llvm::ArrayType::get(types._float4, pHullStage->max_output_register), pHullStage->output_control_point_count
-      )
-          ->getPointerTo(address_space)
+      )->getContext(), address_space)
   );
   resource_map.input_element_count = pHullStage->max_output_register;
 
@@ -249,7 +249,7 @@ setup_domain_patch(
       builder.CreateAlloca(llvm::ArrayType::get(types._int4, max_input_register));
   resource_map.patch_constant_output.ptr_float4 = builder.CreateBitCast(
       resource_map.patch_constant_output.ptr_int4,
-      llvm::ArrayType::get(types._float4, max_input_register)->getPointerTo()
+      llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_input_register)->getContext(), 0)
   );
 
   resource_map.output.ptr_int4 = builder.CreateAlloca(llvm::ArrayType::get(types._int4, max_output_register));
@@ -258,25 +258,23 @@ setup_domain_patch(
                       resource_map.output.ptr_int4);
   resource_map.output.ptr_float4 = builder.CreateBitCast(
       resource_map.output.ptr_int4,
-      llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo(
-          cast<llvm::PointerType>(resource_map.output.ptr_int4->getType())->getPointerAddressSpace()
-      )
+      llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_output_register)->getContext(), cast<llvm::PointerType>(resource_map.output.ptr_int4->getType())->getPointerAddressSpace())
   );
   resource_map.output_element_count = max_output_register;
 
   /* setup patch constant register */
-  for (auto x : llvm::enumerate(pHullStage->patch_constant_scalars)) {
-    if (x.value().reg >= max_input_register)
+  for (auto [x_index, x_value] : std::views::enumerate(pHullStage->patch_constant_scalars)) {
+    if (x_value.reg >= max_input_register)
       continue;
     auto src_ptr = builder.CreateGEP(
         payload_type, payload,
         {builder.getInt32(0), // struct
          builder.getInt32(1), // pcout
-         patch_index, builder.getInt32(x.index())}
+         patch_index, builder.getInt32(x_index)}
     );
     auto dst_ptr = builder.CreateGEP(
         llvm::ArrayType::get(types._int4, max_input_register), resource_map.patch_constant_output.ptr_int4,
-        {builder.getInt32(0), builder.getInt32(x.value().reg), builder.getInt32(x.value().component)}
+        {builder.getInt32(0), builder.getInt32(x_value.reg), builder.getInt32(x_value.component)}
     );
     builder.CreateStore(builder.CreateLoad(types._int, src_ptr), dst_ptr);
   }
@@ -292,7 +290,7 @@ setup_domain_stage(
   auto &builder = ctx.builder;
   auto &types = ctx.types;
   auto &resource_map = ctx.resource;
-  auto payload = builder.CreateBitCast(payload_argument, payload_type->getPointerTo(6));
+  auto payload = builder.CreateBitCast(payload_argument, llvm::PointerType::get(payload_type->getContext(), 6));
   auto data = builder.CreateGEP(payload_type, payload, {builder.getInt32(0), builder.getInt32(3), builder.getInt32(0)});
   auto batched_patch_start =
       builder.CreateLoad(types._int, builder.CreateGEP(payload_type, payload, {builder.getInt32(0), builder.getInt32(2)}));
@@ -633,7 +631,7 @@ convert_dxbc_vertex_hull_shader(
 
     resource_map.input.ptr_int4 = builder.CreateAlloca(llvm::ArrayType::get(types._int4, max_input_register));
     resource_map.input.ptr_float4 = builder.CreateBitCast(
-        resource_map.input.ptr_int4, llvm::ArrayType::get(types._float4, max_input_register)->getPointerTo()
+        resource_map.input.ptr_int4, llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_input_register)->getContext(), 0)
     );
     resource_map.input_element_count = max_input_register;
 
@@ -642,7 +640,7 @@ convert_dxbc_vertex_hull_shader(
         output_reg_per_group_type, vertex_out, {builder.getInt32(0), patch_offset_in_group, control_point_id_in_patch}
     );
     resource_map.output.ptr_float4 = builder.CreateBitCast(
-        resource_map.output.ptr_int4, output_reg_per_point_type_float->getPointerTo(vertex_out->getAddressSpace())
+        resource_map.output.ptr_int4, llvm::PointerType::get(output_reg_per_point_type_float->getContext(), vertex_out->getAddressSpace())
     );
 
     resource_map.output_element_count = max_output_register;
@@ -734,14 +732,14 @@ convert_dxbc_vertex_hull_shader(
 
     uint32_t vertex_max_output_register = max_vs_output_register;
 
-    auto payload = builder.CreateBitCast(function->getArg(payload_idx), payload_struct_type->getPointerTo(6));
+    auto payload = builder.CreateBitCast(function->getArg(payload_idx), llvm::PointerType::get(payload_struct_type->getContext(), 6));
 
     assert(pHullStage->input_control_point_count != ~0u);
 
     resource_map.input.ptr_int4 =
         builder.CreateGEP(output_reg_per_group_type, vertex_out, {builder.getInt32(0), patch_offset_in_group});
     resource_map.input.ptr_float4 = builder.CreateBitCast(
-        resource_map.input.ptr_int4, output_reg_per_patch_type_float->getPointerTo(vertex_out->getAddressSpace())
+        resource_map.input.ptr_int4, llvm::PointerType::get(output_reg_per_patch_type_float->getContext(), vertex_out->getAddressSpace())
     );
     resource_map.input_element_count = vertex_max_output_register;
 
@@ -786,9 +784,7 @@ convert_dxbc_vertex_hull_shader(
       }
       resource_map.output.ptr_float4 = builder.CreateBitCast(
           resource_map.output.ptr_int4,
-          hs_output_per_patch_type_float->getPointerTo(
-              cast<llvm::PointerType>(resource_map.output.ptr_int4->getType())->getPointerAddressSpace()
-          )
+          llvm::PointerType::get(hs_output_per_patch_type_float->getContext(), cast<llvm::PointerType>(resource_map.output.ptr_int4->getType())->getPointerAddressSpace())
       );
       resource_map.output_element_count = max_hs_output_register;
     } else {
@@ -826,7 +822,7 @@ convert_dxbc_vertex_hull_shader(
           builder.CreateGEP(hs_pcout_per_group_type, patch_constant_out, {builder.getInt32(0), patch_offset_in_group});
       resource_map.patch_constant_output.ptr_float4 = builder.CreateBitCast(
           resource_map.patch_constant_output.ptr_int4,
-          hs_pcout_per_patch_type_float->getPointerTo((uint32_t)air::AddressSpace::threadgroup)
+          llvm::PointerType::get(hs_pcout_per_patch_type_float->getContext(), (uint32_t)air::AddressSpace::threadgroup)
       );
     }
 
@@ -1281,7 +1277,7 @@ convert_dxbc_tesselator_domain_shader(
           types._int,
           builder.CreateGEP(
               payload_struct_type,
-              builder.CreateBitCast(function->getArg(payload_idx), payload_struct_type->getPointerTo(6)),
+              builder.CreateBitCast(function->getArg(payload_idx), llvm::PointerType::get(payload_struct_type->getContext(), 6)),
               {builder.getInt32(0), builder.getInt32(4)}
           )
       )
@@ -1290,7 +1286,7 @@ convert_dxbc_tesselator_domain_shader(
   // before it (the patches before it have as many), in the patch's room. the group's first workload names its patch
   llvm::Value *group_end = nullptr;
   if (group_limit) {
-    auto payload = builder.CreateBitCast(function->getArg(payload_idx), payload_struct_type->getPointerTo(6));
+    auto payload = builder.CreateBitCast(function->getArg(payload_idx), llvm::PointerType::get(payload_struct_type->getContext(), 6));
     uint32_t patch_per_group = next_pow2(32 / next_pow2(pHullStage->hull_maximum_threads_per_patch));
     uint32_t room = get_max_potential_workload_count(factor_int, pHullStage->tessellation_domain, pHullStage->tessellation_partition);
     auto group = workload_index;
@@ -1414,35 +1410,35 @@ convert_dxbc_tesselator_domain_shader(
     }
   }
 
-  for (auto x : llvm::enumerate(pShaderInternal->clip_distance_scalars)) {
-    if (x.value().reg >= max_output_register)
+  for (auto [x_index, x_value] : std::views::enumerate(pShaderInternal->clip_distance_scalars)) {
+    if (x_value.reg >= max_output_register)
       continue;
     auto src_ptr = builder.CreateGEP(
         llvm::ArrayType::get(types._float4, max_output_register), resource_map.output.ptr_float4,
-        {builder.getInt32(0), builder.getInt32(x.value().reg), builder.getInt32(x.value().component)}
+        {builder.getInt32(0), builder.getInt32(x_value.reg), builder.getInt32(x_value.component)}
     );
     auto distance = builder.CreateLoad(types._float, src_ptr);
     if (clip_varyings)
-      air.CreateSetMeshVertexData(vertex_id, clip_data + x.index(), distance);
+      air.CreateSetMeshVertexData(vertex_id, clip_data + x_index, distance);
     else
-      air.CreateSetMeshClipDistance(vertex_id, builder.getInt32(x.index()), distance);
+      air.CreateSetMeshClipDistance(vertex_id, builder.getInt32(x_index), distance);
   }
 
   if (behind) {
     llvm::Value *mine = builder.getInt32(0);
-    for (auto distance : llvm::enumerate(pShaderInternal->cull_distance_scalars)) {
+    for (auto [distance_index, distance_value] : std::views::enumerate(pShaderInternal->cull_distance_scalars)) {
       auto value = builder.CreateLoad(
           types._float, builder.CreateGEP(
                             llvm::ArrayType::get(types._float4, max_output_register), resource_map.output.ptr_float4,
-                            {builder.getInt32(0), builder.getInt32(distance.value().reg),
-                             builder.getInt32(distance.value().component)}
+                            {builder.getInt32(0), builder.getInt32(distance_value.reg),
+                             builder.getInt32(distance_value.component)}
                         )
       );
       // negative, or NaN
       mine = builder.CreateOr(
           mine, builder.CreateShl(
                     builder.CreateZExt(builder.CreateFCmpULT(value, llvm::ConstantFP::get(types._float, 0)), types._int),
-                    distance.index()
+                    distance_index
                 )
       );
     }
@@ -1508,14 +1504,14 @@ convert_dxbc_tesselator_domain_shader(
         for (auto &h : ds_output_handlers)
           if (auto err = h(out).build(ctx).takeError())
             return err;
-        for (auto x : llvm::enumerate(pShaderInternal->clip_distance_scalars)) {
-          if (x.value().reg >= max_output_register)
+        for (auto [x_index, x_value] : std::views::enumerate(pShaderInternal->clip_distance_scalars)) {
+          if (x_value.reg >= max_output_register)
             continue;
           auto src_ptr = builder.CreateGEP(
               llvm::ArrayType::get(types._float4, max_output_register), resource_map.output.ptr_float4,
-              {builder.getInt32(0), builder.getInt32(x.value().reg), builder.getInt32(x.value().component)}
+              {builder.getInt32(0), builder.getInt32(x_value.reg), builder.getInt32(x_value.component)}
           );
-          air.CreateSetMeshClipDistance(vertex, builder.getInt32(x.index()), builder.CreateLoad(types._float, src_ptr));
+          air.CreateSetMeshClipDistance(vertex, builder.getInt32(x_index), builder.CreateLoad(types._float, src_ptr));
         }
         conservative_varyings(air, triangle, u, vertex, conservative_at, pso_tess->barycentrics);
         air.CreateSetMeshIndex(vertex, vertex);

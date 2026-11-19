@@ -1231,7 +1231,7 @@ public:
         return FAIL(E_INVALIDARG);
       auto *out = reinterpret_cast<sdk::D3D12_FEATURE_DATA_BARRIER_LAYOUT *>(pFeatureData);
       // queue compatibility is defined by DirectX-Specs, Enhanced Barriers, Command Queue Layout Compatibility
-      switch (out->Layout) {
+      switch (uint32_t(out->Layout)) {
       case D3D12_BARRIER_LAYOUT_RENDER_TARGET:
       case D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_WRITE:
       case D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_READ:
@@ -1301,10 +1301,13 @@ public:
         return S_OK;
       }
       // D3D12_FORMAT_SUPPORT1 and 2 share D3D11's bit values, but for D3D11's mip generation, CPU access and sharing
+      uint32_t support1 = 0, support2 = 0;
       HRESULT hr = MTLQueryDXGIFormatSupport(
           GetMTLDevice(), out->Format, [this](WMTPixelFormat f) { return GetMTLPixelFormatCapability(f); },
-          *reinterpret_cast<uint32_t *>(&out->Support1), *reinterpret_cast<uint32_t *>(&out->Support2)
+          support1, support2
       );
+      out->Support1 = D3D12_FORMAT_SUPPORT1(support1);
+      out->Support2 = D3D12_FORMAT_SUPPORT2(support2);
       out->Support1 &= ~D3D12_FORMAT_SUPPORT1(D3D11_FORMAT_SUPPORT_MIP_AUTOGEN | D3D11_FORMAT_SUPPORT_CPU_LOCKABLE);
       out->Support2 &= ~D3D12_FORMAT_SUPPORT2(D3D11_FORMAT_SUPPORT2_SHAREABLE);
       return hr;
@@ -1707,7 +1710,7 @@ public:
     __ret->Type = D3D12_HEAP_TYPE_CUSTOM;
     __ret->CreationNodeMask = 1;
     __ret->VisibleNodeMask = 1;
-    switch (HeapType) {
+    switch (uint32_t(HeapType)) {
     case D3D12_HEAP_TYPE_DEFAULT:
       __ret->CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
       __ret->MemoryPoolPreference = advertise_numa_ ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0;

@@ -555,7 +555,7 @@ expected_line(Partitioning partitioning, const Factors &patch, uint32_t x, uint3
     float pu, pv;
     memcpy(&pu, &p[0], 4);
     memcpy(&pv, &p[1], 4);
-    line.on |= std::lround(pv * height) == y;
+    line.on |= std::lround(pv * height) == static_cast<long>(y);
     float at = pu * width * 256;
     line.decided &= at != edge - 0.5f;
     if (std::nearbyint(at) < edge)

@@ -86,14 +86,17 @@ main(int argc, char **argv) {
   expect(swapchain->SetBackgroundColor(&color) == S_OK && swapchain->GetBackgroundColor(&got_color) == S_OK &&
              !memcmp(&got_color, &color, sizeof(color)),
          "the background color", got_color.g * 4, color.g * 4);
-  expect((hr = swapchain->SetBackgroundColor(&beyond)) == E_INVALIDARG, "a color beyond 1", hr, E_INVALIDARG);
-  expect((hr = swapchain->SetBackgroundColor(nullptr)) == E_INVALIDARG, "no color", hr, E_INVALIDARG);
+  hr = swapchain->SetBackgroundColor(&beyond);
+  expect(hr == E_INVALIDARG, "a color beyond 1", hr, E_INVALIDARG);
+  hr = swapchain->SetBackgroundColor(nullptr);
+  expect(hr == E_INVALIDARG, "no color", hr, E_INVALIDARG);
   expect(swapchain->GetBackgroundColor(&got_color) == S_OK && !memcmp(&got_color, &color, sizeof(color)),
          "the background color after refused ones", got_color.g * 4, color.g * 4);
   DXGI_MODE_ROTATION rotation = DXGI_MODE_ROTATION_UNSPECIFIED;
   expect(swapchain->GetRotation(&rotation) == S_OK && rotation == DXGI_MODE_ROTATION_IDENTITY, "the first rotation",
          rotation, DXGI_MODE_ROTATION_IDENTITY);
-  expect((hr = swapchain->SetRotation(DXGI_MODE_ROTATION_ROTATE90)) == S_OK &&
+  hr = swapchain->SetRotation(DXGI_MODE_ROTATION_ROTATE90);
+  expect(hr == S_OK &&
              swapchain->GetRotation(&rotation) == S_OK && rotation == DXGI_MODE_ROTATION_ROTATE90,
          "a rotation", rotation, DXGI_MODE_ROTATION_ROTATE90);
   CHECK(swapchain->SetRotation(DXGI_MODE_ROTATION_IDENTITY));
@@ -103,8 +106,10 @@ main(int argc, char **argv) {
            source[0] << 16 | source[1], width << 16 | height);
   };
   source_is(size, size, "the first source size");
-  expect((hr = swapchain->SetSourceSize(0, size)) == E_INVALIDARG, "a source of no width", hr, E_INVALIDARG);
-  expect((hr = swapchain->SetSourceSize(size, size + 1)) == E_INVALIDARG, "a source beyond the buffer", hr, E_INVALIDARG);
+  hr = swapchain->SetSourceSize(0, size);
+  expect(hr == E_INVALIDARG, "a source of no width", hr, E_INVALIDARG);
+  hr = swapchain->SetSourceSize(size, size + 1);
+  expect(hr == E_INVALIDARG, "a source beyond the buffer", hr, E_INVALIDARG);
   source_is(size, size, "the source size after refused ones");
 
   ComPtr<ID3D12DescriptorHeap> rtv_heap;
@@ -132,7 +137,8 @@ main(int argc, char **argv) {
   for (UINT f = 0; f < frames; f++) {
     // the last frame is presented from the quarter at the buffer's origin
     if (f == frames - 1) {
-      expect((hr = swapchain->SetSourceSize(size / 2, size / 2)) == S_OK, "a source size", hr, S_OK);
+      hr = swapchain->SetSourceSize(size / 2, size / 2);
+      expect(hr == S_OK, "a source size", hr, S_OK);
       source_is(size / 2, size / 2, "the source size");
     }
     auto i = swapchain->GetCurrentBackBufferIndex();
@@ -179,7 +185,8 @@ main(int argc, char **argv) {
   const UINT resized = size * 3 / 4;
   CHECK(swapchain->ResizeBuffers(buffers, resized, resized, DXGI_FORMAT_UNKNOWN, 0));
   source_is(resized, resized, "the source size of new buffers");
-  expect((hr = swapchain->SetSourceSize(size, size)) == E_INVALIDARG, "a source beyond the new buffers", hr, E_INVALIDARG);
+  hr = swapchain->SetSourceSize(size, size);
+  expect(hr == E_INVALIDARG, "a source beyond the new buffers", hr, E_INVALIDARG);
   printf("%s: %u mismatching channels over %u frames\n", mismatches ? "failed" : "passed", mismatches, frames);
   return mismatches != 0;
 }

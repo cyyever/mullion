@@ -176,8 +176,7 @@ struct MSLSampler {
   constexpr std::string_view get_name() const { return "sampler"; };
 
   llvm::Type *get_llvm_type(llvm::LLVMContext &context) const {
-    return getOrCreateStructType("struct._sampler_t", context)
-      ->getPointerTo(2); // samplers are in constant addrspace
+    return llvm::PointerType::get(getOrCreateStructType("struct._sampler_t", context)->getContext(), 2); // samplers are in constant addrspace
   };
 };
 
@@ -286,53 +285,37 @@ struct MSLTexture {
   llvm::Type *get_llvm_type(llvm::LLVMContext &context) const {
     switch (resource_kind) {
     case TextureKind::texture_1d:
-      return getOrCreateStructType("struct._texture_1d_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_1d_t", context)->getContext(), 1);
     case TextureKind::texture_1d_array:
-      return getOrCreateStructType("struct._texture_1d_array_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_1d_array_t", context)->getContext(), 1);
     case TextureKind::texture_2d:
-      return getOrCreateStructType("struct._texture_2d_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_2d_t", context)->getContext(), 1);
     case TextureKind::texture_2d_array:
-      return getOrCreateStructType("struct._texture_2d_array_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_2d_array_t", context)->getContext(), 1);
     case TextureKind::texture_2d_ms:
-      return getOrCreateStructType("struct._texture_2d_ms_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_2d_ms_t", context)->getContext(), 1);
     case TextureKind::texture_2d_ms_array:
-      return getOrCreateStructType("struct._texture_2d_ms_array_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_2d_ms_array_t", context)->getContext(), 1);
     case TextureKind::texture_3d:
-      return getOrCreateStructType("struct._texture_3d_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_3d_t", context)->getContext(), 1);
     case TextureKind::texture_cube:
-      return getOrCreateStructType("struct._texture_cube_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_cube_t", context)->getContext(), 1);
     case TextureKind::texture_cube_array:
-      return getOrCreateStructType("struct._texture_cube_array_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_cube_array_t", context)->getContext(), 1);
     case TextureKind::texture_buffer:
-      return getOrCreateStructType("struct._texture_buffer_1d_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._texture_buffer_1d_t", context)->getContext(), 1);
     case TextureKind::depth_2d:
-      return getOrCreateStructType("struct._depth_2d_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._depth_2d_t", context)->getContext(), 1);
     case TextureKind::depth_2d_array:
-      return getOrCreateStructType("struct._depth_2d_array_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._depth_2d_array_t", context)->getContext(), 1);
     case TextureKind::depth_2d_ms:
-      return getOrCreateStructType("struct._depth_2d_ms_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._depth_2d_ms_t", context)->getContext(), 1);
     case TextureKind::depth_2d_ms_array:
-      return getOrCreateStructType("struct._depth_2d_ms_array_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._depth_2d_ms_array_t", context)->getContext(), 1);
     case TextureKind::depth_cube:
-      return getOrCreateStructType("struct._depth_cube_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._depth_cube_t", context)->getContext(), 1);
     case TextureKind::depth_cube_array:
-      return getOrCreateStructType("struct._depth_cube_array_t", context)
-        ->getPointerTo(1);
+      return llvm::PointerType::get(getOrCreateStructType("struct._depth_cube_array_t", context)->getContext(), 1);
       break;
     };
   };
@@ -364,7 +347,7 @@ struct MSLPointer {
   llvm::Type *get_llvm_type(llvm::LLVMContext &context) {
     auto pointee_type =
       std::visit([&](auto x) { return x.get_llvm_type(context); }, pointee);
-    return pointee_type->getPointerTo((uint32_t)address_space);
+    return llvm::PointerType::get(pointee_type->getContext(), (uint32_t)address_space);
   };
 };
 
@@ -390,21 +373,21 @@ using MSLRepresentableTypeWithArray = template_concat_t<
   std::variant<MSLStaticArray, MSLPointer /* why are you here? */>>;
 
 struct ArgumentBindingBuffer {
-  std::optional<uint32_t> buffer_size; // unbounded if not represented
+  std::optional<uint32_t> buffer_size = {}; // unbounded if not represented
   uint32_t location_index;
   uint32_t array_size;
   MemoryAccess memory_access;
   AddressSpace address_space;
   // std::string arg_type_name;
   MSLRepresentableType type;
-  std::string arg_name;
-  std::optional<uint32_t> raster_order_group;
+  std::string arg_name = {};
+  std::optional<uint32_t> raster_order_group = {};
 };
 
 struct ArgumentBindingSampler {
   uint32_t location_index;
   uint32_t array_size;
-  std::string arg_name;
+  std::string arg_name = {};
 };
 
 struct ArgumentBindingTexture {
@@ -412,8 +395,8 @@ struct ArgumentBindingTexture {
   uint32_t array_size;
   MemoryAccess memory_access;
   MSLTexture type; // why it's a variant!
-  std::string arg_name;
-  std::optional<uint32_t> raster_order_group;
+  std::string arg_name = {};
+  std::optional<uint32_t> raster_order_group = {};
 };
 
 /* is this in fact argument buffer? */
@@ -424,14 +407,14 @@ struct ArgumentBindingIndirectBuffer {
   AddressSpace address_space;
   llvm::StructType *struct_type;
   llvm::Metadata *struct_type_info;
-  std::string arg_name;
+  std::string arg_name = {};
 };
 
 struct ArgumentBindingIndirectConstant {
   uint32_t location_index;
   uint32_t array_size;
   MSLRepresentableTypeWithArray type;
-  std::string arg_name;
+  std::string arg_name = {};
 };
 
 using ArgumentBufferArguments = std::variant<
@@ -515,7 +498,7 @@ struct InputFragmentStageIn {
   std::string user;
   MSLScalerOrVectorType type;
   Interpolation interpolation;
-  bool pull_mode;
+  bool pull_mode = false;
   // a flat input the shader also reads at each vertex of the primitive (Metal 4's vertex_value<T>)
   bool vertex_value = false;
 };

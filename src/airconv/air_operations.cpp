@@ -52,7 +52,7 @@ AIRBuilderResult load_from_device_buffer(
       ctx.builder.CreateBitCast(
         // an offset is unsigned: as a 32-bit index it would be taken as signed
         ctx.builder.CreateGEP(ctx.types._byte, base_addr, {ctx.builder.CreateZExt(aligned_offset, ctx.types._long)}),
-        value_type->getPointerTo((uint32_t)AddressSpace::device)
+        llvm::PointerType::get(value_type->getContext(), (uint32_t)AddressSpace::device)
       ),
       element_offset
     ),
