@@ -74,7 +74,10 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
         for (auto &operand : i.operands())
           if (auto *expression = llvm::dyn_cast<llvm::ConstantExpr>(operand.get()))
             expressions.push_back(expression);
-  llvm::convertUsersOfConstantsToInstructions(expressions, nullptr, true, true);
+  // A dead user of one expression may itself occur later in this list. LLVM's
+  // cleanup would delete it before visiting that entry. Leave constant lifetime
+  // to the LLVM context; only materialize the instruction operands here.
+  llvm::convertUsersOfConstantsToInstructions(expressions, nullptr, false, true);
 
   // Metal's object shader lowering fails on byte-array pointer arithmetic
   // combined with payload writes. Preserve the stride using an integer element.
