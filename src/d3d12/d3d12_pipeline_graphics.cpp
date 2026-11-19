@@ -19,6 +19,7 @@
 #include "d3d12_device.hpp"
 #include "d3d12_pipeline.hpp"
 #include "mullion_format.hpp"
+#include "mullion_command_constants.hpp"
 #include "mullion_stream_output.hpp"
 #include "mullion_shader_cache.hpp"
 #include "tessellation_limits.hpp"
@@ -1023,20 +1024,20 @@ struct Group {
   // discards those of a primitive `culls` cull distances cull, as its cull_distances does (SM50_CULL_VARYING), then
   // writing the depth where the pipeline clamps it (`cull_depth`, as cull_depth does). the device keeps one of each
   WMT::Reference<WMT::Function>
-  TestFragment(bool conservative, bool depth, bool bounds, uint32_t sample_mask, uint32_t culls, bool cull_depth) {
+  TestFragment(bool conservative, bool depth, bool bounds, uint32_t sample_mask, uint32_t culls, bool cull_depth, bool fragment_bias) {
     std::lock_guard<mullion::mutex> lock(device_->test_fragments_mutex);
-    auto &function = device_->test_fragments[{conservative, depth, bounds, sample_mask, culls, cull_depth}];
+    auto &function = device_->test_fragments[{conservative, depth, bounds, sample_mask, culls, cull_depth, fragment_bias}];
     if (!function)
-      function = CompileTestFragment(conservative, depth, bounds, sample_mask, culls, cull_depth);
+      function = CompileTestFragment(conservative, depth, bounds, sample_mask, culls, cull_depth, fragment_bias);
     return function;
   }
 
   // `depth`: it writes the depth, as a conservative rasterizer's that may discard does (a hull's too, whose pixels
   // it does not test)
   WMT::Reference<WMT::Function>
-  CompileTestFragment(bool conservative, bool depth, bool bounds, uint32_t sample_mask, uint32_t culls, bool cull_depth) {
+  CompileTestFragment(bool conservative, bool depth, bool bounds, uint32_t sample_mask, uint32_t culls, bool cull_depth, bool fragment_bias) {
     // and a clamped depth where it may discard by cull distance
-    depth |= conservative || (culls && cull_depth);
+    depth |= fragment_bias || conservative || (culls && cull_depth);
     bool masked = bounds || sample_mask != ~0u;
     auto corners = std::to_string(SM50_CONSERVATIVE_CORNERS);
     std::string source = "#include <metal_stdlib>\nusing namespace metal;\nstruct In {\n  float4 position [[position]];\n";
@@ -1051,6 +1052,9 @@ struct Group {
     bool outputs = depth || masked;
     std::string ret = outputs ? "  return out;\n" : "  return;\n";
     source += std::string("};\nfragment ") + (outputs ? "Out" : "void") + " test_fragment(In in [[stage_in]]";
+    if (fragment_bias)
+      source += ", uint viewport [[viewport_array_index]], constant float *ranges [[buffer(" +
+                std::to_string(SM50_BINDING_INDEX_DEPTH_RANGES) + ")]]";
     if (bounds)
       source += ", constant uint2 &bounds [[buffer(" + std::to_string(SM50_BINDING_INDEX_DEPTH_BOUNDS) +
                 ")]], device const uchar *samples [[buffer(" + std::to_string(SM50_BINDING_INDEX_DEPTH_BOUNDS_SAMPLES) + ")]]";
@@ -1082,7 +1086,18 @@ struct Group {
     discard_fragment();
 )";
     }
-    if (depth)
+    if (fragment_bias) {
+      source += "  constant float *bias = ranges + " + std::to_string(2 * SM50_VIEWPORTS + 4) + ";\n";
+      source += R"(  float z = in.position.z;
+  float slope = max(abs(dfdx(z)), abs(dfdy(z)));
+  float offset = bias[1] * slope;
+  if (bias[3] != 0) offset += bias[0] / bias[3];
+  if (bias[2] > 0) offset = min(offset, bias[2]);
+  if (bias[2] < 0) offset = max(offset, bias[2]);
+  float biased = clamp(z + offset, ranges[2 * viewport], ranges[2 * viewport + 1]);
+  out.z = bias[3] != 0 ? precise::divide(round(biased * bias[3]), bias[3]) : biased;
+)";
+    } else if (depth)
       source += "  out.z = in.position.z;\n";
     if (masked)
       source += "  out.samples = " +
@@ -1737,6 +1752,8 @@ public:
         kept |= (sample_mask >> 2 * i & 3 ? 1u : 0u) << i;
       sample_mask = kept;
     }
+    // D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS is absent from the current MinGW headers.
+    constexpr unsigned dynamic_depth_bias = 4;
     if (pDesc->PS.pShaderBytecode) {
       auto sha1 = ShaderDigest(pDesc->PS.pShaderBytecode, pDesc->PS.BytecodeLength);
 
@@ -1746,8 +1763,6 @@ public:
       data_ps.dual_source_blending = dual_source_blending;
       data_ps.disable_depth_output =
           (mesh ? mesh_info.depth_pixel_format : info.depth_pixel_format) == WMTPixelFormatInvalid;
-      // D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS is absent from the current MinGW headers.
-      constexpr unsigned dynamic_depth_bias = 4;
       data_ps.quantize_d24 = pDesc->DSVFormat == DXGI_FORMAT_D24_UNORM_S8_UINT && pDesc->DepthStencilState.DepthEnable &&
           (ref_ps.PixelShader.DepthOutput ||
            (pDesc->SampleDesc.Count == 1 && !pDesc->RasterizerState.ForcedSampleCount &&
@@ -1832,10 +1847,27 @@ public:
       sample_mask = ~0u;
     // a hull's that tests the depth bounds or keeps a sample mask discards, so it writes the depth as a conservative
     // pixel shader that discards does
-    if (((conservative && !conservative_hull) || depth_bounds_emulated || sample_mask != ~0u || culls) && !ps_func &&
+    // A UNORM depth bias is measured in fixed units of the Direct3D attachment format.
+    if (!ps_func && !mesh && !conservative && !culls && !depth_bounds_emulated &&
+        !pDesc->GS.BytecodeLength && !pDesc->HS.BytecodeLength && raster_samples == 1 && sample_mask == ~0u &&
+        pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE &&
+        pDesc->DepthStencilState.DepthEnable &&
+        (pDesc->RasterizerState.DepthBias || pDesc->RasterizerState.SlopeScaledDepthBias || (pDesc->Flags & dynamic_depth_bias))) {
+      if (pDesc->DSVFormat == DXGI_FORMAT_D24_UNORM_S8_UINT)
+        depth_bias_unorm_max = kD24UnormMax;
+      else if (pDesc->DSVFormat == DXGI_FORMAT_D16_UNORM)
+        depth_bias_unorm_max = UINT16_MAX;
+      // Metal can discard a fragment when a non-finite slope yields NaN. Apply the D3D clamp before depth testing.
+      const bool float_depth = pDesc->DSVFormat == DXGI_FORMAT_D32_FLOAT ||
+                               pDesc->DSVFormat == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+      fragment_depth_bias = depth_bias_unorm_max ||
+          (float_depth && !pDesc->RasterizerState.DepthBias && !(pDesc->Flags & dynamic_depth_bias) &&
+           !std::isfinite(pDesc->RasterizerState.SlopeScaledDepthBias));
+    }
+    if ((fragment_depth_bias || (conservative && !conservative_hull) || depth_bounds_emulated || sample_mask != ~0u || culls) && !ps_func &&
         !(ps_func = TestFragment(conservative && !conservative_hull, conservative, depth_bounds_emulated, sample_mask, culls,
                                  culls && !pDesc->RasterizerState.DepthClipEnable &&
-                                     pDesc->DSVFormat != DXGI_FORMAT_UNKNOWN)))
+                                     pDesc->DSVFormat != DXGI_FORMAT_UNKNOWN, fragment_depth_bias)))
       return E_FAIL;
 
     auto geometry_inputs = [&] {
@@ -2222,6 +2254,8 @@ public:
               info.colors[i].pixel_format = WMTPixelFormat(
                   (info.colors[i].pixel_format & WMTPixelFormatCustomSwizzle) | ORIGINAL_FORMAT(Colors[i])
               );
+          if (fragment_depth_bias && !(DSVPlanar & 1))
+            info.fragment_function = {};
           if (!(DSVPlanar & 1))
             info.depth_pixel_format = WMTPixelFormatInvalid;
           else if (any_format || other_dsv)

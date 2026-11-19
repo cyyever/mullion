@@ -638,6 +638,8 @@ public:
   // it rasterizes points or lines, which take no depth bias (D3D11.3 15.10); Metal gives them one with a stray slope
   // when an indirect command buffer draws them, so none is set
   bool unbiased = false;
+  bool fragment_depth_bias = false;
+  uint32_t depth_bias_unorm_max = 0;
   // the samples a pass without targets rasterizes (RasterSampleCount of ForcedSampleCount), 0 for its targets'
   uint32_t forced_sample_count = 0;
   // a pipeline that could not be made, given to the application with d3d12.ignoreFailedPipelines: its draws are dropped
@@ -1026,7 +1028,7 @@ public:
 
   // the fragment functions of pipelines without a pixel shader, by what they do (conservative rasterization, the depth
   // bounds test, the sample mask): compiled once each (MTLD3D12GraphicsPipelineState's TestFragment)
-  std::map<std::tuple<bool, bool, bool, uint32_t, uint32_t, bool>, WMT::Reference<WMT::Function>> test_fragments;
+  std::map<std::tuple<bool, bool, bool, uint32_t, uint32_t, bool, bool>, WMT::Reference<WMT::Function>> test_fragments;
   mullion::mutex test_fragments_mutex;
 
   // whether acceleration structures keep what they were built from, which serializing and decoding them gives back
