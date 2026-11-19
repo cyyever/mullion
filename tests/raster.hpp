@@ -628,29 +628,43 @@ inline bool clip_segment(const Case &c, Vertex &a, Vertex &b) {
   return visible && a.position[3] > 0 && b.position[3] > 0;
 }
 inline bool diamond(const Screen &a, const Screen &b, double x, double y) {
-  // Rules: lower edges and bottom corner are included; y-major diamonds also include the right corner.
-  double lo = 0, hi = 1;
+  // Exact intersections on the 16.8 grid keep a tangent at an included corner
+  // from being lost to division and subsequent floating-point reconstruction.
+  using Wide = __int128;
+  const int64_t ax = std::llround((a.x - x) * 256), ay = std::llround((a.y - y) * 256);
+  const int64_t dx = std::llround((b.x - a.x) * 256), dy = std::llround((b.y - a.y) * 256);
+  if (!dx && !dy)
+    return false;
+  struct Fraction { int64_t numerator, denominator; };
+  Fraction lo{0, 1}, hi{1, 1};
+  auto less = [](Fraction a, Fraction b) {
+    return Wide(a.numerator) * b.denominator < Wide(b.numerator) * a.denominator;
+  };
   for (int sx : {-1, 1})
     for (int sy : {-1, 1}) {
-      double d = sx * (a.x - x) + sy * (a.y - y) - 0.5, slope = sx * (b.x - a.x) + sy * (b.y - a.y);
+      int64_t distance = sx * ax + sy * ay - 128, slope = sx * dx + sy * dy;
       if (!slope) {
-        if (d > 0 || (d == 0 && sy < 0))
+        if (distance > 0 || (distance == 0 && sy < 0))
           return false;
-      } else if (slope > 0)
-        hi = std::min(hi, -d / slope);
-      else
-        lo = std::max(lo, -d / slope);
+      } else if (slope > 0) {
+        Fraction exit{-distance, slope};
+        if (less(exit, hi)) hi = exit;
+      } else {
+        Fraction enter{distance, -slope};
+        if (less(lo, enter)) lo = enter;
+      }
     }
-  auto inside = [&](double t) {
-    double u = a.x + t * (b.x - a.x) - x, v = a.y + t * (b.y - a.y) - y;
-    if (std::abs(u) + std::abs(v) < 0.5)
-      return true;
-    if (std::abs(u) + std::abs(v) != 0.5)
-      return false;
-    return v > 0 || (u == 0.5 && std::abs(b.y - a.y) > std::abs(b.x - a.x));
+  auto inside = [&](Fraction t) {
+    Wide u = Wide(ax) * t.denominator + Wide(dx) * t.numerator;
+    Wide v = Wide(ay) * t.denominator + Wide(dy) * t.numerator;
+    Wide radius = Wide(128) * t.denominator;
+    Wide sum = (u < 0 ? -u : u) + (v < 0 ? -v : v);
+    return sum < radius || (sum == radius && (v > 0 || (u == radius && std::abs(dy) > std::abs(dx))));
   };
-  return lo <= hi && hi >= 0 && (hi < 1 || !inside(1)) && inside((lo + hi) / 2);
+  return !less(hi, lo) && hi.numerator >= 0 && (less(hi, {1, 1}) || !inside({1, 1})) &&
+         (less(lo, hi) || inside(lo));
 }
+
 inline bool line(const Screen &a, const Screen &b, double x, double y, bool quad, Color &result, bool front) {
   double dx = b.x - a.x, dy = b.y - a.y, length = std::hypot(dx, dy);
   if (!length)
@@ -790,6 +804,9 @@ inline bool reference_contract() {
   ok &= expect(triangle(v, 0, 1, result, true), "reference rejected a left edge");
   std::swap(v[1], v[2]);
   ok &= expect(triangle(v, 0.5, 0.5, result, false) && result[0] == 2, "reference changed coverage with winding");
+  const Screen a{-3.77734375, 6.0546875, 0.5, 1}, b{2.77734375, -7.0546875, 0.5, 1};
+  ok &= expect(diamond(a, b, -0.5, -1.5) && diamond(b, a, -0.5, -1.5),
+               "reference lost an included right corner to intersection rounding");
   auto c = base();
   c.shape = Point;
   c.vertices = {vertex(4.5f, 4.5f)};
