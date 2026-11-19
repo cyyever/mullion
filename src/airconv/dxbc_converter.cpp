@@ -265,7 +265,7 @@ void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION) {
       MDTuple::get(context, {createUnsignedInteger(2), createUnsignedInteger(8), createUnsignedInteger(0)}));
   airLangVersion->addOperand(MDTuple::get(
       context, {createString("Metal"), createUnsignedInteger(4), createUnsignedInteger(0), createUnsignedInteger(0)}));
-  module.setTargetTriple(Triple("air64_v28-apple-macosx26.0.0"));
+  module.setTargetTriple(Triple("air64_v28-apple-macosx27.2.0"));
 }
 
 RegisterComponentType
