@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <initializer_list>
 #include <type_traits>
 #include <utility>
@@ -58,7 +59,9 @@ struct SmallVectorState<Allocator, true> {
  *  elements. Largely functions as a drop-in replacement for std::vector. */
 template<typename T, size_t N, typename Allocator = std::allocator<T>>
 class small_vector {
-  using storage = std::aligned_storage_t<sizeof(T), alignof(T)>;
+  struct alignas(T) storage {
+    std::byte data[sizeof(T)];
+  };
 
   template<typename T_, size_t N_, typename Allocator_>
   friend class small_vector;
