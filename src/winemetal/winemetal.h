@@ -1872,6 +1872,8 @@ struct WMTFXTemporalScalerInfo {
   // offsets of each frame (MTLFXTemporalScalerDescriptor.jitteredMotionVectorsEnabled, macOS 27): no scaler is made
   // where MetalFX lacks it
   bool jittered_motion_vectors;
+  // macOS 27 reads output-resolution motion vectors without an intermediate texture.
+  bool output_resolution_motion_vectors;
 };
 
 struct WMTFXSpatialScalerInfo {

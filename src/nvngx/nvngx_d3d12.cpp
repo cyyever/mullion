@@ -74,7 +74,8 @@ ReadCreate(const ParametersImpl *params, DLSSFeature &dlss) {
   if (NVNGX_FAILED(params->Get(NVNGX_Parameter_Width, &dlss.width)) ||
       NVNGX_FAILED(params->Get(NVNGX_Parameter_Height, &dlss.height)) ||
       NVNGX_FAILED(params->Get(NVNGX_Parameter_OutWidth, &dlss.target_width)) ||
-      NVNGX_FAILED(params->Get(NVNGX_Parameter_OutHeight, &dlss.target_height)))
+      NVNGX_FAILED(params->Get(NVNGX_Parameter_OutHeight, &dlss.target_height)) ||
+      !dlss.width || !dlss.height || !dlss.target_width || !dlss.target_height)
     return NVNGX_RESULT_INVALID_PARAMETER;
   dlss.quality = GetOr(params, NVNGX_Parameter_PerfQualityValue, 0);
   dlss.flag = GetOr(params, NVNGX_Parameter_DLSS_Feature_Create_Flags, 0);
@@ -203,8 +204,9 @@ NVSDK_NGX_D3D12_CreateFeature(
   Logger::debug("NGX: NVSDK_NGX_D3D12_CreateFeature");
   auto parameters = static_cast<ParametersImpl *>(params);
   auto ext = GetExt(list);
-  if (!ext || !out_handle)
+  if (!ext || !out_handle || !params)
     return NVNGX_RESULT_INVALID_PARAMETER;
+  *out_handle = nullptr;
   if (feature == NVNGX_FEATURE_SUPERSAMPLING) {
     if (!ext->SupportsTemporalUpscale())
       return NVNGX_RESULT_FEATURE_NOT_SUPPORTED;
@@ -258,8 +260,8 @@ NVSDK_NGX_D3D12_EvaluateFeature(
   Logger::debug("NGX: NVSDK_NGX_D3D12_EvaluateFeature");
   auto parameters = static_cast<ParametersImpl *>(params);
   auto ext = GetExt(list);
-  if (!ext || !handle) {
-    ERR("NVSDK_NGX_D3D12_EvaluateFeature: ", !ext ? "a command list without Mullion's extension" : "no feature");
+  if (!ext || !handle || !params) {
+    ERR("NVSDK_NGX_D3D12_EvaluateFeature: ", !ext ? "a command list without Mullion's extension" : !handle ? "no feature" : "no parameters");
     return NVNGX_RESULT_INVALID_PARAMETER;
   }
   auto common = static_cast<CommonFeature *>((void *)handle);

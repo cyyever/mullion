@@ -2044,10 +2044,11 @@ temporal_scaler_motion(MTLFXTemporalScalerDescriptor *desc, const struct WMTFXTe
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= 270000
   if (@available(macOS 27.0, *)) {
     desc.jitteredMotionVectorsEnabled = info->jittered_motion_vectors;
+    desc.outputResolutionMotionVectorsEnabled = info->output_resolution_motion_vectors;
     return true;
   }
 #endif
-  return !info->jittered_motion_vectors;
+  return !info->jittered_motion_vectors && !info->output_resolution_motion_vectors;
 }
 
 static NTSTATUS
@@ -2367,14 +2368,14 @@ _MetalLayer_nextDrawable(void *obj) {
 static NTSTATUS
 _MTLDevice_supportsFXSpatialScaler(void *obj) {
   struct unixcall_generic_obj_uint64_ret *params = obj;
-  params->ret = [MTLFXSpatialScalerDescriptor supportsDevice:(id<MTLDevice>)params->handle];
+  params->ret = [MTLFXSpatialScalerDescriptor supportsMetal4FX:(id<MTLDevice>)params->handle];
   return STATUS_SUCCESS;
 }
 
 static NTSTATUS
 _MTLDevice_supportsFXTemporalScaler(void *obj) {
   struct unixcall_generic_obj_uint64_ret *params = obj;
-  params->ret = [MTLFXTemporalScalerDescriptor supportsDevice:(id<MTLDevice>)params->handle];
+  params->ret = [MTLFXTemporalScalerDescriptor supportsMetal4FX:(id<MTLDevice>)params->handle];
   return STATUS_SUCCESS;
 }
 

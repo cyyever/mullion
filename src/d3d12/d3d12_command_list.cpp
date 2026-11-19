@@ -5688,15 +5688,14 @@ public:
     std::array<uint32_t, 14> key{};
     Rc<TemporalScaler> temporal;
     Rc<DenoisedScaler> denoised;
-    // display-resolution motion vectors brought to the input resolution (DownscaleMotion)
+    // Motion formats converted to RG32Float for MetalFX.
     WMT::Reference<WMT::Texture> motion;
   };
 
-  // MetalFX reads motion vectors at the input resolution, in its pixels: those DLSS was given at the output resolution
-  // (MotionVectorInDisplayRes) are read at each input pixel's place, scaled to pixels by `scale` and then to the input
-  // resolution, into the cache's texture, in a pass before the upscale (as D3D11's MTLFXMVScaleContext)
+  // Convert normalized motion values to RG32Float pixels at their original resolution.
+  // macOS 27 MetalFX handles output-resolution motion without downsampling it.
   void
-  DownscaleMotion(Texture *motion, WMT::Texture view, UpscalerCache *cache, float scale_x, float scale_y) {
+  ConvertMotion(Texture *motion, WMT::Texture view, UpscalerCache *cache, float scale_x, float scale_y) {
     UsedTexture(motion);
     StartComputePass();
     auto &pso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
@@ -5768,6 +5767,22 @@ public:
     }
   }
 
+  static bool
+  UpscaleImage(const Texture *texture) {
+    return texture && texture->textureType() == WMTTextureType2D && texture->sampleCount() == 1;
+  }
+
+  static bool
+  UpscaleSize(const Texture *texture, const Texture *reference) {
+    return UpscaleImage(texture) && texture->width() == reference->width() && texture->height() == reference->height();
+  }
+
+  static bool
+  UpscaleValues(float exposure, float scale_x, float scale_y, float jitter_x, float jitter_y) {
+    return std::isfinite(exposure) && exposure > 0 && std::isfinite(scale_x) && std::isfinite(scale_y) &&
+           std::isfinite(jitter_x) && std::isfinite(jitter_y);
+  }
+
   // the pass, after everything before it and before everything after it
   UpscaleEncoderData *
   RecordUpscale() {
@@ -5787,7 +5802,13 @@ public:
     auto color = UpscaleTexture(pDesc->Color), output = UpscaleTexture(pDesc->Output),
          depth = UpscaleTexture(pDesc->Depth), motion = UpscaleTexture(pDesc->MotionVector),
          exposure = UpscaleTexture(pDesc->ExposureTexture);
-    if (!color || !output || !depth || !motion)
+    const auto *motion_size = pDesc->MotionVectorInDisplayRes ? output : color;
+    if (!UpscaleImage(color) || !UpscaleImage(output) || color == output || !UpscaleSize(depth, color) ||
+        !UpscaleSize(motion, motion_size) || output->width() < color->width() || output->height() < color->height() ||
+        pDesc->InputContentWidth > color->width() || pDesc->InputContentHeight > color->height() ||
+        (pDesc->ExposureTexture && (!UpscaleImage(exposure) || exposure->width() != 1 || exposure->height() != 1)) ||
+        !UpscaleValues(pDesc->PreExposure, pDesc->MotionVectorScaleX, pDesc->MotionVectorScaleY,
+                       pDesc->JitterOffsetX, pDesc->JitterOffsetY))
       return E_INVALIDARG;
     auto motion_format = MotionVectorFormat(motion->pixelFormat());
     // DLSS reads motion vectors through their format ("DLSS uses formatted reads so should handle most input buffer
@@ -5799,14 +5820,15 @@ public:
       ERR("TemporalUpscale: motion vectors of format ", motion->pixelFormat(), " are not supported");
       return E_INVALIDARG;
     }
-    // motion vectors at the output resolution are brought to the input's (DownscaleMotion), as 32-bit floats
-    bool display_motion = pDesc->MotionVectorInDisplayRes && device_->downscale_motion &&
+    // MetalFX on macOS 27 reads display-resolution motion directly. Only formats
+    // it cannot read need the conversion pass, at the original motion resolution.
+    bool display_motion = pDesc->MotionVectorInDisplayRes &&
                           (motion->width() != color->width() || motion->height() != color->height());
-    bool motion_pass = display_motion || formatted;
+    bool motion_pass = formatted;
     auto scaler_motion_format = motion_pass ? WMTPixelFormatRG32Float : motion_format;
-    // the pass writes the input resolution's motion vectors, or as many as it reads where they are at it already
-    uint32_t pass_width = !motion_pass ? 0 : display_motion ? color->width() : motion->width(),
-             pass_height = !motion_pass ? 0 : display_motion ? color->height() : motion->height();
+    // The format conversion keeps the motion texture at its original resolution.
+    uint32_t pass_width = motion_pass ? motion->width() : 0,
+             pass_height = motion_pass ? motion->height() : 0;
     auto depth_format = ScalarFloatFormat(depth->pixelFormat());
     auto cache = static_cast<UpscalerCache *>(*ppCache);
     if (!cache)
@@ -5843,8 +5865,9 @@ public:
       // the same image (MTLFXTemporalScalerDescriptor, requiresSynchronousInitialization): the list is not held
       // through the compilation each time a game changes its resolution or quality mode
       info.requires_synchronous_initialization = false;
-      // the pass that brings motion vectors to the input resolution writes them in pixels and leaves their jitter in
+      // The format conversion preserves any jitter in the motion vectors.
       info.jittered_motion_vectors = pDesc->MotionVectorJittered;
+      info.output_resolution_motion_vectors = display_motion;
       cache->temporal = new TemporalScaler(device_->GetMTLDevice(), info, device_->UsesMetal4());
       if (!cache->temporal->scaler().handle) {
         cache->temporal = nullptr;
@@ -5876,7 +5899,7 @@ public:
       Logger::info(str::format(
           "MetalFX: temporal upscaling ", info.input_width, "x", info.input_height, " to ", info.output_width, "x",
           info.output_height, device_->UsesMetal4() ? " (Metal 4)" : "",
-          display_motion ? ", motion vectors brought from the output resolution" : "",
+          display_motion ? ", native output-resolution motion vectors" : "",
           formatted ? str::format(", motion vectors read from format ", motion->pixelFormat()) : ""
       ));
       // MULLION_LOG_LEVEL=debug: what the game gives the scaler, for an image that comes out wrong
@@ -5892,9 +5915,9 @@ public:
             ", motion at output resolution ", pDesc->MotionVectorInDisplayRes
         ));
     }
-    // the pass writes the input resolution's motion vectors, or as many as it reads where they are at it already
+    // The format conversion keeps the motion texture at its original resolution.
     if (motion_pass)
-      DownscaleMotion(
+      ConvertMotion(
           motion, UpscaleView(motion, motion_format), cache, pDesc->MotionVectorScaleX, pDesc->MotionVectorScaleY
       );
     auto pass = RecordUpscale();
@@ -5929,7 +5952,14 @@ public:
          normals = UpscaleTexture(pDesc->Normals),
          roughness = pDesc->RoughnessInNormalAlpha ? normals : UpscaleTexture(pDesc->Roughness),
          hit_distance = UpscaleTexture(pDesc->SpecularHitDistance), exposure = UpscaleTexture(pDesc->ExposureTexture);
-    if (!color || !output || !depth || !motion || !diffuse || !specular || !normals || !roughness)
+    if (!UpscaleImage(color) || !UpscaleImage(output) || color == output || !UpscaleSize(depth, color) ||
+        !UpscaleSize(motion, color) || !UpscaleSize(diffuse, color) || !UpscaleSize(specular, color) ||
+        !UpscaleSize(normals, color) || !UpscaleSize(roughness, color) ||
+        (pDesc->SpecularHitDistance && !UpscaleSize(hit_distance, color)) ||
+        (pDesc->ExposureTexture && (!UpscaleImage(exposure) || exposure->width() != 1 || exposure->height() != 1)) ||
+        output->width() < color->width() || output->height() < color->height() ||
+        !UpscaleValues(pDesc->PreExposure, pDesc->MotionVectorScaleX, pDesc->MotionVectorScaleY,
+                       pDesc->JitterOffsetX, pDesc->JitterOffsetY))
       return E_INVALIDARG;
     auto motion_format = MotionVectorFormat(motion->pixelFormat());
     if (motion_format == WMTPixelFormatInvalid) {
