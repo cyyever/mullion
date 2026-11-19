@@ -2107,6 +2107,102 @@ own_vertex(
   return own.count < 3 || !corner ? at : corner == 1 ? builder.CreateAdd(at, odd) : builder.CreateSub(at, odd);
 }
 
+// A convex triangle gains at most one vertex per clip plane: seven D3D planes
+// and four target planes need at most fourteen vertices. Keep z/w homogeneous;
+// replacing w with one changes perspective interpolation even for SV_Position.
+static constexpr unsigned local_triangle_vertices = 14;
+static std::pair<pvalue, pvalue>
+clip_local_triangle(llvm::IRBuilder<> &b, llvm::air::AIRBuilder &air, air::AirType &types,
+                    const pvalue (&positions)[3], pvalue viewport, pvalue state) {
+  auto function = b.GetInsertBlock()->getParent();
+  auto &context = function->getContext();
+  auto block = [&](const char *name) { return llvm::BasicBlock::Create(context, name, function); };
+  auto at = [&](pvalue p, unsigned axis) { return b.CreateExtractElement(p, axis); };
+  auto data = b.CreateAlloca(types._float4, b.getInt32(local_triangle_vertices));
+  auto scratch = b.CreateAlloca(types._float4, b.getInt32(local_triangle_vertices));
+  auto size = b.CreateAlloca(types._int);
+  for (unsigned i = 0; i < 3; ++i)
+    b.CreateStore(positions[i], b.CreateGEP(types._float4, data, b.getInt32(i)));
+  pvalue count = b.getInt32(3);
+  auto each = [&](pvalue length, auto action) {
+    auto before = b.GetInsertBlock();
+    auto test = block("clip_test"), body = block("clip_edge"), done = block("clip_done");
+    b.CreateBr(test);
+    b.SetInsertPoint(test);
+    auto i = b.CreatePHI(types._int, 2);
+    i->addIncoming(b.getInt32(0), before);
+    b.CreateCondBr(b.CreateICmpULT(i, length), body, done);
+    b.SetInsertPoint(body);
+    action(i);
+    auto next = b.CreateAdd(i, b.getInt32(1));
+    i->addIncoming(next, b.GetInsertBlock());
+    b.CreateBr(test);
+    b.SetInsertPoint(done);
+  };
+  auto append = [&](pvalue value, pvalue condition) {
+    auto n = b.CreateLoad(types._int, size);
+    auto write = block("clip_append"), next = block("clip_continue");
+    // Also bound stores for malformed, non-finite input positions.
+    b.CreateCondBr(b.CreateAnd(condition, b.CreateICmpULT(n, b.getInt32(local_triangle_vertices))), write, next);
+    b.SetInsertPoint(write);
+    b.CreateStore(value, b.CreateGEP(types._float4, scratch, n));
+    b.CreateStore(b.CreateAdd(n, b.getInt32(1)), size);
+    b.CreateBr(next);
+    b.SetInsertPoint(next);
+  };
+  auto plane = [&](auto distance) {
+    b.CreateStore(b.getInt32(0), size);
+    each(count, [&](pvalue i) {
+      auto previous = b.CreateSelect(b.CreateICmpEQ(i, b.getInt32(0)), count, i);
+      auto a = b.CreateLoad(types._float4, b.CreateGEP(types._float4, data, b.CreateSub(previous, b.getInt32(1))));
+      auto v = b.CreateLoad(types._float4, b.CreateGEP(types._float4, data, i));
+      auto da = distance(a), dv = distance(v);
+      auto inside_a = b.CreateFCmpOGE(da, air.getFloat(0)), inside_v = b.CreateFCmpOGE(dv, air.getFloat(0));
+      auto crossing = block("clip_crossing"), keep = block("clip_keep");
+      b.CreateCondBr(b.CreateXor(inside_a, inside_v), crossing, keep);
+      b.SetInsertPoint(crossing);
+      auto t = b.CreateVectorSplat(4, b.CreateFDiv(da, b.CreateFSub(da, dv)));
+      append(b.CreateFAdd(a, b.CreateFMul(t, b.CreateFSub(v, a))), b.getTrue());
+      b.CreateBr(keep);
+      b.SetInsertPoint(keep);
+      append(v, inside_v);
+    });
+    count = b.CreateLoad(types._int, size);
+    std::swap(data, scratch);
+  };
+  plane([&](pvalue p) -> pvalue { return at(p, 3); });
+  auto xy_planes = [&] {
+    for (unsigned axis = 0; axis < 2; ++axis)
+      for (bool positive : {false, true})
+        plane([&](pvalue p) -> pvalue {
+          return positive ? b.CreateFAdd(at(p, 3), at(p, axis)) : b.CreateFSub(at(p, 3), at(p, axis));
+        });
+  };
+  xy_planes();
+  auto flags = b.CreateFPToUI(at(state, 0), types._int);
+  auto depth_clip = b.CreateICmpNE(b.CreateAnd(flags, b.getInt32(1)), b.getInt32(0));
+  for (bool far : {false, true})
+    plane([&](pvalue p) -> pvalue {
+      auto distance = far ? b.CreateFSub(at(p, 3), at(p, 2)) : at(p, 2);
+      return b.CreateSelect(depth_clip, distance, air.getFloat(1));
+    });
+  each(count, [&](pvalue i) {
+    auto address = b.CreateGEP(types._float4, data, i);
+    pvalue p = b.CreateLoad(types._float4, address);
+    for (unsigned axis = 0; axis < 2; ++axis) {
+      auto extent = at(state, 2 + axis);
+      auto scale = b.CreateFDiv(at(viewport, 2 + axis), extent);
+      auto offset = b.CreateFSub(b.CreateFDiv(b.CreateFAdd(b.CreateFMul(air.getFloat(2), at(viewport, axis)),
+                                                         at(viewport, 2 + axis)), extent), air.getFloat(1));
+      if (axis) offset = b.CreateFNeg(offset);
+      p = b.CreateInsertElement(p, b.CreateFAdd(b.CreateFMul(at(p, axis), scale), b.CreateFMul(at(p, 3), offset)), axis);
+    }
+    b.CreateStore(p, address);
+  });
+  xy_planes();
+  return {data, count};
+}
+
 // the mesh stage of a pipeline without a geometry shader that still has to assemble primitives: each mesh
 // threadgroup passes a primitive's own vertices on as the vertex shader output them. Metal has no topologies with
 // adjacency, and culls by primitive where Direct3D discards one whose vertices are all behind a cull distance
@@ -2131,6 +2227,7 @@ convert_pass_through_geometry_shader(
   // a quadrilateral line is a rectangle 1.4 pixels wide, two triangles whose corners take their end's attributes
   // (D3D11.3 3.4.5): what Metal's own lines are not. conservative rasterization of triangles: each the triangle
   // conservative_triangle makes of it
+  bool local = pso_data->local_triangles && own.count == 3;
   bool alias = pso_data->aliased_lines;
   bool quads = pso_data->quad_lines && own.count == 2, conservative = pso_data->conservative && own.count == 3;
   if (alias)
@@ -2141,8 +2238,8 @@ convert_pass_through_geometry_shader(
   if (pso_data->wire_slope)
     func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{.user = "mullion_wire_gradient", .type = air::msl_float2, .index = 0});
   bool hull = conservative && pso_data->conservative_hull;
-  uint32_t corners = quads ? 4 : hull ? SM50_CONSERVATIVE_HULL_POINTS : own.count,
-           primitives = quads ? 2 : hull ? SM50_CONSERVATIVE_HULL_POINTS - 2 : 1;
+  uint32_t corners = local ? local_triangle_vertices : quads ? 4 : hull ? SM50_CONSERVATIVE_HULL_POINTS : own.count,
+           primitives = local ? local_triangle_vertices - 2 : quads ? 2 : hull ? SM50_CONSERVATIVE_HULL_POINTS - 2 : 1;
   func_signature.DefineInput(air::InputMesh{
       corners, primitives,
       quads || own.count == 3 ? air::MeshOutputTopology::Triangle
@@ -2184,6 +2281,7 @@ convert_pass_through_geometry_shader(
     default:
       continue;
     }
+    if (local) continue; // this pipeline has no pixel-shader user inputs
     if (std::exchange(declared, declared | 1u << element.reg()) >> element.reg() & 1)
       continue;
     auto component_types = pVertexStage->register_types(element.reg(), element.componentType());
@@ -2224,7 +2322,7 @@ convert_pass_through_geometry_shader(
     func_signature.DefineMeshVertexOutput(air::OutputPointSize{});
   // and the viewports, and the window coordinates the pixel shader tests against
   uint32_t viewports_idx = 0, conservative_at = varyings.size();
-  if (conservative || alias || pso_data->wire_snap) {
+  if (conservative || alias || pso_data->wire_snap || local) {
     viewports_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
         .buffer_size = {},
         .location_index = SM50_BINDING_INDEX_VIEWPORTS,
@@ -2305,6 +2403,56 @@ convert_pass_through_geometry_shader(
       for (uint32_t c = 0; c < 4; c++)
         clip[corner] = builder.CreateInsertElement(clip[corner], real(component(corner, element.reg(), c)), c);
     }
+  if (local) {
+    if (!clip[0]) return llvm::make_error<UnsupportedFeature>("local viewport triangle has no position");
+    auto state = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), builder.getInt32(SM50_VIEWPORTS)));
+    auto flags = builder.CreateFPToUI(builder.CreateExtractElement(state, uint64_t(0)), types._int);
+    auto clipped = llvm::BasicBlock::Create(context, "local_viewport", function);
+    auto unchanged = llvm::BasicBlock::Create(context, "original_viewport", function);
+    builder.CreateCondBr(builder.CreateICmpNE(builder.CreateAnd(flags, builder.getInt32(2)), zero), clipped, unchanged);
+    auto primitive_outputs = [&](pvalue index) {
+      air.CreateSetMeshPrimitiveID(index, primitive_id);
+      if (auto layer = chosen(D3D10_SB_NAME_RENDER_TARGET_ARRAY_INDEX))
+        air.CreateSetMeshRenderTargetArrayIndex(index, layer);
+      if (auto vp = chosen(D3D10_SB_NAME_VIEWPORT_ARRAY_INDEX))
+        air.CreateSetMeshViewportArrayIndex(index, vp);
+      else if (default_viewport)
+        air.CreateSetMeshViewportArrayIndex(index, zero);
+    };
+    builder.SetInsertPoint(unchanged);
+    for (unsigned i = 0; i < 3; ++i) {
+      air.CreateSetMeshPosition(builder.getInt32(i), clip[i]);
+      air.CreateSetMeshIndex(builder.getInt32(i), builder.getInt32(i));
+    }
+    primitive_outputs(zero);
+    builder.CreateStore(one, count);
+    builder.CreateBr(done);
+    builder.SetInsertPoint(clipped);
+    auto vp = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), viewport()));
+    auto [polygon, length] = clip_local_triangle(builder, air, types, clip, vp, state);
+    // Emit a bounded fan. Repeated final vertices make unused triangles degenerate.
+    auto valid_length = builder.CreateICmpUGE(length, builder.getInt32(3));
+    auto emit = llvm::BasicBlock::Create(context, "local_emit", function);
+    builder.CreateCondBr(valid_length, emit, done);
+    builder.SetInsertPoint(emit);
+    for (unsigned i = 0; i < local_triangle_vertices; ++i) {
+      auto at = builder.CreateSelect(builder.CreateICmpULT(builder.getInt32(i), length), builder.getInt32(i), builder.CreateSub(length, one));
+      air.CreateSetMeshPosition(builder.getInt32(i), builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, polygon, at)));
+    }
+    for (unsigned i = 0; i < local_triangle_vertices - 2; ++i) {
+      air.CreateSetMeshIndex(builder.getInt32(3 * i), zero);
+      air.CreateSetMeshIndex(builder.getInt32(3 * i + 1), builder.getInt32(i + 1));
+      air.CreateSetMeshIndex(builder.getInt32(3 * i + 2), builder.getInt32(i + 2));
+      primitive_outputs(builder.getInt32(i));
+    }
+    builder.CreateStore(builder.CreateSub(length, builder.getInt32(2)), count);
+    builder.CreateBr(done);
+    builder.SetInsertPoint(done);
+    air.CreateSetMeshPrimitiveCount(builder.CreateLoad(types._int, count));
+    builder.CreateRetVoid();
+    module.getOrInsertNamedMetadata("air.mesh")->addOperand(function_metadata);
+    return llvm::Error::success();
+  }
   std::array<pvalue, 4> line_positions{};
   pvalue line_culled = builder.getFalse();
   if (alias && clip[0]) {

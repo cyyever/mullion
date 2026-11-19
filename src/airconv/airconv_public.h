@@ -690,8 +690,9 @@ struct SM50_SHADER_PSO_PIXEL_SHADER_DATA {
    SM50_CONSERVATIVE_CORNERS corners once, and once more for each quadrant its edges' normals turn through there, four
    in all (some of them repeated) */
 #define SM50_CONSERVATIVE_HULL_POINTS (4 + SM50_CONSERVATIVE_CORNERS)
-/* what a conservative rasterizer's mesh stage reads: the viewports by viewport array index (x, y, width, height), then
-   whether the pipeline clips depth and whether its front faces are counterclockwise (1 or 0) */
+/* rasterizer emulation: viewports by array index (x, y, width, height), then numeric float state:
+   [0] depth clipping (bit 0), local triangle coordinates (bit 1); [1] counterclockwise front faces (0 or 1);
+   [2,3] render target width and height. Only local_triangles uses bit 1. */
 struct SM50_CONSERVATIVE_VIEWPORTS {
   float viewports[16][4];
   float state[4];
@@ -829,6 +830,8 @@ struct SM50_SHADER_PSO_GEOMETRY_SHADER_DATA {
   /* the lines passed on are quadrilaterals (D3D11.3 3.4.5): two counterclockwise triangles, which the pipeline
      draws with no culling, no depth bias, solid fill and counterclockwise front faces, as lines are drawn */
   /* round unclipped wireframe triangle positions to the D3D subpixel grid */
+  /* clip position-only triangles before mapping an oversized viewport to the render target */
+  bool local_triangles;
   bool wire_snap;
   bool wire_slope;
   bool quad_lines;
