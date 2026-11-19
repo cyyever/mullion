@@ -1860,7 +1860,10 @@ public:
       // Metal can discard a fragment when a non-finite slope yields NaN. Apply the D3D clamp before depth testing.
       const bool float_depth = pDesc->DSVFormat == DXGI_FORMAT_D32_FLOAT ||
                                pDesc->DSVFormat == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-      fragment_depth_bias = depth_bias_unorm_max ||
+      // Fragment position includes the hardware float bias. Clamp it to the D3D viewport before storing.
+      clamp_hardware_bias = float_depth && pDesc->RasterizerState.DepthBias &&
+          std::isfinite(pDesc->RasterizerState.SlopeScaledDepthBias) && !(pDesc->Flags & dynamic_depth_bias);
+      fragment_depth_bias = clamp_hardware_bias || depth_bias_unorm_max ||
           (float_depth && !pDesc->RasterizerState.DepthBias && !(pDesc->Flags & dynamic_depth_bias) &&
            !std::isfinite(pDesc->RasterizerState.SlopeScaledDepthBias));
     }

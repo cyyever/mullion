@@ -1362,7 +1362,7 @@ public:
       cmd_setrs.fill_mode = pso_graphics_->fill_mode;
       // one by one: libstdc++ assigns no std::array to a std::tuple of references
       auto [depth_bias, depth_bias_clamp, scole_scale] =
-          (pso_graphics_->unbiased || pso_graphics_->fragment_depth_bias) ? std::array<FLOAT, 3>{}
+          (pso_graphics_->unbiased || (pso_graphics_->fragment_depth_bias && !pso_graphics_->clamp_hardware_bias)) ? std::array<FLOAT, 3>{}
                                   : depth_bias_.value_or(std::array{
                                         pso_graphics_->depth_bias, pso_graphics_->depth_bias_clamp, pso_graphics_->scole_scale
                                     });
@@ -1459,8 +1459,8 @@ public:
             pso_graphics_->depth_bias, pso_graphics_->depth_bias_clamp, pso_graphics_->scole_scale});
         auto bias = static_cast<float *>(ranges) + 2 * count + std::size(blend_factor_);
         bias[0] = constant;
-        bias[1] = slope;
-        bias[2] = clamp;
+        bias[1] = pso_graphics_->clamp_hardware_bias ? 0 : slope;
+        bias[2] = pso_graphics_->clamp_hardware_bias ? 0 : clamp;
         bias[3] = float(pso_graphics_->depth_bias_unorm_max);
       }
       EncodeBuffer(WMTRenderCommandSetFragmentBuffer, ranges_offset, SM50_BINDING_INDEX_DEPTH_RANGES);
