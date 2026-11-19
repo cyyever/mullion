@@ -109,3 +109,10 @@ if get_option('enable_nvngx')
                    include_directories: include_directories('../../src/util'))
   test('d3d12_ngx_stats', exe, env: ['MULLION_ENABLE_NVEXT=1'], timeout: 600)
 endif
+
+dxc_official_header = configure_file(output : 'dxc_official_cases.hpp',
+  command : [find_program('python3', native : true), files('../dxc_cases.py'),
+             files('../engines/directx-shader-compiler/tools/clang/unittests/HLSLExec/ShaderOpArithTable.xml')], capture : true)
+dxc_official = executable('d3d12_dxc_official', ['d3d12_dxc_official.cpp', dxc_official_header],
+  dependencies : d3d12_test_deps)
+test('d3d12_dxc_official_dxil', dxc_official, args : ['dxil'], suite : 'microsoft-dxc', timeout : 120)

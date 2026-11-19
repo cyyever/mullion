@@ -8,3 +8,6 @@
 	path = tests/engines/unity-graphics
 	url = https://github.com/Unity-Technologies/Graphics.git
 	branch = 6000.1/staging
+[submodule "tests/engines/directx-shader-compiler"]
+	path = tests/engines/directx-shader-compiler
+	url = https://github.com/microsoft/DirectXShaderCompiler.git
