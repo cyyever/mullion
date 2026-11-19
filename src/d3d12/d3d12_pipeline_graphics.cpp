@@ -480,10 +480,10 @@ CompileFunction(
     }
     case SM50_SHADER_PSO_PIXEL_SHADER: {
       auto &[next, type, mask, dual, depth, d24, unorm, formats, statistics, coverage, centered, single, paired, clips,
-             culls, cull_depth, blend, bounds, late, conservative, coarse, rate, quads, hull, patch] =
+             culls, cull_depth, blend, bounds, late, conservative, coarse, rate, wire, quads, hull, patch] =
           *(SM50_SHADER_PSO_PIXEL_SHADER_DATA *)arg;
       hash(mask, dual, depth, d24, unorm, formats, statistics, coverage, centered, single, paired, clips, culls, cull_depth,
-           blend, bounds, late, conservative, coarse, rate, quads, hull, patch);
+           blend, bounds, late, conservative, coarse, rate, wire, quads, hull, patch);
       break;
     }
     case SM50_SHADER_IA_INPUT_LAYOUT: {
@@ -496,9 +496,9 @@ CompileFunction(
       break;
     }
     case SM50_SHADER_PSO_GEOMETRY_SHADER: {
-      auto &[next, type, strip, cut, index, primitive, pass, statistics, clips, culls, quads, barycentrics, conservative,
+      auto &[next, type, strip, cut, index, primitive, pass, statistics, clips, culls, wire, quads, barycentrics, conservative,
              flat, noperspective, mesh_only, hull, inner] = *(SM50_SHADER_PSO_GEOMETRY_SHADER_DATA *)arg;
-      hash(strip, cut, index, primitive, pass, statistics, clips, culls, quads, barycentrics, conservative, flat,
+      hash(strip, cut, index, primitive, pass, statistics, clips, culls, wire, quads, barycentrics, conservative, flat,
            noperspective, mesh_only, hull, inner);
       break;
     }
@@ -815,7 +815,7 @@ protected:
     // without a geometry shader, the mesh stage passes the vertex shader's primitives on to the rasterizer
     bool pass_through;
     bool clip_distance_varyings, cull_distance_varyings;
-    bool quad_lines, barycentrics;
+    bool wire_slope, quad_lines, barycentrics;
     // conservative rasterization, of the hull of a triangle's pixels where it can, and how the pixel shader
     // interpolates its inputs
     bool conservative, conservative_hull, conservative_inner;
@@ -870,6 +870,7 @@ protected:
     pso_gs.pipeline_statistics = statistics;
     pso_gs.clip_distance_varyings = in.clip_distance_varyings;
     pso_gs.cull_distance_varyings = in.cull_distance_varyings && pso_gs.pass_through;
+    pso_gs.wire_slope = in.wire_slope && !counting;
     pso_gs.quad_lines = in.quad_lines && pass_through && !counting;
     pso_gs.conservative = in.conservative && !counting && (in.gs || pass_through);
     pso_gs.conservative_hull = pso_gs.conservative && in.conservative_hull && !in.gs;
@@ -1660,8 +1661,17 @@ public:
     // and passes lines on as quadrilaterals (D3D11.3 15.14.1, SM50_SHADER_PSO_GEOMETRY_SHADER_DATA)
     bool quad_lines =
         plain && pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE && pDesc->RasterizerState.MultisampleEnable;
+    // D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS is absent from the current MinGW headers.
+    constexpr unsigned dynamic_depth_bias = 4;
+    // Metal wireframe uses edge slopes. Carry the final triangle plane to SV_Position.z instead.
+    wire_slope = !(pDesc->Flags & dynamic_depth_bias) && pDesc->RasterizerState.FillMode == D3D12_FILL_MODE_WIREFRAME &&
+        pDesc->RasterizerState.SlopeScaledDepthBias != 0 && !pDesc->RasterizerState.DepthBias &&
+        pDesc->DSVFormat == DXGI_FORMAT_UNKNOWN && pDesc->PS.BytecodeLength && PixelShaderVaryings(pDesc->PS) <= 122 &&
+        !stream_output && !tessellation &&
+        !mesh_shader && (plain ? pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+                               : ref_gs.GeometryShader.ConservativeFits);
     bool pass_through = plain && pDesc->PrimitiveTopologyType != D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH &&
-                        ((ref_vs.CullDistances && !culls) || (stream_output && so_data.rasterized_stream == 0) || quad_lines ||
+                        ((ref_vs.CullDistances && !culls) || (stream_output && so_data.rasterized_stream == 0) || wire_slope || quad_lines ||
                          conservative);
     geometry_shader |= pass_through;
     // a mesh stage that runs a shader of the pipeline's reads its root arguments; the vertex shader's primitives passed
@@ -1749,8 +1759,6 @@ public:
         kept |= (sample_mask >> 2 * i & 3 ? 1u : 0u) << i;
       sample_mask = kept;
     }
-    // D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS is absent from the current MinGW headers.
-    constexpr unsigned dynamic_depth_bias = 4;
     if (pDesc->PS.pShaderBytecode) {
       auto sha1 = ShaderDigest(pDesc->PS.pShaderBytecode, pDesc->PS.BytecodeLength);
 
@@ -1785,6 +1793,7 @@ public:
       data_ps.late_tests = false;
       data_ps.conservative = conservative;
       data_ps.conservative_hull = conservative_hull;
+      data_ps.wire_slope = wire_slope;
       data_ps.quad_lines = quad_lines && ref_ps.PixelShader.Barycentrics;
       data_ps.patch_varying = false;
       data_ps.coarse_shading = false;
@@ -1888,6 +1897,7 @@ public:
       in->ps = ps_func;
       in->clip_distance_varyings = clips;
       in->cull_distance_varyings = culls;
+      in->wire_slope = wire_slope;
       in->quad_lines = quad_lines;
       in->barycentrics = ps_func && ref_ps.PixelShader.Barycentrics;
       in->strip_cut = pDesc->IBStripCutValue;
@@ -1999,7 +2009,7 @@ public:
       static const bool mesh_only_lists = env::getEnvVar("MULLION_D3D12_CULL_MESH_ONLY") != "0";
       mesh_only = mesh_only_lists && pass_through && !bool(pDesc->GS.pShaderBytecode) && ref_vs.CullDistances &&
                   pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE && !stream_output &&
-                  !conservative && !quad_lines;
+                  !conservative && !quad_lines && !wire_slope;
       mesh_reads_root_arguments |= mesh_only;
       if (!patches && !variant(pso, false, false, mesh_only))
         return hr;

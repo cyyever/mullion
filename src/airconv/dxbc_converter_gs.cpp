@@ -181,6 +181,24 @@ stream_output_input(air::FunctionSignatureBuilder &signature, llvm::LLVMContext 
   });
 }
 
+// Absolute derivatives of NDC depth with respect to NDC x and y. The fragment applies the viewport scale.
+static pvalue wire_depth_gradient(llvm::IRBuilder<> &ir, llvm::air::AIRBuilder &air, pvalue a, pvalue b, pvalue c) {
+  auto relative = [&](pvalue vertex) {
+    auto splat_w = [&](pvalue v) { return ir.CreateVectorSplat(4, ir.CreateExtractElement(v, 3)); };
+    return ir.CreateFSub(ir.CreateFMul(vertex, splat_w(a)), ir.CreateFMul(a, splat_w(vertex)));
+  };
+  auto u = relative(b), v = relative(c);
+  auto det = [&](unsigned i, unsigned j) {
+    return ir.CreateFSub(ir.CreateFMul(ir.CreateExtractElement(u,i), ir.CreateExtractElement(v,j)),
+                         ir.CreateFMul(ir.CreateExtractElement(u,j), ir.CreateExtractElement(v,i)));
+  };
+  auto denominator = det(0,1);
+  auto component = [&](unsigned i, unsigned j) {
+    return air.CreateFPUnOp(llvm::air::AIRBuilder::fabs, ir.CreateFDiv(det(i,j), denominator), false);
+  };
+  return ir.CreateInsertElement(ir.CreateVectorSplat(2, component(2,1)), component(0,2), 1);
+}
+
 // conservative rasterization of a triangle with corners at `clip`, through the viewport `viewport_index` of
 // `viewports` (SM50_CONSERVATIVE_VIEWPORTS). the rasterizer takes the triangle as clipped, to the depth range when the
 // pipeline clips depth (D3D11.3 15.5) and to before the eye when not: a polygon in the window of at most
@@ -658,6 +676,9 @@ convert_dxbc_geometry_shader(
   bool conservative = (pso_tess ? pso_tess->conservative : pso_data && pso_data->conservative) &&
                       topology == air::MeshOutputTopology::Triangle &&
                       max_vertex_out >= 3;
+  const bool wire_slope = pso_data && pso_data->wire_slope && topology == air::MeshOutputTopology::Triangle;
+  if (wire_slope)
+    func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{.user = "mullion_wire_gradient", .type = air::msl_float2, .index = 0});
   uint32_t triangles = conservative ? max_vertex_out - 2 : 0;
   // a Metal mesh has at most 256 vertices. a geometry shader may declare more where its vertices are smaller than a
   // position, its output being 1024 scalars at most (D3D11.3 13.3), as one that only streams out: stream output takes
@@ -848,6 +869,15 @@ convert_dxbc_geometry_shader(
     return collapse_lines ? culled : nullptr;
   };
 
+  pvalue history[2] = {};
+  uint32_t wire_position = ~0u;
+  if (wire_slope) {
+    for (auto &e : pShaderInternal->output_signature)
+      if (e.systemValue() == D3D10_SB_NAME_POSITION) wire_position = e.reg();
+    for (auto &slot : history)
+      builder.CreateStore(llvm::ConstantAggregateZero::get(types._float4), slot = builder.CreateAlloca(types._float4));
+  }
+
   // what the rasterized stream's emit and cut make of the mesh
   std::function<IREffect()> mesh_emit, mesh_cut;
   if (topology == air::MeshOutputTopology::Triangle) {
@@ -859,6 +889,17 @@ convert_dxbc_geometry_shader(
       auto current_primitive_count = builder.CreateLoad(types._int, primitive_count);
       auto current_primitive_idx = builder.CreateAdd(current_primitive_count, current_write_vertex);
 
+      if (wire_slope && wire_position != ~0u) {
+        auto ptr = builder.CreateGEP(llvm::ArrayType::get(types._float4, max_output_register),
+                                     resource_map.output.ptr_float4, {zero_const,builder.getInt32(wire_position)});
+        auto c = builder.CreateLoad(types._float4,ptr);
+        auto a = builder.CreateLoad(types._float4,history[0]), b = builder.CreateLoad(types._float4,history[1]);
+        auto idx = builder.CreateSelect(builder.CreateICmpUGE(current_write_vertex,two_const),
+                                        builder.CreateSub(current_primitive_idx,two_const),current_primitive_count);
+        air.CreateSetMeshPrimitiveData(idx,zero_const,wire_depth_gradient(builder,air,a,b,c));
+        builder.CreateStore(b,history[0]);
+        builder.CreateStore(c,history[1]);
+      }
       auto even_winding = builder.CreateZExt(
           builder.CreateICmpEQ(zero_const, builder.CreateAnd(current_write_vertex, one_const)), types._int
       );
@@ -1773,6 +1814,8 @@ convert_pass_through_geometry_shader(
   // conservative_triangle makes of it
   bool quads = pso_data->quad_lines && own.count == 2, conservative = pso_data->conservative && own.count == 3;
   // or of one raster sample, the fan of its hull, whose vertices all take the first corner's flat inputs
+  if (pso_data->wire_slope)
+    func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{.user = "mullion_wire_gradient", .type = air::msl_float2, .index = 0});
   bool hull = conservative && pso_data->conservative_hull;
   uint32_t corners = quads ? 4 : hull ? SM50_CONSERVATIVE_HULL_POINTS : own.count,
            primitives = quads ? 2 : hull ? SM50_CONSERVATIVE_HULL_POINTS - 2 : 1;
@@ -1937,6 +1980,8 @@ convert_pass_through_geometry_shader(
       for (uint32_t c = 0; c < 4; c++)
         clip[corner] = builder.CreateInsertElement(clip[corner], real(component(corner, element.reg(), c)), c);
     }
+  if (pso_data->wire_slope && own.count == 3 && clip[0])
+    air.CreateSetMeshPrimitiveData(zero,zero,wire_depth_gradient(builder,air,clip[0],clip[1],clip[2]));
   // the rectangle's half width in x and y of normalized device coordinates. on the screen the line points along
   // d = (xb wa - xa wb, yb wa - ya wb), whichever side of w = 0 either end is, as d/dt (x/w) = d/w^2 along it; its
   // normal in pixels of the viewport (width and height in the raster scale buffer) is then

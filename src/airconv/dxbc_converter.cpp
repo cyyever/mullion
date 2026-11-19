@@ -864,6 +864,15 @@ llvm::Error convert_dxbc_pixel_shader(
     };
   }
 
+  uint32_t wire_gradient = ~0u, wire_ranges = ~0u, wire_viewport = ~0u;
+  if (pso_data && pso_data->wire_slope) {
+    wire_gradient = func_signature.DefineInput(air::InputFragmentStageIn{
+        .user = "mullion_wire_gradient", .type = air::msl_float2, .interpolation = air::Interpolation::flat});
+    wire_ranges = func_signature.DefineInput(air::ArgumentBindingBuffer{
+        .location_index = SM50_BINDING_INDEX_DEPTH_RANGES, .array_size = 1, .memory_access = air::MemoryAccess::read,
+        .address_space = air::AddressSpace::constant, .type = air::msl_float, .arg_name = "depth_ranges"});
+    wire_viewport = func_signature.DefineInput(air::InputViewportArrayIndex{});
+  }
   std::optional<CoarseShading> coarse;
   if (coarse_shading)
     coarse.emplace(
@@ -1190,6 +1199,31 @@ llvm::Error convert_dxbc_pixel_shader(
     builder.CreateRetVoid();
   } else {
     builder.CreateRet(value);
+  }
+  if (wire_gradient != ~0u) {
+    builder.SetInsertPoint(&*function->getEntryBlock().getFirstInsertionPt());
+    auto vp = function->getArg(wire_viewport);
+    auto index = builder.CreateSelect(builder.CreateICmpULT(vp,builder.getInt32(SM50_VIEWPORTS)),vp,builder.getInt32(0));
+    auto load = [&](unsigned i) {
+      auto at = builder.CreateAdd(builder.CreateMul(index,builder.getInt32(4)),builder.getInt32(2 * SM50_VIEWPORTS + 4 + i));
+      return builder.CreateLoad(types._float,builder.CreateGEP(types._float,function->getArg(wire_ranges),at));
+    };
+    auto gradient = function->getArg(wire_gradient);
+    auto slope = air.CreateFPBinOp(llvm::air::AIRBuilder::fmax,
+        builder.CreateFMul(builder.CreateExtractElement(gradient,uint64_t(0)),load(0)),
+        builder.CreateFMul(builder.CreateExtractElement(gradient,1),load(1)),false);
+    auto scale = load(2), clamp = load(3);
+    auto zero = air.getFloat(0);
+    auto offset = builder.CreateSelect(builder.CreateFCmpOEQ(scale,zero),zero,builder.CreateFMul(slope,scale));
+    offset = builder.CreateSelect(builder.CreateFCmpOGT(clamp,zero),air.CreateFPBinOp(llvm::air::AIRBuilder::fmin,offset,clamp,false),offset);
+    offset = builder.CreateSelect(builder.CreateFCmpOLT(clamp,zero),air.CreateFPBinOp(llvm::air::AIRBuilder::fmax,offset,clamp,false),offset);
+    for (auto [i,input] : llvm::enumerate(func_signature.Inputs())) {
+      if (!std::holds_alternative<air::InputPosition>(input)) continue;
+      auto pos = function->getArg(i);
+      auto z = builder.CreateExtractElement(pos,2);
+      auto adjusted = builder.CreateInsertElement(pos,builder.CreateFAdd(z,offset),2);
+      pos->replaceUsesWithIf(adjusted,[&](llvm::Use &use) { return use.getUser()!=z && use.getUser()!=adjusted; });
+    }
   }
   if (coarse)
     coarse->Finish();

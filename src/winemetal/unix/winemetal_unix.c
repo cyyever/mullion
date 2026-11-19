@@ -2822,6 +2822,7 @@ struct SM50_SHADER_PSO_PIXEL_SHADER_DATA32 {
   bool conservative;
   bool coarse_shading;
   uint32_t shading_rate_varying;
+  bool wire_slope;
   bool quad_lines;
   bool conservative_hull;
   bool patch_varying;
@@ -2850,6 +2851,7 @@ struct SM50_SHADER_PSO_GEOMETRY_SHADER_DATA32 {
   bool pipeline_statistics;
   bool clip_distance_varyings;
   bool cull_distance_varyings;
+  bool wire_slope;
   bool quad_lines;
   bool barycentrics;
   bool conservative;
@@ -2944,6 +2946,7 @@ sm50_compilation_argument32_convert(
       data->conservative = src->conservative;
       data->coarse_shading = src->coarse_shading;
       data->shading_rate_varying = src->shading_rate_varying;
+      data->wire_slope = src->wire_slope;
       data->quad_lines = src->quad_lines;
       data->conservative_hull = src->conservative_hull;
       data->patch_varying = src->patch_varying;
@@ -2990,6 +2993,7 @@ sm50_compilation_argument32_convert(
       data->pipeline_statistics = src->pipeline_statistics;
       data->clip_distance_varyings = src->clip_distance_varyings;
       data->cull_distance_varyings = src->cull_distance_varyings;
+      data->wire_slope = src->wire_slope;
       data->quad_lines = src->quad_lines;
       data->barycentrics = src->barycentrics;
       data->conservative = src->conservative;
