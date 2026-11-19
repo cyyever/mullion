@@ -1092,11 +1092,13 @@ struct Group {
       source += "  constant float *bias = ranges + " + std::to_string(2 * SM50_VIEWPORTS + 4) + ";\n";
       source += R"(  float z = in.position.z;
   float slope = max(abs(dfdx(z)), abs(dfdy(z)));
-  float offset = bias[1] * slope;
+  // D3D skips slope multiplication at zero scale, including for edge-on wireframe triangles.
+  float offset = bias[1] != 0 ? bias[1] * slope : 0;
   if (bias[3] != 0) offset += bias[0] / bias[3];
   if (bias[2] > 0) offset = min(offset, bias[2]);
   if (bias[2] < 0) offset = max(offset, bias[2]);
-  float biased = clamp(z + offset, ranges[2 * viewport], ranges[2 * viewport + 1]);
+  uint range = viewport < )" + std::to_string(SM50_VIEWPORTS) + R"(u ? 2 * viewport : 0;
+  float biased = clamp(z + offset, ranges[range], ranges[range + 1]);
   out.z = bias[3] != 0 ? precise::divide(round(biased * bias[3]), bias[3]) : biased;
 )";
     } else if (depth)
