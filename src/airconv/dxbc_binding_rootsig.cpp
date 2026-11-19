@@ -68,7 +68,7 @@ public:
     );
     auto &B = AIR.builder;
     auto Pointer = B.CreatePointerCast(
-        IntPtr, TyBufferDescriptor->getPointerTo(IntPtr->getType()->getPointerAddressSpace())
+        IntPtr, llvm::PointerType::get(TyBufferDescriptor->getContext(), IntPtr->getType()->getPointerAddressSpace())
     );
     auto IdxDescriptor = B.CreateAdd(B.CreateSub(Index, AIR.getInt(RangeId)), AIR.getInt(DescriptorOffset));
     auto Handle =
@@ -95,14 +95,14 @@ public:
   GetUAVCounterDescriptor(
       llvm::air::AIRBuilder &AIR, llvm::Value *IntPtr, llvm::Value *Index, RangeId RangeId, uint32_t DescriptorOffset
   ) {
-    auto TyCounter = AIR.getIntTy()->getPointerTo(1);
+    auto TyCounter = llvm::PointerType::get(AIR.getIntTy()->getContext(), 1);
     auto TyBufferDescriptor = llvm::StructType::get(
         AIR.getContext(), {llvm::Type::getInt64Ty(AIR.getContext()), llvm::Type::getInt64Ty(AIR.getContext()),
                            TyCounter, llvm::Type::getInt64Ty(AIR.getContext())}
     );
     auto &B = AIR.builder;
     auto Pointer = B.CreatePointerCast(
-        IntPtr, TyBufferDescriptor->getPointerTo(IntPtr->getType()->getPointerAddressSpace())
+        IntPtr, llvm::PointerType::get(TyBufferDescriptor->getContext(), IntPtr->getType()->getPointerAddressSpace())
     );
     auto IdxDescriptor = B.CreateAdd(B.CreateSub(Index, AIR.getInt(RangeId)), AIR.getInt(DescriptorOffset));
     return B.CreateLoad(
@@ -116,12 +116,12 @@ public:
     auto Arg = Table(AIR, TableIndex);
     auto TyStruct = RootArgumentsType;
     return B.CreatePointerCast(
-        B.CreateStructGEP(TyStruct, Arg, Index), AIR.getIntTy(4)->getPointerTo(Arg->getType()->getPointerAddressSpace())
+        B.CreateStructGEP(TyStruct, Arg, Index), llvm::PointerType::get(AIR.getIntTy(4)->getContext(), Arg->getType()->getPointerAddressSpace())
     );
   };
 
   virtual std::optional<ConstantBufferDescriptor>
-  GetConstantBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  GetConstantBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
     auto Iter = ConstantBuffers.find(Range);
@@ -139,7 +139,7 @@ public:
     }
     auto HeapPointer = GetArgument(Builder, RootSignatureArgumentIndex, CBuf.arg_index);
     auto [Pointer, Metadata] = GetBufferDescriptor(
-        Builder, HeapPointer, Index, Builder.getIntTy(4)->getPointerTo(2), CBuf.range.lower_bound, DescriptorOffset
+        Builder, HeapPointer, Index, llvm::PointerType::get(Builder.getIntTy(4)->getContext(), 2), CBuf.range.lower_bound, DescriptorOffset
     );
     return ConstantBufferDescriptor{Pointer, Unbounded.count({D3D12_DESCRIPTOR_RANGE_TYPE_CBV, Range}) ? nullptr : Metadata};
   }
@@ -157,7 +157,7 @@ public:
     auto Field = [&](llvm::Type *Ty, unsigned Field) {
       return B.CreateLoad(
           Ty, B.CreateGEP(
-                  TySamplerDescriptor, B.CreatePointerCast(IntPtr, TySamplerDescriptor->getPointerTo(2)),
+                  TySamplerDescriptor, B.CreatePointerCast(IntPtr, llvm::PointerType::get(TySamplerDescriptor->getContext(), 2)),
                   {IdxDescriptor, AIR.getInt(Field)}
               )
       );
@@ -167,7 +167,7 @@ public:
   }
 
   virtual std::optional<SamplerDescriptor>
-  GetSampler(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  GetSampler(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     auto Iter = Samplers.find(Range);
     if (Iter == Samplers.end()) {
       return {};
@@ -209,7 +209,7 @@ public:
     );
     auto &B = AIR.builder;
     auto Pointer = B.CreatePointerCast(
-        IntPtr, TyTextureDescriptor->getPointerTo(IntPtr->getType()->getPointerAddressSpace())
+        IntPtr, llvm::PointerType::get(TyTextureDescriptor->getContext(), IntPtr->getType()->getPointerAddressSpace())
     );
     auto IdxDescriptor = B.CreateAdd(B.CreateSub(Index, AIR.getInt(RangeId)), AIR.getInt(DescriptorOffset));
     return {
@@ -228,7 +228,7 @@ public:
   }
 
   virtual std::optional<TextureDescirptor>
-  GetSRVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  GetSRVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
     auto Iter = SRVs.find(Range);
@@ -259,7 +259,7 @@ public:
   }
 
   virtual std::optional<TextureDescirptor>
-  GetUAVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  GetUAVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
     auto Iter = UAVs.find(Range);
@@ -293,7 +293,7 @@ public:
   }
 
   virtual std::optional<BufferDescriptor>
-  GetSRVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  GetSRVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
     auto Iter = SRVs.find(Range);
@@ -308,7 +308,7 @@ public:
       return BufferDescriptor{HeapPointer, Builder.builder.getInt64(0xffffffff), SRV.structure_stride, false, false};
     }
     auto [Pointer, Metadata] = GetBufferDescriptor(
-        Builder, HeapPointer, Index, Builder.getIntTy()->getPointerTo(1), SRV.range.lower_bound, DescriptorOffset, true
+        Builder, HeapPointer, Index, llvm::PointerType::get(Builder.getIntTy()->getContext(), 1), SRV.range.lower_bound, DescriptorOffset, true
     );
 
     return BufferDescriptor{
@@ -317,7 +317,7 @@ public:
   }
 
   virtual std::optional<BufferDescriptor>
-  GetUAVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  GetUAVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
     auto Iter = UAVs.find(Range);
@@ -334,7 +334,7 @@ public:
       };
     }
     auto [Pointer, Metadata] = GetBufferDescriptor(
-        Builder, HeapPointer, Index, Builder.getIntTy()->getPointerTo(1), UAV.range.lower_bound, DescriptorOffset, true
+        Builder, HeapPointer, Index, llvm::PointerType::get(Builder.getIntTy()->getContext(), 1), UAV.range.lower_bound, DescriptorOffset, true
     );
 
     return BufferDescriptor{
@@ -344,7 +344,7 @@ public:
   }
 
   virtual std::optional<CounterDescriptor>
-  GetUAVCounter(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  GetUAVCounter(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
     auto Iter = UAVs.find(Range);
@@ -791,7 +791,7 @@ bind_rootsig_arguments(
 ) {
   auto &rootsig = static_cast<RootSignatureBindingMap &>(map);
   rootsig.RootArguments = builder.CreatePointerCast(
-      arguments, rootsig.RootArgumentsType->getPointerTo(arguments->getType()->getPointerAddressSpace())
+      arguments, llvm::PointerType::get(rootsig.RootArgumentsType->getContext(), arguments->getType()->getPointerAddressSpace())
   );
   rootsig.StaticSamplers = static_samplers;
   rootsig.SparseBufferMappings = sparse_buffers;

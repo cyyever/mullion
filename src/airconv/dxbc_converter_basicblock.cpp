@@ -461,7 +461,7 @@ IREffect pull_vertex_input(
     if (!ctx.resource.vertex_buffer_table) {
       ctx.resource.vertex_buffer_table = ctx.builder.CreateBitCast(
         ctx.function->getArg(vbuf_table),
-        ctx.types._mullion_vertex_buffer_entry->getPointerTo((uint32_t
+        llvm::PointerType::get(ctx.types._mullion_vertex_buffer_entry->getContext(), (uint32_t
         )air::AddressSpace::constant)
       );
     }

@@ -208,7 +208,7 @@ D3D12SerializeVersionedRootSignature(
   if (!ppBlob)
     return FAIL(E_INVALIDARG);
 
-  switch (pRootSignatureDesc->Version) {
+  switch (uint32_t(pRootSignatureDesc->Version)) {
   default:
     break;
   case D3D_ROOT_SIGNATURE_VERSION_1:
@@ -273,7 +273,7 @@ public:
   GetRootSignatureDescAtVersion(
       D3D_ROOT_SIGNATURE_VERSION Version, const D3D12_VERSIONED_ROOT_SIGNATURE_DESC **ppDesc
   ) {
-    switch (Version) {
+    switch (uint32_t(Version)) {
     case D3D_ROOT_SIGNATURE_VERSION_1_0:
       *ppDesc = &impl_.desc_1_0_;
       break;

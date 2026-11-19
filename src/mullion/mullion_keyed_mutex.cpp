@@ -50,7 +50,7 @@ KeyedMutex::decRef() {
 static uint64_t
 makeOwnerToken() {
   static std::atomic<uint32_t> next = {0u};
-  return (uint64_t(GetCurrentProcessId()) << 32) | next.fetch_add(1u, std::memory_order_relaxed) + 1u;
+  return (uint64_t(GetCurrentProcessId()) << 32) | (next.fetch_add(1u, std::memory_order_relaxed) + 1u);
 }
 
 // whether the instance a token names still exists. an owner that dies without unwinding anything (ExitProcess, a

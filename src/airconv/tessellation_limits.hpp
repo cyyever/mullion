@@ -204,7 +204,7 @@ struct tess_grids {
 
 inline tess_grids
 tessellation_grids(uint32_t workloads, uint32_t primitives, uint32_t instances, uint32_t limit) {
-  tess_grids grids{workloads, instances};
+  tess_grids grids{workloads, instances, 0, 0};
   if (limit) {
     grids.instances = std::clamp(limit / primitives, 1u, instances);
     grids.workloads = std::clamp(limit / (primitives * grids.instances), 1u, workloads);

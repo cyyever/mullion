@@ -54,7 +54,7 @@ AirType::AirType(LLVMContext &context) : context(context) {
   _mullion_vertex_buffer_entry = StructType::create(
     context,
     {
-      _byte->getPointerTo((uint32_t)AddressSpace::device),
+      llvm::PointerType::get(_byte->getContext(), (uint32_t)AddressSpace::device),
       _int, // stride
       _int, // length
     },
@@ -87,9 +87,9 @@ AirType::AirType(LLVMContext &context) : context(context) {
   );
 
   auto tyOpaque = get_or_create_struct(context, "opaque");
-  _ptr_device = PointerType::get(tyOpaque, 1);
-  _ptr_constant = PointerType::get(tyOpaque, 2);
-  _ptr_threadgroup = PointerType::get(tyOpaque, 3);
+  _ptr_device = PointerType::get(tyOpaque->getContext(), 1);
+  _ptr_constant = PointerType::get(tyOpaque->getContext(), 2);
+  _ptr_threadgroup = PointerType::get(tyOpaque->getContext(), 3);
 
   _texture1d = get_or_create_struct(context, "struct._texture_1d_t");
   _texture1d_array =

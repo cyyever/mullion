@@ -18,7 +18,7 @@ struct Arm {
   BasicBlock *First, *Last;
 };
 struct Diamond {
-  BranchInst *Branch;
+  CondBrInst *Branch;
   Arm Own, Scaled;
   BasicBlock *Join;
 };
@@ -29,8 +29,8 @@ Reach(BasicBlock *First, BasicBlock *Head, BasicBlock *Join) {
     return {};
   if (First->getSingleSuccessor() == Join)
     return Arm{First, First};
-  auto Branch = dyn_cast_or_null<BranchInst>(First->getTerminator());
-  if (!Branch || !Branch->isConditional())
+  auto Branch = dyn_cast_or_null<CondBrInst>(First->getTerminator());
+  if (!Branch)
     return {};
   auto A = Branch->getSuccessor(0), B = Branch->getSuccessor(1), Last = A->getSingleSuccessor();
   if (A == B || !Last || B->getSingleSuccessor() != Last || A->getSinglePredecessor() != First ||
@@ -41,8 +41,8 @@ Reach(BasicBlock *First, BasicBlock *Head, BasicBlock *Join) {
 
 std::optional<Diamond>
 Match(BasicBlock *Head, unsigned Kind) {
-  auto Branch = dyn_cast_or_null<BranchInst>(Head->getTerminator());
-  if (!Branch || !Branch->isConditional() || !Branch->getMetadata(Kind))
+  auto Branch = dyn_cast_or_null<CondBrInst>(Head->getTerminator());
+  if (!Branch || !Branch->getMetadata(Kind))
     return {};
   auto Own = Branch->getSuccessor(0), Scaled = Branch->getSuccessor(1);
   auto Join = Own->getSingleSuccessor();
@@ -67,13 +67,13 @@ Blocks(const Arm &A) {
 // then go to the sample's join themselves. it is split off again, so the gradients arm ends in one block
 void
 Unfold(BasicBlock *Head) {
-  auto Branch = cast<BranchInst>(Head->getTerminator());
-  if (!Branch->isConditional())
+  auto Branch = dyn_cast<CondBrInst>(Head->getTerminator());
+  if (!Branch)
     return;
   auto Join = Branch->getSuccessor(0)->getSingleSuccessor();
   auto Scaled = Branch->getSuccessor(1);
-  auto Check = dyn_cast<BranchInst>(Scaled->getTerminator());
-  if (!Join || !Check || !Check->isConditional())
+  auto Check = dyn_cast<CondBrInst>(Scaled->getTerminator());
+  if (!Join || !Check)
     return;
   auto A = Check->getSuccessor(0), B = Check->getSuccessor(1);
   if (A != B && A->getSinglePredecessor() == Scaled && B->getSinglePredecessor() == Scaled &&
@@ -157,9 +157,9 @@ Join(Diamond &First, const Diamond &Second) {
       return false;
 
   for (auto I : Before)
-    I->moveBefore(First.Branch);
+    I->moveBefore(First.Branch->getIterator());
   // in their order, ahead of what followed the second sample
-  auto At = Second.Join->getFirstNonPHI();
+  auto At = Second.Join->getFirstNonPHIIt();
   SmallVector<PHINode *, 4> Moved;
   for (auto &Phi : make_early_inc_range(Between->phis()))
     Phi.moveBefore(At), Moved.push_back(&Phi);
@@ -193,7 +193,7 @@ MergeSampleBranchesPass::run(Function &F, FunctionAnalysisManager &AM) {
   auto Kind = F.getContext().getMDKindID(SampleBranchMetadata);
   SmallVector<BasicBlock *, 16> Heads;
   for (auto &BB : F)
-    if (auto Branch = dyn_cast_or_null<BranchInst>(BB.getTerminator()); Branch && Branch->getMetadata(Kind))
+    if (auto Branch = dyn_cast_or_null<CondBrInst>(BB.getTerminator()); Branch && Branch->getMetadata(Kind))
       Heads.push_back(&BB);
   bool Changed = false;
   if (Merge) {
@@ -215,7 +215,7 @@ MergeSampleBranchesPass::run(Function &F, FunctionAnalysisManager &AM) {
     }
   }
   for (auto &BB : F)
-    if (auto Branch = dyn_cast_or_null<BranchInst>(BB.getTerminator()); Branch && Branch->getMetadata(Kind))
+    if (auto Branch = BB.getTerminator(); Branch && Branch->getMetadata(Kind))
       Branch->setMetadata(Kind, nullptr), Changed = true;
   return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

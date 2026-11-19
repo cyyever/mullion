@@ -44,8 +44,8 @@ struct ShaderResourceViewInfo {
   bool compared = false; // therefore we use depth texture!
 
   uint32_t structure_stride = 0;
-  uint32_t arg_index;
-  uint32_t arg_metadata_index;
+  uint32_t arg_index = 0;
+  uint32_t arg_metadata_index = 0;
 };
 struct UnorderedAccessViewInfo {
   ResourceRange range;
@@ -58,21 +58,21 @@ struct UnorderedAccessViewInfo {
   bool with_counter = false;
 
   uint32_t structure_stride = 0;
-  uint32_t arg_index;
-  uint32_t arg_metadata_index;
-  uint32_t arg_counter_index;
+  uint32_t arg_index = 0;
+  uint32_t arg_metadata_index = 0;
+  uint32_t arg_counter_index = 0;
 };
 struct ConstantBufferInfo {
   ResourceRange range;
   uint32_t size_in_vec4;
-  uint32_t arg_index;
-  uint32_t arg_metadata_index;
+  uint32_t arg_index = 0;
+  uint32_t arg_metadata_index = 0;
 };
 struct SamplerInfo {
   ResourceRange range;
-  uint32_t arg_index;
-  uint32_t arg_cube_index;
-  uint32_t arg_metadata_index;
+  uint32_t arg_index = 0;
+  uint32_t arg_cube_index = 0;
+  uint32_t arg_metadata_index = 0;
 };
 
 struct ThreadgroupBufferInfo {
@@ -717,7 +717,7 @@ private:
   llvm::Value *lane_ = nullptr, *leader_ = nullptr, *leads_ = nullptr, *wide_ = nullptr, *high_ = nullptr;
   llvm::AllocaInst *discarded_ = nullptr, *pixel_discarded_ = nullptr;
   llvm::Instruction *discard_ = nullptr;
-  llvm::BranchInst *discard_branch_ = nullptr;
+  llvm::CondBrInst *discard_branch_ = nullptr;
   bool elide_discard_ = true;
   llvm::IRBuilder<> *builder_ = nullptr;
   llvm::Value *fine_index(llvm::Value *x, llvm::Value *y);

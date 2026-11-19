@@ -12,14 +12,14 @@ namespace {
 
 // a sample's branch: Head branches to Reduce (the emulation) or straight to Join, which Reduce goes to as well
 struct Diamond {
-  BranchInst *Branch;
+  CondBrInst *Branch;
   BasicBlock *Head, *Reduce, *Join;
 };
 
 std::optional<Diamond>
 Match(BasicBlock *Head, unsigned Kind) {
-  auto Branch = dyn_cast_or_null<BranchInst>(Head->getTerminator());
-  if (!Branch || !Branch->isConditional() || !Branch->getMetadata(Kind))
+  auto Branch = dyn_cast_or_null<CondBrInst>(Head->getTerminator());
+  if (!Branch || !Branch->getMetadata(Kind))
     return {};
   auto Reduce = Branch->getSuccessor(0), Join = Branch->getSuccessor(1);
   if (Reduce == Join || Reduce->getSinglePredecessor() != Head || Reduce->getSingleSuccessor() != Join ||
@@ -104,9 +104,9 @@ Join(Diamond &First, const Diamond &Second) {
     return false;
 
   for (auto I : Before)
-    I->moveBefore(First.Branch);
+    I->moveBefore(First.Branch->getIterator());
   // in their order, ahead of what followed the second sample
-  auto At = Second.Join->getFirstNonPHI();
+  auto At = Second.Join->getFirstNonPHIIt();
   for (auto &Phi : make_early_inc_range(Between->phis()))
     Phi.moveBefore(At);
   for (auto I : Later)
@@ -133,7 +133,7 @@ MergeMinMaxBranchesPass::run(Function &F, FunctionAnalysisManager &AM) {
   auto Kind = F.getContext().getMDKindID(MinMaxBranchMetadata);
   SmallVector<BasicBlock *, 16> Heads;
   for (auto &BB : F)
-    if (auto Branch = dyn_cast_or_null<BranchInst>(BB.getTerminator()); Branch && Branch->getMetadata(Kind))
+    if (auto Branch = dyn_cast_or_null<CondBrInst>(BB.getTerminator()); Branch && Branch->getMetadata(Kind))
       Heads.push_back(&BB);
   bool Changed = false;
   if (Merge) {
@@ -153,7 +153,7 @@ MergeMinMaxBranchesPass::run(Function &F, FunctionAnalysisManager &AM) {
     }
   }
   for (auto &BB : F)
-    if (auto Branch = dyn_cast_or_null<BranchInst>(BB.getTerminator()); Branch && Branch->getMetadata(Kind))
+    if (auto Branch = BB.getTerminator(); Branch && Branch->getMetadata(Kind))
       Branch->setMetadata(Kind, nullptr), Changed = true;
   return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

@@ -283,7 +283,7 @@ ValidateResourceStates(D3D12_RESOURCE_STATES State, const D3D12_HEAP_PROPERTIES 
       return FAIL(E_INVALIDARG);
   }
 
-  switch (pHeapProps->Type) {
+  switch (uint32_t(pHeapProps->Type)) {
   case D3D12_HEAP_TYPE_READBACK: {
     if (State != D3D12_RESOURCE_STATE_COPY_DEST && State != D3D12_RESOURCE_STATE_COMMON)
       return FAIL(E_INVALIDARG);
@@ -298,7 +298,7 @@ ValidateResourceStates(D3D12_RESOURCE_STATES State, const D3D12_HEAP_PROPERTIES 
 
 bool
 IsCpuVisibleHeap(const D3D12_HEAP_PROPERTIES *pHeapProps) {
-  switch (pHeapProps->Type) {
+  switch (uint32_t(pHeapProps->Type)) {
   case D3D12_HEAP_TYPE_UPLOAD:
   case D3D12_HEAP_TYPE_READBACK:
   case sdk::D3D12_HEAP_TYPE_GPU_UPLOAD:
@@ -313,7 +313,7 @@ IsCpuVisibleHeap(const D3D12_HEAP_PROPERTIES *pHeapProps) {
 HRESULT
 ValidateResourceDescs(const D3D12_RESOURCE_DESC *pDesc, const D3D12_HEAP_PROPERTIES *pHeapProps) {
   auto HeapType = pHeapProps->Type;
-  switch (HeapType) {
+  switch (uint32_t(HeapType)) {
   case D3D12_HEAP_TYPE_UPLOAD: {
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
       return FAIL(E_INVALIDARG);
@@ -378,7 +378,7 @@ ValidateResourceDescs(const D3D12_RESOURCE_DESC *pDesc, const D3D12_HEAP_PROPERT
 
 HRESULT
 ValidateHeapProperties(const D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS Flags, bool AdapterIsNUMA) {
-  switch (pHeapProps->Type) {
+  switch (uint32_t(pHeapProps->Type)) {
   case D3D12_HEAP_TYPE_DEFAULT:
   case D3D12_HEAP_TYPE_READBACK: {
     if (Flags & D3D12_HEAP_FLAG_ALLOW_WRITE_WATCH)

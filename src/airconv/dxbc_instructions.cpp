@@ -434,10 +434,10 @@ SrcOperand readSrcOperand(
   }
   default:
     Refuse("an unhandled source operand type");
-    return SrcOperandImmediate32{._ = readSrcOperandCommon(O, read_type)};
+    return SrcOperandImmediate32{._ = readSrcOperandCommon(O, read_type), .uvalue = {}};
   }
   Refuse("an unhandled source operand type");
-  return SrcOperandImmediate32{._ = readSrcOperandCommon(O, read_type)};
+  return SrcOperandImmediate32{._ = readSrcOperandCommon(O, read_type), .uvalue = {}};
 };
 
 auto readSrcOperandResource(
@@ -461,7 +461,7 @@ auto readSrcOperandResource(
     }
   } else {
     Refuse("an interface resource");
-    return SrcOperandResource{.range_id = 0, .index = readOperandIndex(O.m_Index[0], O.m_IndexType[0], phase)};
+    return SrcOperandResource{.range_id = 0, .index = readOperandIndex(O.m_Index[0], O.m_IndexType[0], phase), .read_swizzle = {}};
   }
 }
 

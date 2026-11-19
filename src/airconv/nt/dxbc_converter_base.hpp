@@ -445,17 +445,18 @@ public:
         break;
     }
 
-    llvm::SmallVector<int, 4> Idx;
+    std::array<int, 4> Idx{};
+    unsigned Count = 0;
     unsigned SrcIdx = 0;
     for (unsigned Bit = 0; Bit < 4; ++Bit) {
       if (CombinedMask & (1 << Bit)) {
         if (Mask & (1 << Bit))
-          Idx.push_back(SrcIdx);
+          Idx[Count++] = SrcIdx;
         SrcIdx++;
       }
     }
 
-    return ir.CreateShuffleVector(Value, Idx);
+    return ir.CreateShuffleVector(Value, llvm::ArrayRef(Idx.data(), Count));
   }
 
   mask_t

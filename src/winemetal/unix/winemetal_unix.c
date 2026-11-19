@@ -1712,8 +1712,8 @@ _MTLTexture_replaceRegion(void *obj) {
 
 static NTSTATUS
 _MTLBuffer_didModifyRange(void *obj) {
-  struct unixcall_generic_obj_uint64_uint64_ret *params = obj;
-  [(id<MTLBuffer>)params->handle didModifyRange:NSMakeRange(params->arg, params->ret)];
+  // Shared buffers are coherent on the supported Apple Silicon devices.
+  (void)obj;
   return STATUS_SUCCESS;
 }
 
@@ -3079,6 +3079,14 @@ sm50_compilation_argument32_convert(
       data->static_samplers = src->static_samplers;
       break;
     }
+    case SM50_SHADER_LIBRARIES: {
+      const uint32_t *src = (const uint32_t *)args32;
+      struct SM50_SHADER_LIBRARIES_DATA *data = malloc(sizeof(*data));
+      *data = (struct SM50_SHADER_LIBRARIES_DATA){NULL, args32->type, UInt32ToPtr(src[2]), src[3]};
+      last_arg->next = data;
+      last_arg = (void *)data;
+      break;
+    }
     case SM50_SHADER_ARGUMENT_TYPE_MAX:
       break;
     }
@@ -3809,8 +3817,6 @@ static NTSTATUS
 _MTLBuffer_updateContents(void *obj) {
   struct unixcall_mtlbuffer_updatecontents *params = obj;
   memcpy((void *)((char *)[(id<MTLBuffer>)params->buffer contents] + params->offset), params->data.ptr, params->length);
-  if ([(id<MTLBuffer>)params->buffer storageMode] == MTLStorageModeManaged)
-    [(id<MTLBuffer>)params->buffer didModifyRange:NSMakeRange(params->offset, params->length)];
   return STATUS_SUCCESS;
 }
 
@@ -5515,26 +5521,25 @@ _WMTDeviceReport(void *obj) {
   typedef struct unixcall_generic_obj_uint64_uint64_ret two;
   #define ANSWER(call, type, argument, ...)                                                                            \
     do {                                                                                                               \
-      type asked = {params->device, argument};                                                                         \
+      type asked = {.handle = params->device, .ret = 0, argument};                                                                         \
       _MTLDevice_##call(&asked);                                                                                       \
       [text appendFormat:@"%s", #call];                                                                                \
       [text appendFormat:@"" __VA_ARGS__];                                                                             \
       [text appendFormat:@"=%llu\n", (unsigned long long)asked.ret];                                                   \
     } while (0)
   for (unsigned n = 7; n <= 11; n++)
-    ANSWER(supportsFamily, two, MTLGPUFamilyApple1 + n - 1, ".apple%u", n);
-  ANSWER(supportsFamily, two, MTLGPUFamilyMac2, ".mac2");
-  ANSWER(supportsFamily, two, MTLGPUFamilyMetal3, ".metal3");
-  ANSWER(supportsFamily, two, 5002 /* MTLGPUFamilyMetal4 */, ".metal4");
+    ANSWER(supportsFamily, two, .arg = MTLGPUFamilyApple1 + n - 1, ".apple%u", n);
+  ANSWER(supportsFamily, two, .arg = MTLGPUFamilyMetal3, ".metal3");
+  ANSWER(supportsFamily, two, .arg = 5002 /* MTLGPUFamilyMetal4 */, ".metal4");
   for (unsigned samples = 1; samples <= 16; samples *= 2)
-    ANSWER(supportsTextureSampleCount, two, samples, ".%u", samples);
+    ANSWER(supportsTextureSampleCount, two, .arg = samples, ".%u", samples);
   ANSWER(maxArgumentBufferSamplerCount, one, );
   ANSWER(supportsSamplerReduction, one, );
   ANSWER(supportsShaderBarycentricCoordinates, one, );
   ANSWER(supportsFXSpatialScaler, one, );
   ANSWER(supportsFXTemporalScaler, one, );
-  ANSWER(supportsFXDenoisedScaler, two, 0, ".metal3");
-  ANSWER(supportsFXDenoisedScaler, two, 1, ".metal4");
+  ANSWER(supportsFXDenoisedScaler, two, .arg = 0, ".metal3");
+  ANSWER(supportsFXDenoisedScaler, two, .arg = 1, ".metal4");
   ANSWER(supportsBCTextureCompression, one, );
   ANSWER(supports32BitFloatFiltering, one, );
   ANSWER(supports32BitMSAA, one, );
@@ -5795,28 +5800,28 @@ API_AVAILABLE(macos(26.0)) metal4_parts(id<MTL4CommandQueue> queue) {
   dispatch_release(feedback_ready);
   // the GPU is done with the commands once the buffer's feedback came, and never had those of one not committed
   bool done = finished || feedback.status < WMTCommandBufferStatusCommitted;
-  MullionMetal4Parts *parts = done && residency ? [[MullionMetal4Parts alloc] init] : nil;
-  if (parts) {
+  MullionMetal4Parts *recycled = done && residency ? [[MullionMetal4Parts alloc] init] : nil;
+  if (recycled) {
     // the next buffer's passes start as with new tables, as a render pass leaves them (MTL4CommandEncoder_endEncoding)
     for (unsigned stage = 0; stage < Metal4BindingStageCount; stage++) {
       for (unsigned i = 0; i < buffers_set[stage]; i++)
         [tables[stage] setAddress:0 atIndex:i];
       for (unsigned i = 0; i < textures_set[stage]; i++)
         [tables[stage] setTexture:(MTLResourceID){0} atIndex:i];
-      parts->tables[stage] = tables[stage];
+      recycled->tables[stage] = tables[stage];
       tables[stage] = nil;
     }
     // a set gives its allocations up at its next commit
     [residency removeAllAllocations];
     [residency commit];
-    parts->residency = residency;
+    recycled->residency = residency;
     residency = nil;
-    parts->bindings = bindings;
+    recycled->bindings = bindings;
     NSMutableArray *pool = metal4_parts(queue);
     @synchronized(pool) {
-      [pool addObject:parts];
+      [pool addObject:recycled];
     }
-    [parts release];
+    [recycled release];
   }
   for (unsigned i = 0; i < Metal4BindingStageCount; i++)
     [tables[i] release];

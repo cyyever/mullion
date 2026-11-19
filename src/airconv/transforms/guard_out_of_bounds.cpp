@@ -54,13 +54,13 @@ GuardOutOfBoundsPass::run(Function &F, FunctionAnalysisManager &AM) {
   for (auto [I, Select] : Accesses) {
     auto Head = I->getParent();
     bool Inverted = Fallback(Select->getTrueValue(), GuardConstants && isa<LoadInst>(I));
-    auto Inside = Inverted ? BinaryOperator::CreateNot(Select->getCondition(), "", I) : Select->getCondition();
+    auto Inside = Inverted ? BinaryOperator::CreateNot(Select->getCondition(), "", I->getIterator()) : Select->getCondition();
     auto Then = SplitBlockAndInsertIfThen(Inside, I, false);
     auto Tail = I->getParent();
-    I->moveBefore(Then);
+    I->moveBefore(Then->getIterator());
     I->replaceUsesOfWith(Select, Inverted ? Select->getFalseValue() : Select->getTrueValue());
     if (!I->getType()->isVoidTy()) {
-      auto Read = PHINode::Create(I->getType(), 2, "", &Tail->front());
+      auto Read = PHINode::Create(I->getType(), 2, "", Tail->begin());
       I->replaceAllUsesWith(Read);
       Read->addIncoming(I, Then->getParent());
       Read->addIncoming(Constant::getNullValue(I->getType()), Head);

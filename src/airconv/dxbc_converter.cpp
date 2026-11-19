@@ -1,3 +1,4 @@
+#include <ranges>
 #include <string_view>
 #include <array>
 #include <unordered_map>
@@ -138,10 +139,9 @@ void setup_immediate_constant_buffer(
   icb->setAlignment(llvm::Align(4));
   resource_map.icb = icb;
   resource_map.icb_float = builder.CreateBitCast(
-    resource_map.icb, llvm::ArrayType::get(
+    resource_map.icb, llvm::PointerType::get(llvm::ArrayType::get(
                         types._float4, shader_info->immConstantBufferData.size()
-                      )
-                        ->getPointerTo(2)
+                      )->getContext(), 2)
   );
 }
 
@@ -166,7 +166,7 @@ index_from_view(llvm::IRBuilder<> &builder, air::AirType &types, llvm::Value *vi
   // an index is one or two ushorts of the view
   constexpr uint32_t kFormatR32Uint = 42; // DXGI_FORMAT_R32_UINT
   auto view_ty = llvm::StructType::get(builder.getContext(), {types._long, types._int, types._int});
-  auto ushort_ptr = builder.getInt16Ty()->getPointerTo((uint32_t)air::AddressSpace::device);
+  auto ushort_ptr = llvm::PointerType::get(builder.getInt16Ty()->getContext(), (uint32_t)air::AddressSpace::device);
   auto wide = builder.CreateICmpEQ(format, builder.getInt32(kFormatR32Uint));
   auto shorts = builder.CreateSelect(wide, builder.getInt64(2), builder.getInt64(1));
   auto first = builder.CreateMul(builder.CreateZExt(position, types._long), shorts);
@@ -207,8 +207,7 @@ void setup_temp_register(
   );
   resource_map.temp.ptr_float4 = builder.CreateBitCast(
     resource_map.temp.ptr_int4,
-    llvm::ArrayType::get(types._float, 4 * shader_info->tempRegisterCount)
-      ->getPointerTo()
+    llvm::PointerType::get(llvm::ArrayType::get(types._float, 4 * shader_info->tempRegisterCount)->getContext(), 0)
   );
   for (auto &phase : shader_info->phases) {
     resource_map.phases.push_back({});
@@ -219,8 +218,7 @@ void setup_temp_register(
     );
     phase_temp.temp.ptr_float4 = builder.CreateBitCast(
       phase_temp.temp.ptr_int4,
-      llvm::ArrayType::get(types._float, 4 * phase.tempRegisterCount)
-        ->getPointerTo()
+      llvm::PointerType::get(llvm::ArrayType::get(types._float, 4 * phase.tempRegisterCount)->getContext(), 0)
     );
 
     for (auto &[idx, info] : phase.indexableTempRegisterCounts) {
@@ -228,7 +226,7 @@ void setup_temp_register(
       auto channel_count = std::bit_width(mask);
       auto ptr_int_vec = builder.CreateAlloca(llvm::ArrayType::get(types._int, numRegisters * channel_count));
       auto ptr_float_vec = builder.CreateBitCast(
-          ptr_int_vec, llvm::ArrayType::get(types._float, numRegisters * channel_count)->getPointerTo()
+          ptr_int_vec, llvm::PointerType::get(llvm::ArrayType::get(types._float, numRegisters * channel_count)->getContext(), 0)
       );
       phase_temp.indexable_temp_map[idx] = {
         ptr_int_vec, ptr_float_vec, (uint32_t)channel_count
@@ -240,7 +238,7 @@ void setup_temp_register(
     auto channel_count = std::bit_width(mask);
     auto ptr_int_vec = builder.CreateAlloca(llvm::ArrayType::get(types._int, numRegisters * channel_count));
     auto ptr_float_vec = builder.CreateBitCast(
-        ptr_int_vec, llvm::ArrayType::get(types._float, numRegisters * channel_count)->getPointerTo()
+        ptr_int_vec, llvm::PointerType::get(llvm::ArrayType::get(types._float, numRegisters * channel_count)->getContext(), 0)
     );
     resource_map.indexable_temp_map[idx] = {
       ptr_int_vec, ptr_float_vec, (uint32_t)channel_count
@@ -367,12 +365,12 @@ gate_writes(llvm::Function &function, llvm::Value *live) {
   for (auto write : writes) {
     auto head = write->getParent();
     auto then = llvm::SplitBlockAndInsertIfThen(
-        new llvm::LoadInst(llvm::Type::getInt1Ty(function.getContext()), live, "", write), write, false
+        new llvm::LoadInst(llvm::Type::getInt1Ty(function.getContext()), live, "", write->getIterator()), write, false
     );
-    write->moveBefore(then);
+    write->moveBefore(then->getIterator());
     if (write->use_empty())
       continue;
-    auto phi = llvm::PHINode::Create(write->getType(), 2, "", &*then->getSuccessor(0)->begin());
+    auto phi = llvm::PHINode::Create(write->getType(), 2, "", then->getSuccessor(0)->begin());
     write->replaceAllUsesWith(phi);
     phi->addIncoming(write, then->getParent());
     phi->addIncoming(llvm::Constant::getNullValue(write->getType()), head);
@@ -1069,7 +1067,7 @@ llvm::Error convert_dxbc_pixel_shader(
     auto at = builder.CreateAdd(builder.CreateMul(y, builder.CreateExtractElement(words, uint64_t(1))), x);
     auto bytes = builder.CreateBitCast(
         function->getArg(bounds_mask),
-        builder.getInt8Ty()->getPointerTo(function->getArg(bounds_mask)->getType()->getPointerAddressSpace())
+        llvm::PointerType::get(builder.getInt8Ty()->getContext(), function->getArg(bounds_mask)->getType()->getPointerAddressSpace())
     );
     auto samples = builder.CreateZExt(
         builder.CreateLoad(builder.getInt8Ty(), builder.CreateGEP(builder.getInt8Ty(), bytes, {at})), builder.getInt32Ty()
@@ -1136,7 +1134,7 @@ llvm::Error convert_dxbc_pixel_shader(
     builder.CreateAlloca(llvm::ArrayType::get(types._int4, max_input_register));
   resource_map.input.ptr_float4 = builder.CreateBitCast(
     resource_map.input.ptr_int4,
-    llvm::ArrayType::get(types._float4, max_input_register)->getPointerTo()
+    llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_input_register)->getContext(), 0)
   );
   resource_map.input_element_count = max_input_register;
   resource_map.output.ptr_int4 =
@@ -1144,7 +1142,7 @@ llvm::Error convert_dxbc_pixel_shader(
     );
   resource_map.output.ptr_float4 = builder.CreateBitCast(
     resource_map.output.ptr_int4,
-    llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo()
+    llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_output_register)->getContext(), 0)
   );
   resource_map.output_element_count = max_output_register;
 
@@ -1311,7 +1309,7 @@ llvm::Error convert_dxbc_pixel_shader(
     auto offset = builder.CreateSelect(builder.CreateFCmpOEQ(scale,zero),zero,builder.CreateFMul(slope,scale));
     offset = builder.CreateSelect(builder.CreateFCmpOGT(clamp,zero),air.CreateFPBinOp(llvm::air::AIRBuilder::fmin,offset,clamp,false),offset);
     offset = builder.CreateSelect(builder.CreateFCmpOLT(clamp,zero),air.CreateFPBinOp(llvm::air::AIRBuilder::fmax,offset,clamp,false),offset);
-    for (auto [i,input] : llvm::enumerate(func_signature.Inputs())) {
+    for (auto [i,input] : std::views::enumerate(func_signature.Inputs())) {
       if (!std::holds_alternative<air::InputPosition>(input)) continue;
       auto pos = function->getArg(i);
       auto z = builder.CreateExtractElement(pos,2);
@@ -1352,7 +1350,7 @@ llvm::Error convert_dxbc_pixel_shader(
       for (auto &instruction : llvm::make_early_inc_range(block))
         if (auto alloca = llvm::dyn_cast<llvm::AllocaInst>(&instruction);
             alloca && llvm::isa<llvm::ConstantInt>(alloca->getArraySize()))
-          alloca->moveBefore(&*entry_bb->getFirstInsertionPt());
+          alloca->moveBefore(entry_bb->getFirstInsertionPt());
 
   if (air.Live)
     gate_writes(*function, air.Live);
@@ -1608,7 +1606,7 @@ llvm::Error convert_dxbc_vertex_shader(
     builder.CreateAlloca(llvm::ArrayType::get(types._int4, max_input_register));
   resource_map.input.ptr_float4 = builder.CreateBitCast(
     resource_map.input.ptr_int4,
-    llvm::ArrayType::get(types._float4, max_input_register)->getPointerTo()
+    llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_input_register)->getContext(), 0)
   );
   resource_map.input_element_count = max_input_register;
   resource_map.output.ptr_int4 =
@@ -1620,7 +1618,7 @@ llvm::Error convert_dxbc_vertex_shader(
                       resource_map.output.ptr_int4);
   resource_map.output.ptr_float4 = builder.CreateBitCast(
     resource_map.output.ptr_int4,
-    llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo()
+    llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_output_register)->getContext(), 0)
   );
   resource_map.output_element_count = max_output_register;
 
@@ -2304,7 +2302,7 @@ static int SM50InitializeUncached(
     if (sm50_shader->shader_type == microsoft::D3D10_SB_PIXEL_SHADER) {
       pRefl->PixelShader = {sm50_shader->pso_valid_output_reg_mask, sm50_shader->ps_has_coverage_output, 0, 0,
                             sm50_shader->ps_has_coverage_input, sm50_shader->ps_flat_input_mask,
-                            sm50_shader->ps_noperspective_input_mask};
+                            sm50_shader->ps_noperspective_input_mask, 0, 0, 0, 0, 0, 0, 0, 0};
       // EvaluateAttribute* evaluates where the shader chooses, which coarse shading does not move
       pRefl->PixelShader.FineShading = sm50_shader->ps_fine_shading || sm50_shader->shader_info.pull_mode_reg_mask;
       pRefl->PixelShader.PrimitiveID = sm50_shader->ps_primitive_id;

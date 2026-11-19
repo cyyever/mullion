@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <ranges>
 //===- ValueEnumerator.cpp - Number values and types for bitcode writer ---===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -233,7 +235,7 @@ static void predictValueUseListOrderImpl(const Value *V, const Function *F,
     return;
 
   bool IsGlobalValue = OM.isGlobalValue(ID);
-  llvm::sort(List, [&](const Entry &L, const Entry &R) {
+  std::ranges::sort(List, [&](const Entry &L, const Entry &R) {
     const Use *LU = L.first;
     const Use *RU = R.first;
     if (LU == RU)
@@ -327,7 +329,7 @@ UseListOrderStack predictUseListOrder(const Module &M, ValueEnumerator &VE) {
   // We want to visit the functions backward now so we can list function-local
   // constants in the last Function they're used in.  Module-level constants
   // have already been visited above.
-  for (const Function &F : llvm::reverse(M)) {
+  for (const Function &F : std::views::reverse(M)) {
     if (F.isDeclaration())
       continue;
     for (const BasicBlock &BB : F)
@@ -854,7 +856,7 @@ void ValueEnumerator::organizeMetadata() {
   // and then sort by the original/current ID.  Since the IDs are guaranteed to
   // be unique, the result of llvm::sort will be deterministic.  There's no need
   // for std::stable_sort.
-  llvm::sort(Order, [this](MDIndex LHS, MDIndex RHS) {
+  std::ranges::sort(Order, [this](MDIndex LHS, MDIndex RHS) {
     return std::make_tuple(LHS.F, getMetadataTypeOrder(LHS.get(MDs)), LHS.ID) <
            std::make_tuple(RHS.F, getMetadataTypeOrder(RHS.get(MDs)), RHS.ID);
   });

@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <ranges>
 #include "hoist_loads.hpp"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/IR/Instructions.h"
@@ -121,11 +123,11 @@ HoistLoadsPass::run(Function &F, FunctionAnalysisManager &) {
       }
       // the slice's instructions after the insertion point move before it, in their order: their operands in the block
       // are slice instructions moved before them, or come before the insertion point
-      llvm::sort(Slice, [](Instruction *A, Instruction *B) { return A->comesBefore(B); });
+      std::ranges::sort(Slice, [](Instruction *A, Instruction *B) { return A->comesBefore(B); });
       for (auto *S : Slice)
         if (To->comesBefore(S))
-          S->moveBefore(To);
-      I.moveBefore(To);
+          S->moveBefore(To->getIterator());
+      I.moveBefore(To->getIterator());
       // a move within one block leaves its instructions' order numbers as they were, which comesBefore reads
       BB.renumberInstructions();
       Changed = true;

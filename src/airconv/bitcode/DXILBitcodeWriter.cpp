@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <ranges>
 //===- Bitcode/Writer/DXILBitcodeWriter.cpp - DXIL Bitcode Writer ---------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -2614,7 +2616,7 @@ void DXILBitcodeWriter::writeFunctionLevelValueSymbolTable(
     SortedTable.push_back(V.getValueName());
   }
   // The keys are unique, so there shouldn't be stability issues.
-  llvm::sort(SortedTable, [](const ValueName *A, const ValueName *B) {
+  std::ranges::sort(SortedTable, [](const ValueName *A, const ValueName *B) {
     return A->first() < B->first();
   });
 

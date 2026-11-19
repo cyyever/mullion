@@ -194,7 +194,7 @@ auto build_argument_binding_buffer(
   md.string("air.arg_name");
   md.string(buffer.arg_name);
 
-  return type->getPointerTo((uint32_t)buffer.address_space);
+  return llvm::PointerType::get(type->getContext(), (uint32_t)buffer.address_space);
 };
 auto build_argument_binding_indirect_buffer(
   StreamMDHelper &md, const ArgumentBindingIndirectBuffer &indirect_buffer,
@@ -241,7 +241,7 @@ auto build_argument_binding_indirect_buffer(
   md.string("air.arg_name");
   md.string(indirect_buffer.arg_name);
 
-  return indirect_buffer.struct_type->getPointerTo((uint32_t
+  return llvm::PointerType::get(indirect_buffer.struct_type->getContext(), (uint32_t
   )indirect_buffer.address_space);
 };
 auto build_argument_binding_texture(
@@ -683,9 +683,9 @@ auto FunctionSignatureBuilder::CreateFunction(
             ->string("air.arg_name")
             ->string(frag_in.user);
           if (frag_in.vertex_value)
-            return getOrCreateStructType("struct._vertex_value_t", context)->getPointerTo(1);
+            return llvm::PointerType::get(getOrCreateStructType("struct._vertex_value_t", context)->getContext(), 1);
           if (frag_in.pull_mode)
-            return getOrCreateStructType("struct._interpolant_t", context)->getPointerTo(1);
+            return llvm::PointerType::get(getOrCreateStructType("struct._interpolant_t", context)->getContext(), 1);
           return get_llvm_type(frag_in.type, context);
         },
         [&](const InputBarycentricCoord &barycentric) -> llvm::Type * {
@@ -917,9 +917,8 @@ auto FunctionSignatureBuilder::CreateFunction(
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
             ->string("mtl_payload");
-          return msl_uint.get_llvm_type(context)->getPointerTo( //
-            (uint32_t)AddressSpace::object_data
-          );
+          return llvm::PointerType::get(msl_uint.get_llvm_type(context)->getContext(), //
+            (uint32_t)AddressSpace::object_data);
         },
         [&](const InputMeshGridProperties &) -> llvm::Type * {
           metadata_field.string("air.mesh_grid_properties")
@@ -927,9 +926,8 @@ auto FunctionSignatureBuilder::CreateFunction(
             ->string("mesh_grid_properties") // HARDCODED
             ->string("air.arg_name")
             ->string("mtl_mesh_grid_properties");
-          return getOrCreateStructType("struct._mesh_grid_properties_t", context)->getPointerTo( //
-            (uint32_t)AddressSpace::threadgroup
-          );
+          return llvm::PointerType::get(getOrCreateStructType("struct._mesh_grid_properties_t", context)->getContext(), //
+            (uint32_t)AddressSpace::threadgroup);
         },
         [&](const InputMesh &mesh) -> llvm::Type * {
           StreamMDHelper mesh_info(context);
@@ -956,7 +954,7 @@ auto FunctionSignatureBuilder::CreateFunction(
             ->string("mesh<>") // HARDCODED
             ->string("air.arg_name")
             ->string("mtl_mesh");
-          return getOrCreateStructType("struct._mesh_t", context)->getPointerTo(7);
+          return llvm::PointerType::get(getOrCreateStructType("struct._mesh_t", context)->getContext(), 7);
         },
         [](auto _) {
           assert(0 && "Unhandled input");

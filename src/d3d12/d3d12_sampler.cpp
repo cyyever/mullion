@@ -142,7 +142,7 @@ SamplerDescription(const D3D12_STATIC_SAMPLER_DESC &Desc) {
   D3D12_SAMPLER_DESC desc{Desc.Filter,     Desc.AddressU,      Desc.AddressV,       Desc.AddressW,
                           Desc.MipLODBias, Desc.MaxAnisotropy, Desc.ComparisonFunc, {},
                           Desc.MinLOD,     Desc.MaxLOD};
-  switch (Desc.BorderColor) {
+  switch (uint32_t(Desc.BorderColor)) {
   case D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK:
     break;
   case D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK:

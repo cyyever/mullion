@@ -151,10 +151,14 @@ WriteLine(const std::string &line) {
 void
 WriteFlight(Category category, const char *format, const uint64_t words[4]) {
   char line[1024];
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
+#endif
   snprintf(line, sizeof(line), format, words[0], words[1], words[2], words[3]);
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
   Write(category, line);
 }
 
