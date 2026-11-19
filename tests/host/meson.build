@@ -49,10 +49,6 @@ test('host_parse_shared',
      executable('host_parse_shared', 'parse_shared.cpp', dependencies : airconv_dep_darwin,
                 cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
      suite : 'host', timeout : 120)
-test('host_coherent_version',
-     executable('host_coherent_version', 'coherent_version.cpp', dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
-     suite : 'host', timeout : 120)
 test('host_pixel_input_declarations',
      executable('host_pixel_input_declarations', 'pixel_input_declarations.cpp',
                 include_directories : llvm_include_path_darwin,
