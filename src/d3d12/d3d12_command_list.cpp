@@ -172,6 +172,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
   D3D12_PRIMITIVE_TOPOLOGY topology_;
 
   UINT num_viewports;
+  bool aliased_viewports_ = false;
   D3D12_VIEWPORT
   viewports[D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE] = {{}};
   // where the pass's viewports' depth ranges and raster scale are in the GPU heap, for indirect commands to bind
@@ -1197,6 +1198,8 @@ public:
       ShadingRateImageBytes();
       image_copied = true;
     }
+    if (aliased_viewports_ != pso_graphics_->aliased_lines)
+      dirty_state_.set(DirtyState::Viewport);
     // a draw whose scissors or viewports the pass has no room for starts the next pass
     const UINT count = D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
     if (auto pass = static_cast<RenderEncoderData *>(allocator_->encoder_current);
@@ -1404,7 +1407,7 @@ public:
 
     // a conservative rasterizer's mesh stage grows triangles by pixels of the viewport each chooses, clipping depth
     // as the pipeline does and facing as it does
-    if (pso_graphics_->conservative && conservative_dirty) {
+    if ((pso_graphics_->conservative || pso_graphics_->aliased_lines) && conservative_dirty) {
       auto [mapped, offset] = allocator_->AllocateGPUHeap(sizeof(SM50_CONSERVATIVE_VIEWPORTS), 16);
       auto data = static_cast<SM50_CONSERVATIVE_VIEWPORTS *>(mapped);
       memset(data, 0, sizeof(*data));
@@ -1413,6 +1416,9 @@ public:
         data->viewports[i][2] = viewports[i].Width, data->viewports[i][3] = viewports[i].Height;
       data->state[0] = pso_graphics_->depth_clip_mode == WMTDepthClipModeClip;
       data->state[1] = pso_graphics_->winding == WMTWindingCounterClockwise;
+      auto pass = static_cast<RenderEncoderData *>(allocator_->encoder_current);
+      data->state[2] = pass->render_target_width;
+      data->state[3] = pass->render_target_height;
       if (allocator_->records_)
         allocator_->RecordGPUHeap(mapped, sizeof(*data), "conservative viewports");
       EncodeBuffer(WMTRenderCommandSetMeshBuffer, offset, SM50_BINDING_INDEX_VIEWPORTS);
@@ -1457,6 +1463,7 @@ public:
       depth_ranges_ = allocator_->gpu_heap_buffer_address_ + ranges_offset;
     }
     if (dirty_state_.test(DirtyState::Viewport)) {
+      aliased_viewports_ = pso_graphics_->aliased_lines;
       auto [scale, scale_offset] = allocator_->AllocateGPUHeap(SM50_RASTER_SCALE_WORDS * sizeof(float), alignof(float));
       *(float *)scale = 1;
       // a mesh shader's groups from the first (DispatchMesh)
@@ -1475,8 +1482,12 @@ public:
           metal_viewport[i] = {viewport.TopLeftX, viewport.TopLeftY, viewport.Width,
                                viewport.Height,   viewport.MinDepth, viewport.MaxDepth};
         }
-        *(float *)scale =
-            EnlargeViewports({metal_viewport, count}, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+        if (pso_graphics_->aliased_lines) {
+          for (auto i = 0u; i < count; i++)
+            metal_viewport[i] = {0, 0, double(pass->render_target_width), double(pass->render_target_height), 0, 1};
+        } else {
+          *(float *)scale = EnlargeViewports({metal_viewport, count}, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+        }
         auto &cmd = allocator_->EncodeRenderCommand<wmtcmd_render_setviewports>();
         cmd.type = WMTRenderCommandSetViewports;
         cmd.viewports.set(metal_viewport);

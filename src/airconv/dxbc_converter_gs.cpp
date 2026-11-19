@@ -1964,7 +1964,12 @@ convert_pass_through_geometry_shader(
   // a quadrilateral line is a rectangle 1.4 pixels wide, two triangles whose corners take their end's attributes
   // (D3D11.3 3.4.5): what Metal's own lines are not. conservative rasterization of triangles: each the triangle
   // conservative_triangle makes of it
+  bool alias = pso_data->aliased_lines;
   bool quads = pso_data->quad_lines && own.count == 2, conservative = pso_data->conservative && own.count == 3;
+  if (alias)
+    for (unsigned i = 0; i < 2; i++)
+      func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{
+          .user = "mullion_line" + std::to_string(i), .type = air::msl_float4, .index = i});
   // or of one raster sample, the fan of its hull, whose vertices all take the first corner's flat inputs
   if (pso_data->wire_slope)
     func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{.user = "mullion_wire_gradient", .type = air::msl_float2, .index = 0});
@@ -2045,14 +2050,14 @@ convert_pass_through_geometry_shader(
     func_signature.DefineMeshVertexOutput(
         air::OutputMeshData{.user = cull_varying_name(i), .type = air::msl_float, .index = culls_at + i}
     );
-  if (pVertexStage->cull_distance_scalars.size() || conservative)
+  if (pVertexStage->cull_distance_scalars.size() || conservative || alias)
     func_signature.DefineMeshPrimitiveOutput(air::OutputPrimitiveCulled{});
   // Metal's points have a size to be given, Direct3D's are a pixel wide (D3D11.3 3.4.6)
   if (own.count == 1)
     func_signature.DefineMeshVertexOutput(air::OutputPointSize{});
   // and the viewports, and the window coordinates the pixel shader tests against
   uint32_t viewports_idx = 0, conservative_at = varyings.size();
-  if (conservative) {
+  if (conservative || alias) {
     viewports_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
         .buffer_size = {},
         .location_index = SM50_BINDING_INDEX_VIEWPORTS,
@@ -2063,7 +2068,8 @@ convert_pass_through_geometry_shader(
         .arg_name = "viewports",
         .raster_order_group = {}
     });
-    define_conservative_varyings(func_signature, conservative_at, pso_data->barycentrics, !hull || pso_data->conservative_inner);
+    if (conservative)
+      define_conservative_varyings(func_signature, conservative_at, pso_data->barycentrics, !hull || pso_data->conservative_inner);
   }
 
   auto raster_scale = DefineRasterScale(func_signature);
@@ -2132,6 +2138,76 @@ convert_pass_through_geometry_shader(
       for (uint32_t c = 0; c < 4; c++)
         clip[corner] = builder.CreateInsertElement(clip[corner], real(component(corner, element.reg(), c)), c);
     }
+  std::array<pvalue, 4> line_positions{};
+  pvalue line_culled = builder.getFalse();
+  if (alias && clip[0]) {
+    auto f = [&](float value) { return air.getFloat(value); };
+    auto at = [&](pvalue value, unsigned index) { return builder.CreateExtractElement(value, index); };
+    auto load = [&](unsigned index) {
+      return builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), builder.getInt32(index)));
+    };
+    auto state = load(SM50_VIEWPORTS);
+    auto vp = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), viewport()));
+    pvalue a = clip[0], b = clip[1];
+    // Clip before projection. Every plane uses the current pair of endpoints.
+    for (unsigned plane = 0; plane < 7; plane++) {
+      auto distance = [&](pvalue v) -> pvalue {
+        if (!plane) return at(v, 3);
+        if (plane == 5) return at(v, 2);
+        if (plane == 6) return builder.CreateFSub(at(v, 3), at(v, 2));
+        return plane % 2 ? builder.CreateFAdd(at(v, 3), at(v, (plane - 1) / 2))
+                         : builder.CreateFSub(at(v, 3), at(v, (plane - 1) / 2));
+      };
+      auto da = distance(a), db = distance(b);
+      if (plane >= 5) {
+        auto enabled = builder.CreateFCmpONE(at(state, 0), f(0));
+        da = builder.CreateSelect(enabled, da, f(1)); db = builder.CreateSelect(enabled, db, f(1));
+      }
+      auto outside_a = builder.CreateFCmpULT(da, f(0)), outside_b = builder.CreateFCmpULT(db, f(0));
+      line_culled = builder.CreateOr(line_culled, builder.CreateAnd(outside_a, outside_b));
+      auto denominator = builder.CreateFSub(da, db);
+      auto t = builder.CreateFDiv(da, builder.CreateSelect(builder.CreateFCmpOEQ(denominator, f(0)), f(1), denominator));
+      auto intersection = builder.CreateFAdd(a, builder.CreateFMul(builder.CreateFSub(b, a), builder.CreateVectorSplat(4, t)));
+      auto crossing = builder.CreateXor(outside_a, outside_b);
+      a = builder.CreateSelect(builder.CreateAnd(crossing, outside_a), intersection, a);
+      b = builder.CreateSelect(builder.CreateAnd(crossing, outside_b), intersection, b);
+    }
+    auto project = [&](pvalue v) {
+      line_culled = builder.CreateOr(line_culled, builder.CreateFCmpULE(at(v, 3), f(0)));
+      auto iw = builder.CreateFDiv(f(1), builder.CreateSelect(builder.CreateFCmpOGT(at(v, 3), f(0)), at(v, 3), f(1)));
+      pvalue result = llvm::PoisonValue::get(types._float4);
+      for (unsigned axis = 0; axis < 2; axis++) {
+        auto ndc = builder.CreateFMul(at(v, axis), iw);
+        auto unit = axis ? builder.CreateFSub(f(1), ndc) : builder.CreateFAdd(ndc, f(1));
+        auto screen = builder.CreateFAdd(builder.CreateFMul(builder.CreateFMul(unit, at(vp, axis + 2)), f(0.5)), at(vp, axis));
+        auto snapped = builder.CreateFMul(air.CreateFPUnOp(llvm::air::AIRBuilder::rint, builder.CreateFMul(screen, f(256)), false), f(1.0f / 256));
+        result = builder.CreateInsertElement(result, snapped, axis);
+      }
+      result = builder.CreateInsertElement(result, builder.CreateFMul(at(v, 2), iw), 2);
+      return builder.CreateInsertElement(result, iw, 3);
+    };
+    auto first = project(a), last = project(b);
+    for (unsigned primitive = 0; primitive < 2; primitive++) {
+      air.CreateSetMeshPrimitiveData(builder.getInt32(primitive), builder.getInt32(0), first);
+      air.CreateSetMeshPrimitiveData(builder.getInt32(primitive), builder.getInt32(1), last);
+    }
+    auto minimum = [&](pvalue x, pvalue y) { return air.CreateFPBinOp(llvm::air::AIRBuilder::fmin, x, y, false); };
+    auto maximum = [&](pvalue x, pvalue y) { return air.CreateFPBinOp(llvm::air::AIRBuilder::fmax, x, y, false); };
+    for (unsigned corner = 0; corner < 4; corner++) {
+      pvalue position = llvm::ConstantAggregateZero::get(types._float4);
+      for (unsigned axis = 0; axis < 2; axis++) {
+        auto size = at(state, axis + 2);
+        bool high = axis ? corner % 2 : corner / 2;
+        auto bound = high ? builder.CreateFAdd(maximum(at(first, axis), at(last, axis)), f(1))
+                          : builder.CreateFSub(minimum(at(first, axis), at(last, axis)), f(1));
+        bound = minimum(maximum(bound, f(0)), size);
+        auto ndc = builder.CreateFSub(builder.CreateFDiv(builder.CreateFMul(bound, f(2)), maximum(size, f(1))), f(1));
+        position = builder.CreateInsertElement(position, axis ? builder.CreateFNeg(ndc) : ndc, axis);
+      }
+      position = builder.CreateInsertElement(position, f(0.5), 2);
+      line_positions[corner] = builder.CreateInsertElement(position, f(1), 3);
+    }
+  }
   if (pso_data->wire_slope && own.count == 3 && clip[0])
     air.CreateSetMeshPrimitiveData(zero,zero,wire_depth_gradient(builder,air,clip[0],clip[1],clip[2]));
   // the rectangle's half width in x and y of normalized device coordinates. on the screen the line points along
@@ -2140,7 +2216,7 @@ convert_pass_through_geometry_shader(
   // 0.7 (H dy, W dx) / |(W dx, H dy)| / (W/2, -H/2). a line of no length has no rectangle, and its NaN corners are
   // discarded
   pvalue half_width = nullptr;
-  if (quads && clip[0]) {
+  if (quads && !alias && clip[0]) {
     half_width = line_half_width(builder, air, types, clip[0], clip[1], function->getArg(raster_scale), viewport());
   }
   // what of each of the primitive's corners each of a triangle's vertices has: its own corner's, or for a conservative
@@ -2172,7 +2248,7 @@ convert_pass_through_geometry_shader(
   auto emit = [&](pvalue vertex, uint32_t u) {
     uint32_t corner = quads ? u / 2 : hull ? 0 : u;
     if (clip[corner]) {
-      pvalue position = triangle ? grown[u] : clip[corner];
+      pvalue position = alias ? line_positions[u] : triangle ? grown[u] : clip[corner];
       if (half_width) {
         auto offset = builder.CreateFMul(half_width, builder.CreateVectorSplat(4, builder.CreateExtractElement(position, 3)));
         position = u % 2 ? builder.CreateFSub(position, offset) : builder.CreateFAdd(position, offset);
@@ -2234,7 +2310,7 @@ convert_pass_through_geometry_shader(
       air.CreateSetMeshViewportArrayIndex(i, builder.getInt32(0));
   };
   // culled by a distance that every vertex is behind: negative, or NaN
-  pvalue culled = triangle ? triangle->culled : builder.getFalse();
+  pvalue culled = alias ? line_culled : triangle ? triangle->culled : builder.getFalse();
   for (auto &distance : pVertexStage->cull_distance_scalars) {
     pvalue behind = builder.getTrue();
     for (uint32_t corner = 0; corner < own.count; corner++)
@@ -2291,11 +2367,12 @@ convert_pass_through_geometry_shader(
   // the normal turns the line a quarter clockwise on the screen, so (a+, b+, a-) and (a-, b+, b-) run
   // counterclockwise, and each starts at the first end, whose constant attributes are the line's (D3D11.3 8.14)
   static constexpr uint32_t quad_indices[] = {0, 2, 1, 1, 2, 3};
+  static constexpr uint32_t box_indices[] = {0, 1, 2, 1, 3, 2};
   for (uint32_t i = 0; !hull && i < (quads ? std::size(quad_indices) : own.count); i++)
-    air.CreateSetMeshIndex(builder.getInt32(i), builder.getInt32(quads ? quad_indices[i] : i));
+    air.CreateSetMeshIndex(builder.getInt32(i), builder.getInt32(alias ? box_indices[i] : quads ? quad_indices[i] : i));
   for (uint32_t i = 0; !hull && i < primitives; i++)
     primitive_outputs(builder.getInt32(i));
-  if (pVertexStage->cull_distance_scalars.size() || conservative)
+  if (pVertexStage->cull_distance_scalars.size() || conservative || alias)
     for (uint32_t i = 0; !hull && i < primitives; i++)
       air.CreateSetMeshPrimitiveCulled(builder.getInt32(i), culled);
   builder.CreateStore(builder.getInt32(hull && !triangle ? 0 : primitives), count);
