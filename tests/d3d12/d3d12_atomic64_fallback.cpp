@@ -170,10 +170,7 @@ main(int argc, char **argv) {
         expect((minimum && maximum && !locks) || (!minimum && !maximum && locks),
                "AIR must contain both native min/max or the lock release: min=%u max=%u locks=%u", minimum, maximum,
                locks);
-        char family[16]{};
-        GetEnvironmentVariableA("MULLION_GPU_FAMILY", family, sizeof(family));
-        if (!strcmp(family, "7"))
-          expect(locks && !minimum && !maximum, "Apple7 AIR must use locks and contain no native 64-bit min/max");
+
       }
     }
     const UINT64 result_bytes = UINT64(many) * sizeof(uint64_t);

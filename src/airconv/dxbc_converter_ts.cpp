@@ -72,7 +72,7 @@ get_output_primitive(SM50ShaderInternal *pHullStage) {
 static bool
 tessellation_groups() {
   static const bool groups = [] {
-    auto skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto skip = getenv("MULLION_AIRCONV_SKIP");
     return !skip || !strstr(skip, "tessellation-groups");
   }();
   return groups;
@@ -161,7 +161,7 @@ tessellation_group_limit(SM50ShaderInternal *pHullStage, SM50_SHADER_COMPILATION
 static bool
 tessellation_templates_enabled() {
   static const bool enabled = [] {
-    auto skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto skip = getenv("MULLION_AIRCONV_SKIP");
     return !skip || !strstr(skip, "tessellation-templates");
   }();
   return enabled;

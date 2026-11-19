@@ -2294,7 +2294,7 @@ AIRCONV_API int SM50Initialize(
 ) {
   // MULLION_AIRCONV_SKIP=init-cache: every pipeline parses its shaders again
   static const bool share = [] {
-    auto skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto skip = getenv("MULLION_AIRCONV_SKIP");
     return !skip || !strstr(skip, "init-cache");
   }();
   if (!share || !pBytecode || !BytecodeSize || !ppShader)

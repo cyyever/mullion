@@ -86,8 +86,7 @@ Reason: a hardcoded number is right only for the cases it was taken from, and it
 
 **1.5 Choose paths by capability.** Choose between native and emulated paths from what Metal and macOS report. Use an
 Apple GPU family boundary only where no finer query exists, and never a chip or product name. Every path chosen this
-way is built and tested. `MULLION_GPU_FAMILY` masks selected capability queries, so the paths taken on older Macs can
-run on newer ones.
+way is built and tested on the physical GPU.
 
 Reason: Apple's GPU families differ in what they support, and a path nobody runs breaks on the Macs that take it.
 

@@ -359,7 +359,7 @@ _CacheReader_get(void *obj) {
   struct unixcall_cache_get *params = obj;
   NSMutableData *key = [[NSMutableData alloc] initWithBytes:&params->key_length length:sizeof(params->key_length)];
   [key appendBytes:params->key.ptr length:params->key_length];
-  const char *skip = (getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP"));
+  const char *skip = getenv("MULLION_AIRCONV_SKIP");
   if (skip)
     [key appendBytes:skip length:strlen(skip)];
   const char *hoist = getenv("MULLION_AIRCONV_HOIST_LOADS");
@@ -386,7 +386,7 @@ _CacheWriter_set(void *obj) {
   // airconv reads the Unix environment, which Windows environment changes do not update
   NSMutableData *key = [[NSMutableData alloc] initWithBytes:&params->key_length length:sizeof(params->key_length)];
   [key appendBytes:params->key.ptr length:params->key_length];
-  const char *skip = (getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP"));
+  const char *skip = getenv("MULLION_AIRCONV_SKIP");
   if (skip)
     [key appendBytes:skip length:strlen(skip)];
   const char *hoist = getenv("MULLION_AIRCONV_HOIST_LOADS");

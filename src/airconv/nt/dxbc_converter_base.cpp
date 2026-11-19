@@ -110,7 +110,7 @@ Converter::LoadConstantBuffer(const ConstantBufferDescriptor &Buffer, llvm::Valu
   // lowers it to a guarded load to avoid Metal shader validation errors on shader-global reads.
   // MULLION_AIRCONV_SKIP=cbuffer-bounds leaves the check out, to measure what it costs (it is in the shader cache's key)
   static const bool skip = [] {
-    auto names = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto names = getenv("MULLION_AIRCONV_SKIP");
     return names && strstr(names, "cbuffer-bounds");
   }();
   if (Buffer.Metadata && !skip) {
@@ -1091,7 +1091,7 @@ Converter::Fraction(llvm::Value *Value) {
   // the shader cache's key) takes the select instead
   using llvm::air::AIRBuilder;
   static const bool Select = [] {
-    auto Skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto Skip = getenv("MULLION_AIRCONV_SKIP");
     return Skip && strstr(Skip, "frac-floor");
   }();
   auto Type = Value->getType();
@@ -2481,7 +2481,7 @@ Converter::SampleImplicit(
   // MULLION_AIRCONV_SKIP=anisotropic-gradients: every sample reads Metal's own LOD, whose bias Metal drops once the
   // footprint passes the sampler's anisotropy, to measure what the gradients below cost
   static const bool Exact = [] {
-    auto Skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto Skip = getenv("MULLION_AIRCONV_SKIP");
     return !Skip || !strstr(Skip, "anisotropic-gradients");
   }();
   if (!Planar || ctx.shader_type != microsoft::D3D10_SB_PIXEL_SHADER || !Exact)
@@ -2506,7 +2506,7 @@ Converter::SampleImplicit(
         ir.CreateOr(Isotropic, ir.CreateICmpEQ(ir.CreateTrunc(SamplerMetadata, ir.getInt16Ty()), ir.getInt16(0)));
   // MULLION_AIRCONV_SKIP=table-sampler-implicit: a sampler not known here always takes the gradients
   static const bool Selects = [] {
-    auto Skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto Skip = getenv("MULLION_AIRCONV_SKIP");
     return !Skip || !strstr(Skip, "table-sampler-implicit");
   }();
   auto &Context = air.getContext();
@@ -2612,7 +2612,7 @@ Converter::MinMaxFilter(
   using namespace llvm::air;
   // MULLION_AIRCONV_SKIP=minmax-filters: every sampler averages, as Metal's do
   static const bool Emulates = [] {
-    auto Skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto Skip = getenv("MULLION_AIRCONV_SKIP");
     return !Skip || !strstr(Skip, "minmax-filters");
   }();
   auto &Info = AIRBuilder::getTextureInfo(Tex.Logical);
@@ -4290,12 +4290,12 @@ Converter::UseFastMath(bool OptOut) {
 
 bool
 Converter::SupportsMemoryCoherency() const {
-  return ctx.metal_version >= SM50_SHADER_METAL_320;
+  return true;
 }
 
 bool
 Converter::SupportsNonExecutionBarrier() const {
-  return ctx.metal_version >= SM50_SHADER_METAL_320;
+  return true;
 }
 
 bool

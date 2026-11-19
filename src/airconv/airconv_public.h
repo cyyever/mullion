@@ -462,8 +462,6 @@ SM50StreamOutputScratch(uint64_t groups, uint32_t invocations) {
 }
 
 enum SM50_SHADER_METAL_VERSION {
-  SM50_SHADER_METAL_310 = 310,
-  SM50_SHADER_METAL_320 = 320,
   SM50_SHADER_METAL_400 = 400,
   SM50_SHADER_METAL_MAX = 0xffffffff,
 };

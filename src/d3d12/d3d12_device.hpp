@@ -944,8 +944,7 @@ public:
 
   bool
   UsesMetal4() {
-    static const bool enabled = env::getEnvVar("MULLION_D3D12_METAL4") != "0";
-    return enabled && GetMTLDevice().supportsFamily(WMTGPUFamilyMetal4);
+    return GetMTLDevice().supportsFamily(WMTGPUFamilyMetal4);
   }
 
   virtual HRESULT RegisterResidency(WMT::Allocation allocation) = 0;

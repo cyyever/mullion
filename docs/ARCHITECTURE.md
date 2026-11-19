@@ -192,8 +192,7 @@ the GPU has completed it.
 What Mullion reports is decided in four steps, which a change follows in order:
 
 1. **What the device provides.** The bridge asks Metal for GPU families, sample counts, filtering and sparse
-   placement. [`MULLION_GPU_FAMILY`](TESTING.md#8-gpu-families) masks the family answers and selected limits,
-   never extending them, while other answers still describe the physical GPU.
+   placement. Capability queries describe the physical GPU.
 2. **What Mullion derives.** Shared code derives the Metal language version and the format support
    ([`mullion_info.cpp`](../src/mullion/mullion_info.cpp), [`mullion_format.cpp`](../src/mullion/mullion_format.cpp)).
 3. **What the API reports.** Each API answers its own feature queries. Direct3D 11 selects its feature level in

@@ -170,19 +170,14 @@ processes and, where it applies, repeatedly within one process: `--repeat <n>` r
 followed by a passing retry is still a failure, and a run repeated alone can help find interference but does not replace
 the first result. Passing a fixed number of repeats does not show that a race is absent.
 
-## 8. GPU families
+## 8. Native GPU
 
-Each result names the physical GPU and the capabilities exposed during the run, with the macOS and Wine versions, the
-ABI and the shader front end. `MULLION_GPU_FAMILY` ([CODE.md 1.5](CODE.md#1-design)) masks selected capability queries,
-so the fallback paths an older Mac takes can run on a newer one: `tests/run.py` runs each test as the Mac's own GPU, as
-Apple9, Apple8 and Apple7, and as those three with Direct3D 12 kept off Metal 4, unless `--family` names others.
-`d3d11_gpu_family` holds the masked answers to Apple's Metal feature set tables. Under a masked family the bridge also
-ends the process, naming the feature, where Mullion uses something that family lacks, so a check that is missing fails
-the run instead of passing on the newer GPU.
+Tests use the physical GPU's Metal capabilities on macOS 27.2 with Metal 4. GPU family simulation and Metal 3
+matrices are not supported. M2 capability fallbacks remain tested on the actual device.
 
-Other queries still describe the physical GPU, so a masked run is not a run on the older GPU. It does not reproduce an
-older GPU's scheduling, compiler, memory, timing or driver behaviour, and cannot measure its performance. A change to
-one GPU's own behaviour is tested on that GPU.
+The pinned `tests/engines/directx-shader-compiler` submodule supplies Microsoft's original integer execution cases.
+`d3d12_dxc_official_dxil` compiles the four UnaryIntOpTable shaders and checks their 36 expected values on the
+Apple GPU through Mullion. Initialize the submodule before configuring tests.
 
 ## 9. Conformance, coverage and faults
 

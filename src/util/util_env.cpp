@@ -39,9 +39,6 @@ std::string getEnvVar(const char *name) {
   const char *result = std::getenv(name);
   std::string value = result ? result : "";
 #endif
-  // a variable that had DXMT's name still answers to it
-  if (value.empty() && !std::strncmp(name, "MULLION_", 8))
-    return getEnvVar(("DXMT_" + std::string(name + 8)).c_str());
   return value;
 }
 

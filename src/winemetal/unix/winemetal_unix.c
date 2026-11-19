@@ -101,7 +101,7 @@ static bool encoder_errors;
 
 __attribute__((constructor)) static void
 init_encoder_errors(void) {
-  encoder_errors = getenv("MULLION_D3D12_GPU_ERRORS") || getenv("DXMT_D3D12_GPU_ERRORS");
+  encoder_errors = getenv("MULLION_D3D12_GPU_ERRORS");
 }
 
 static NTSTATUS
@@ -321,9 +321,6 @@ CREATES(_MTLDevice_newBuffer)(void *obj) {
   return STATUS_SUCCESS;
 }
 
-// the Apple GPU family the bridge answers as (MULLION_GPU_FAMILY), below
-static bool family_has(unsigned first);
-static void family_needs(unsigned first, const char *what);
 
 static NTSTATUS
 CREATES(_MTLDevice_newSamplerState)(void *obj) {
@@ -347,7 +344,7 @@ CREATES(_MTLDevice_newSamplerState)(void *obj) {
   sampler_desc.normalizedCoordinates = info->normalized_coords;
   sampler_desc.supportArgumentBuffers = info->support_argument_buffers;
   if (info->reduction_mode != WMTSamplerReductionModeWeightedAverage) {
-    family_needs(10, "sampler minimum and maximum reduction");
+
     if (@available(macOS 26.0, *))
       sampler_desc.reductionMode = (MTLSamplerReductionMode)info->reduction_mode;
   }
@@ -405,8 +402,6 @@ fill_texture_descriptor(MTLTextureDescriptor *desc, struct WMTTextureInfo *info)
   desc.depth = info->depth;
   desc.arrayLength = info->array_length;
   desc.mipmapLevelCount = info->mipmap_level_count;
-  if (info->sample_count > 4)
-    family_needs(10, "textures of 8 samples");
   desc.sampleCount = info->sample_count;
   desc.usage = (MTLTextureUsage)(info->usage & ~WMTTextureUsageLossyCompression);
   if (info->usage & WMTTextureUsageLossyCompression)
@@ -878,15 +873,6 @@ static NTSTATUS
 CREATES(_MTLDevice_newMeshRenderPipelineState)(void *obj) {
   struct unixcall_mtldevice_newmeshrenderpso *params = obj;
   const struct WMTMeshRenderPipelineInfo *info = params->info.ptr;
-  // family emulation must also reject requests that the host GPU accepts (Metal Feature Set Tables, mesh draws in ICBs)
-  if (info->support_indirect_command_buffers && !family_has(9)) {
-    params->ret_pso = 0;
-    params->ret_error = (obj_handle_t)[[NSError
-        errorWithDomain:NSCocoaErrorDomain
-                   code:NSFeatureUnsupportedError
-               userInfo:@{NSLocalizedDescriptionKey : @"indirect mesh command buffers require Apple9"}] retain];
-    return STATUS_SUCCESS;
-  }
   MTLMeshRenderPipelineDescriptor *descriptor = [[MTLMeshRenderPipelineDescriptor alloc] init];
 
   for (unsigned i = 0; i < 8; i++) {
@@ -1409,7 +1395,7 @@ _MTLRenderCommandEncoder_encodeCommands(void *obj) {
     }
     case WMTRenderCommandSetDepthTestBounds: {
       struct wmtcmd_render_setdepthtestbounds *body = (struct wmtcmd_render_setdepthtestbounds *)next;
-      family_needs(10, "depth bounds testing");
+
       if (@available(macOS 26.0, *))
         [encoder setDepthTestMinBound:body->min maxBound:body->max];
       break;
@@ -1747,44 +1733,11 @@ _MTLCommandBuffer_presentDrawableAfterMinimumDuration(void *obj) {
   return STATUS_SUCCESS;
 }
 
-// the Apple GPU family the bridge answers as, to test on a newer GPU what an older one takes: MULLION_GPU_FAMILY=7 is
-// Apple7. 0: the GPU's own
-static unsigned
-emulated_family(void) {
-  static int family = -1;
-  if (family < 0) {
-    const char *value = (getenv("MULLION_GPU_FAMILY") ?: getenv("DXMT_GPU_FAMILY"));
-    family = value ? atoi(value) : 0;
-  }
-  return family;
-}
-
-// whether the family the bridge answers as has what Apple family `first` brought ("Metal feature availability by GPU
-// family" and "GPU implementation limits by family", Apple's Metal feature set tables): everything, on the GPU's own.
-// each answer below that a later family changes is cut by it, and the GPU's own answer stands where it is less
-static bool
-family_has(unsigned first) {
-  unsigned family = emulated_family();
-  return !family || family >= first;
-}
-
-// ends the process at a use of what the family the bridge answers as lacks, naming it: the GPU here would take it,
-// so a check Mullion lacks would pass as that family and fail on its GPUs
-static void
-family_needs(unsigned first, const char *what) {
-  if (family_has(first))
-    return;
-  fprintf(stderr, "mullion: MULLION_GPU_FAMILY=%u has no %s (Apple%u)\n", emulated_family(), what, first);
-  abort();
-}
-
 static NTSTATUS
 _MTLDevice_supportsFamily(void *obj) {
   struct unixcall_generic_obj_uint64_uint64_ret *params = obj;
   MTLGPUFamily family = (MTLGPUFamily)params->arg;
-  // the Apple families are numbered from Apple1, before the Mac ones
-  bool newer = family < MTLGPUFamilyMac2 && !family_has(family - MTLGPUFamilyApple1 + 1);
-  params->ret = !newer && [(id<MTLDevice>)params->handle supportsFamily:family];
+  params->ret = [(id<MTLDevice>)params->handle supportsFamily:family];
   return STATUS_SUCCESS;
 }
 
@@ -1877,7 +1830,7 @@ _MTLDevice_supportsShaderBarycentricCoordinates(void *obj) {
   static bool works;
   id<MTLDevice> device = (id<MTLDevice>)params->handle;
   // what is asked is whether a pixel reads its inputs at each vertex: "Access to pre-raster per-vertex values", Apple10
-  if (![device supportsShaderBarycentricCoordinates] || !family_has(10)) {
+  if (![device supportsShaderBarycentricCoordinates]) {
     params->ret = false;
     return STATUS_SUCCESS;
   }
@@ -1960,7 +1913,7 @@ _MTLDevice_supportsSamplerReduction(void *obj) {
   id<MTLDevice> device = (id<MTLDevice>)params->handle;
   uint64_t registry = device.registryID;
   // "Sampler minimum and maximum reduction", Apple10
-  if (!family_has(10) || ![device supportsFamily:MTLGPUFamilyApple10]) {
+  if (![device supportsFamily:MTLGPUFamilyApple10]) {
     params->ret = false;
     return STATUS_SUCCESS;
   }
@@ -1984,10 +1937,6 @@ static NTSTATUS
 _MTLDevice_maxArgumentBufferSamplerCount(void *obj) {
   struct unixcall_generic_obj_uint64_ret *params = obj;
   params->ret = [(id<MTLDevice>)params->handle maxArgumentBufferSamplerCount];
-  // an emulated Apple7 or Apple8 holds what they do: 1024 samplers a stage reaches from an argument buffer (Metal
-  // feature set tables), which an M1 Pro reports here too
-  if (!family_has(9))
-    params->ret = MIN(params->ret, 1024);
   return STATUS_SUCCESS;
 }
 
@@ -1995,9 +1944,6 @@ static NTSTATUS
 _MTLDevice_supportsTextureSampleCount(void *obj) {
   struct unixcall_generic_obj_uint64_uint64_ret *params = obj;
   params->ret = [(id<MTLDevice>)params->handle supportsTextureSampleCount:params->arg];
-  // render passes take 8 samples from Apple10 on, 4 before (Metal feature set tables)
-  if (!family_has(10))
-    params->ret &= params->arg <= 4;
   return STATUS_SUCCESS;
 }
 
@@ -2332,7 +2278,7 @@ CREATES(_MTLDevice_newDenoisedScaler)(void *obj) {
     MTLFXTemporalDenoisedScalerDescriptor *desc;
     id<MTL4Compiler> compiler = nil;
 
-    if (!family_has(9) || (params->metal4 ? ![MTLFXTemporalDenoisedScalerDescriptor supportsMetal4FX:device]
+    if ((params->metal4 ? ![MTLFXTemporalDenoisedScalerDescriptor supportsMetal4FX:device]
                                           : ![MTLFXTemporalDenoisedScalerDescriptor supportsDevice:device]))
       return STATUS_SUCCESS;
     if (params->metal4 && !(compiler = metalfx_compiler(device)))
@@ -2478,7 +2424,7 @@ _MTLDevice_supportsFXDenoisedScaler(void *obj) {
   params->ret = 0;
   // "MetalFX denoised upscaling", Apple9
   if (@available(macOS 26.0, *))
-    params->ret = family_has(9) && (params->arg ? [MTLFXTemporalDenoisedScalerDescriptor supportsMetal4FX:device]
+    params->ret = (params->arg ? [MTLFXTemporalDenoisedScalerDescriptor supportsMetal4FX:device]
                                                 : [MTLFXTemporalDenoisedScalerDescriptor supportsDevice:device]);
   return STATUS_SUCCESS;
 }
@@ -4404,14 +4350,10 @@ static NTSTATUS
 _MTLRenderPipelineState_maxTotalThreadgroupsPerMeshGrid(void *obj) {
   struct unixcall_generic_obj_uint64_ret *params = obj;
   params->ret = [(id<MTLRenderPipelineState>)params->handle maxTotalThreadgroupsPerMeshGrid];
-  // Metal feature set tables, "Maximum threadgroups per mesh shader grid", of an emulated family: 1024 before Apple9,
-  // 1048575 from it. an M4 reports 2^20, yet a grid of 2^20 threadgroups runs none of them, so the tables' 1048575
-  // holds for the GPU's own family and later ones too
-  static const uint64_t limits[] = {[7] = 1024, [8] = 1024, [9] = 1048575};
-  unsigned family = emulated_family();
-  uint64_t limit = family && family < sizeof(limits) / sizeof(*limits) && limits[family] ? limits[family] : 1048575;
+  // Keep the measured upper bound; the device's lower limit still takes precedence.
+  uint64_t limit = 1048575;
   // or a limit to test with, which no family has: MULLION_MESH_GRID_LIMIT
-  const char *given = (getenv("MULLION_MESH_GRID_LIMIT") ?: getenv("DXMT_MESH_GRID_LIMIT"));
+  const char *given = getenv("MULLION_MESH_GRID_LIMIT");
   if (given)
     limit = strtoull(given, NULL, 10);
   if (limit && limit < params->ret)
@@ -5104,10 +5046,8 @@ acceleration_structure_descriptor(const struct WMTAccelerationStructureInfo *inf
       triangles.triangleCount = g->count;
       triangles.transformationMatrixBuffer = (id<MTLBuffer>)g->transform_buffer;
       triangles.transformationMatrixBufferOffset = g->transform_offset;
-      if (g->transform_buffer && !g->transform_column_major) {
-        family_needs(9, "acceleration structures containing row-major matrices");
+      if (g->transform_buffer && !g->transform_column_major)
         triangles.transformationMatrixLayout = MTLMatrixLayoutRowMajor;
-      }
       geometry = triangles;
     }
     geometry.opaque = g->opaque;
@@ -5624,7 +5564,7 @@ _MTLDevice_sparseResidencyInTiles(void *obj) {
 static NTSTATUS
 _WMTDeviceReport(void *obj) {
   struct unixcall_wmtgpu_statistics *params = obj;
-  NSMutableString *text = [NSMutableString stringWithFormat:@"family=%u\n", emulated_family()];
+  NSMutableString *text = [NSMutableString string];
   typedef struct unixcall_generic_obj_uint64_ret one;
   typedef struct unixcall_generic_obj_uint64_uint64_ret two;
   #define ANSWER(call, type, argument, ...)                                                                            \
@@ -6810,7 +6750,7 @@ API_AVAILABLE(macos(26.0)) metal4_render(MullionMetal4Encoder *state, const stru
     }
     case WMTRenderCommandSetDepthTestBounds: {
       struct wmtcmd_render_setdepthtestbounds *body = (struct wmtcmd_render_setdepthtestbounds *)next;
-      family_needs(10, "depth bounds testing");
+
       if (@available(macOS 26.0, *))
         [encoder setDepthTestMinBound:body->min maxBound:body->max];
       break;
@@ -7392,10 +7332,8 @@ API_AVAILABLE(macos(26.0)) metal4_structure_descriptor(
       triangles.indexType = (MTLIndexType)g->index_type;
       triangles.triangleCount = g->count;
       triangles.transformationMatrixBuffer = metal4_range(state, g->transform_buffer, g->transform_offset);
-      if (g->transform_buffer && !g->transform_column_major) {
-        family_needs(9, "acceleration structures containing row-major matrices");
+      if (g->transform_buffer && !g->transform_column_major)
         triangles.transformationMatrixLayout = MTLMatrixLayoutRowMajor;
-      }
       geometry = triangles;
     }
     geometry.opaque = g->opaque;

@@ -34,13 +34,12 @@ main(int argc, char **argv) {
     printf("skipped: dxcompiler.dll not found\n");
     return 77;
   }
-  char temporary[MAX_PATH], directory[MAX_PATH], exe[MAX_PATH], family[8] = {};
+  char temporary[MAX_PATH], directory[MAX_PATH], exe[MAX_PATH];
   auto length = GetTempPathA(sizeof(temporary), temporary);
   CHECK(length && length < sizeof(temporary) ? S_OK : E_FAIL);
   CHECK(temporary_directory(temporary, "smp", directory) ? S_OK : E_FAIL);
   CHECK(SetEnvironmentVariableA("MULLION_LOG_PATH", directory) ? S_OK : E_FAIL);
   CHECK(GetModuleFileNameA(nullptr, exe, sizeof(exe)) ? S_OK : E_FAIL);
-  GetEnvironmentVariableA("MULLION_GPU_FAMILY", family, sizeof(family));
 
   step("fill a sampler heap with samplers one LOD step apart");
   ComPtr<ID3D12Device> device;
@@ -161,8 +160,8 @@ main(int argc, char **argv) {
   CHECK(readback->Map(0, nullptr, (void **)&read));
   for (UINT i = 0; i < std::size(held); i++)
     expect(read[i] == held[i], "the held sampler at MinLOD %g read mip %g", held[i], read[i]);
-  expect(read[std::size(held)] == (limited ? held[1] : probe), "family %s: the sampler at MinLOD %g read mip %g",
-         family, probe, read[std::size(held)]);
+  expect(read[std::size(held)] == (limited ? held[1] : probe), "the sampler at MinLOD %g read mip %g",
+         probe, read[std::size(held)]);
   readback->Unmap(0, nullptr);
 
   step("read the log");
@@ -174,7 +173,7 @@ main(int argc, char **argv) {
   size_t first = lines.find(said);
   unsigned limit = first == std::string::npos ? 0 : std::stoul(lines.substr(first + sizeof(said) - 1));
   expect(first == std::string::npos || lines.find(said, first + 1) == std::string::npos, "said more than once");
-  expect(limited ? limit == sampler_limit : limit == 0, "family %s: the limit said is %u", family, limit);
+  expect(limited ? limit == sampler_limit : limit == 0, "the limit said is %u", limit);
   file.close();
   DeleteFileA(path.c_str());
   heap = nullptr;
