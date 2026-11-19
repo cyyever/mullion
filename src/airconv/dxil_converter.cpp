@@ -1688,7 +1688,8 @@ convert_dxil(
   // stage's keeps the parameters HLSL gave it when it reads one (DXC compiles a read of a mesh shader's output array
   // so): nothing passes them, and they are memory of its own that nothing has written
   for (auto &argument : F->args())
-    argument.replaceAllUsesWith(
+    if (!argument.use_empty())
+      argument.replaceAllUsesWith(
         ctx.resource.ray_context
             ? (Value *)new BitCastInst(
                   ctx.resource.ray_arguments[argument.getArgNo()], argument.getType(), "",
