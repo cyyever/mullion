@@ -59,6 +59,9 @@ int main(int argc, char **argv) {
         if (horizontal) std::swap(v.position[0], v.position[1]);
         for (auto &coordinate : v.position) coordinate *= 2;
       }
+      all.push_back(c);
+      c.geometry = true;
+      c.name += " through GS";
       all.push_back(std::move(c));
     }
   }
