@@ -19,12 +19,13 @@ int main(int argc, char **argv) {
   if (!raster::reference_contract() || !raster_conservative::reference_contract())
     return 1;
   step("compile raster shaders before device creation");
-  std::string codes[raster::ModeCount], gs_code[raster::ModeCount][raster::Triangle];
+  std::string codes[raster::ModeCount], gs_code[raster::ModeCount][raster::Triangle + 1];
+
   for (unsigned mode = raster::None; mode < raster::ModeCount; mode++) {
     codes[mode] = compiler.compile(raster::hlsl, "vs", "vs", {"DISTANCES=" + std::to_string(mode)});
     if (codes[mode].empty())
       return 1;
-    const char *entries[] = {"gs_point", "gs_line", "gs_triangle"};
+    const char *entries[] = {"gs_point", "gs_line", "gs_triangle", "gs_line_strips"};
     for (unsigned shape = 0; shape < std::size(entries); shape++) {
       gs_code[mode][shape] =
           compiler.compile(raster::hlsl, entries[shape], "gs", {"DISTANCES=" + std::to_string(mode)});
@@ -49,6 +50,20 @@ int main(int argc, char **argv) {
   all.insert(all.end(), boundaries.begin(), boundaries.end());
   auto conservative = raster_conservative::cases(options.ConservativeRasterizationTier);
   all.insert(all.end(), conservative.begin(), conservative.end());
+  const auto strip_begin = all.size();
+  for (auto mode : {raster::None, raster::Clip, raster::Cull})
+    for (bool tall : {false, true}) {
+      auto c = raster::base("GS line strips retain adjacent vertices and RestartStrip boundaries");
+      c.shape = raster::Line;
+      c.geometry = c.multisample = c.additive = true;
+      c.mode = mode;
+      (tall ? c.viewport.w : c.viewport.h) /= 2;
+      auto a = raster::vertex(2.25f, 3.25f), b = raster::vertex(12.25f, 9.25f);
+      a.distance.fill(-1);
+      b.distance.fill(mode == raster::Cull ? -1 : 1);
+      c.vertices = {a, b, b, a, a, b};
+      all.push_back(c);
+    }
   const auto capacity = std::max_element(all.begin(), all.end(), [](const auto &a, const auto &b) {
                           return a.vertices.size() < b.vertices.size();
                         })->vertices.size();
@@ -66,7 +81,7 @@ int main(int argc, char **argv) {
     memset(vertices + i * vertex_bytes, 0, vertex_bytes);
     if (!all[i].vertices.empty())
       memcpy(vertices + i * vertex_bytes, all[i].vertices.data(), all[i].vertices.size() * sizeof(raster::Vertex));
-    arguments[i] = {UINT(all[i].vertices.size()), all[i].instances, 0, 0};
+    arguments[i] = {UINT(i >= strip_begin ? 2 : all[i].vertices.size()), all[i].instances, 0, 0};
   }
   vb->Unmap(0, nullptr);
   args->Unmap(0, nullptr);
@@ -201,7 +216,7 @@ int main(int argc, char **argv) {
                                      c.multisample,
                                      c.aa,
                                      c.additive,
-                                     c.geometry,
+                                     unsigned(c.geometry) + unsigned(i >= strip_begin),
                                      c.conservative,
                                      c.inner,
                                      std::bit_cast<unsigned>(c.bias_scale),
@@ -212,7 +227,7 @@ int main(int argc, char **argv) {
           pd.pRootSignature = rs.Get();
           pd.VS = bytecode(codes[c.mode]);
           if (c.geometry)
-            pd.GS = bytecode(gs_code[c.mode][c.shape - 1]);
+            pd.GS = bytecode(gs_code[c.mode][i >= strip_begin ? raster::Triangle : c.shape - 1]);
           pd.PS = bytecode(c.inner ? inner : ps);
           pd.InputLayout = {elements, UINT(std::size(elements))};
           pd.RasterizerState = {c.wire ? D3D12_FILL_MODE_WIREFRAME : D3D12_FILL_MODE_SOLID,
@@ -272,7 +287,7 @@ int main(int argc, char **argv) {
         if (path == 2)
           commands->ExecuteIndirect(signature.Get(), 1, args.Get(), i * sizeof(D3D12_DRAW_ARGUMENTS), nullptr, 0);
         else
-          commands->DrawInstanced(c.vertices.size(), c.instances, 0, 0);
+          commands->DrawInstanced(i >= strip_begin ? 2 : c.vertices.size(), c.instances, 0, 0);
         if (bundle) {
           CHECK(bundle->Close());
           list->ExecuteBundle(bundle.Get());
