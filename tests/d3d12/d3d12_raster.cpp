@@ -67,6 +67,22 @@ int main(int argc, char **argv) {
   }
   auto boundaries = raster::viewport_boundaries(D3D12_VIEWPORT_BOUNDS_MIN, D3D12_VIEWPORT_BOUNDS_MAX);
   all.insert(all.end(), boundaries.begin(), boundaries.end());
+  for (auto c : boundaries) {
+    if (c.viewport.w <= D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION &&
+        c.viewport.h <= D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION) continue;
+    c.name = "oversized viewport preserves depth and unequal homogeneous weights";
+    c.viewport.low = 0.125f;
+    c.viewport.high = 0.875f;
+    for (unsigned i = 0; i < c.vertices.size(); ++i) {
+      auto &p = c.vertices[i].position;
+      float w = float(1u << i);
+      p[0] *= w;
+      p[1] *= w;
+      p[2] = (0.25f + 0.25f * i) * w;
+      p[3] = w;
+    }
+    all.push_back(std::move(c));
+  }
   auto conservative = raster_conservative::cases(options.ConservativeRasterizationTier);
   all.insert(all.end(), conservative.begin(), conservative.end());
   const auto alias_begin = all.size();

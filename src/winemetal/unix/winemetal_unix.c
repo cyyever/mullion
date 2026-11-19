@@ -2910,6 +2910,7 @@ struct SM50_SHADER_PSO_GEOMETRY_SHADER_DATA32 {
   bool pipeline_statistics;
   bool clip_distance_varyings;
   bool cull_distance_varyings;
+  bool local_triangles;
   bool wire_snap;
   bool wire_slope;
   bool quad_lines;
@@ -3052,6 +3053,7 @@ sm50_compilation_argument32_convert(
       data->pipeline_statistics = src->pipeline_statistics;
       data->clip_distance_varyings = src->clip_distance_varyings;
       data->cull_distance_varyings = src->cull_distance_varyings;
+      data->local_triangles = src->local_triangles;
       data->wire_snap = src->wire_snap;
       data->wire_slope = src->wire_slope;
       data->quad_lines = src->quad_lines;

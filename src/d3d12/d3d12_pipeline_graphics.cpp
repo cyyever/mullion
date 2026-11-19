@@ -496,9 +496,9 @@ CompileFunction(
       break;
     }
     case SM50_SHADER_PSO_GEOMETRY_SHADER: {
-      auto &[next, type, strip, cut, index, primitive, pass, statistics, clips, culls, snap, wire, quads, alias, barycentrics, conservative,
+      auto &[next, type, strip, cut, index, primitive, pass, statistics, clips, culls, local, snap, wire, quads, alias, barycentrics, conservative,
              flat, noperspective, mesh_only, hull, inner] = *(SM50_SHADER_PSO_GEOMETRY_SHADER_DATA *)arg;
-      hash(strip, cut, index, primitive, pass, statistics, clips, culls, snap, wire, quads, alias, barycentrics, conservative, flat,
+      hash(strip, cut, index, primitive, pass, statistics, clips, culls, local, snap, wire, quads, alias, barycentrics, conservative, flat,
            noperspective, mesh_only, hull, inner);
       break;
     }
@@ -813,7 +813,7 @@ protected:
     // without a geometry shader, the mesh stage passes the vertex shader's primitives on to the rasterizer
     bool pass_through;
     bool clip_distance_varyings, cull_distance_varyings;
-    bool wire_snap, wire_slope, quad_lines, aliased_lines, barycentrics;
+    bool local_triangles, wire_snap, wire_slope, quad_lines, aliased_lines, barycentrics;
     // conservative rasterization, of the hull of a triangle's pixels where it can, and how the pixel shader
     // interpolates its inputs
     bool conservative, conservative_hull, conservative_inner;
@@ -868,6 +868,7 @@ protected:
     pso_gs.pipeline_statistics = statistics;
     pso_gs.clip_distance_varyings = in.clip_distance_varyings;
     pso_gs.cull_distance_varyings = in.cull_distance_varyings && pso_gs.pass_through;
+    pso_gs.local_triangles = in.local_triangles && !counting;
     pso_gs.wire_snap = in.wire_snap && !counting;
     pso_gs.wire_slope = in.wire_slope && !counting;
     pso_gs.quad_lines = in.quad_lines && !counting;
@@ -1692,8 +1693,17 @@ public:
                  pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
                : ref_gs.GeometryShader.ConservativeFits && !ref_gs.ClipDistances && !ref_gs.CullDistances) &&
         pDesc->RasterizerState.FillMode == D3D12_FILL_MODE_WIREFRAME;
+    // Preserve homogeneous z/w when clipping oversized viewports. This path has no user varyings to interpolate.
+    local_triangles = plain && !stream_output && !conservative &&
+        pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE &&
+        pDesc->RasterizerState.FillMode == D3D12_FILL_MODE_SOLID &&
+        !ref_vs.ClipDistances && !ref_vs.CullDistances && pDesc->PS.BytecodeLength &&
+        !PixelShaderVaryings(pDesc->PS) && !ref_ps.PixelShader.Barycentrics &&
+        !ref_ps.PixelShader.EarlyTests && pDesc->SampleDesc.Count == 1 &&
+        !pDesc->RasterizerState.ForcedSampleCount && !pDesc->RasterizerState.DepthBias &&
+        !pDesc->RasterizerState.SlopeScaledDepthBias && !(pDesc->Flags & dynamic_depth_bias);
     bool pass_through = plain && pDesc->PrimitiveTopologyType != D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH &&
-                        ((ref_vs.CullDistances && !culls) || (stream_output && so_data.rasterized_stream == 0) || wire_slope || wire_snap || quad_lines ||
+                        ((ref_vs.CullDistances && !culls) || (stream_output && so_data.rasterized_stream == 0) || local_triangles || wire_slope || wire_snap || quad_lines ||
                          conservative);
     geometry_shader |= pass_through;
     // a mesh stage that runs a shader of the pipeline's reads its root arguments; the vertex shader's primitives passed
@@ -1923,6 +1933,7 @@ public:
       in->ps = ps_func;
       in->clip_distance_varyings = clips;
       in->cull_distance_varyings = culls;
+      in->local_triangles = local_triangles;
       in->wire_snap = wire_snap;
       in->wire_slope = wire_slope;
       in->quad_lines = quad_lines;
@@ -2037,7 +2048,7 @@ public:
       static const bool mesh_only_lists = env::getEnvVar("MULLION_D3D12_CULL_MESH_ONLY") != "0";
       mesh_only = mesh_only_lists && pass_through && !bool(pDesc->GS.pShaderBytecode) && ref_vs.CullDistances &&
                   pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE && !stream_output &&
-                  !conservative && !quad_lines && !wire_slope && !wire_snap;
+                  !conservative && !quad_lines && !wire_slope && !wire_snap && !local_triangles;
       mesh_reads_root_arguments |= mesh_only;
       if (!patches && !variant(pso, false, false, mesh_only))
         return hr;
