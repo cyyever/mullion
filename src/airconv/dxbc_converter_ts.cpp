@@ -72,7 +72,7 @@ get_output_primitive(SM50ShaderInternal *pHullStage) {
 static bool
 tessellation_groups() {
   static const bool groups = [] {
-    auto skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto skip = getenv("MULLION_AIRCONV_SKIP");
     return !skip || !strstr(skip, "tessellation-groups");
   }();
   return groups;
@@ -1161,7 +1161,7 @@ convert_dxbc_domain_vertex_shader(
   // the domain shader's signature holds its outputs as a mesh's: a vertex function's are made here
   air::FunctionSignatureBuilder func_signature;
   auto shader_info = &(pShaderInternal->shader_info);
-  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_310;
+  SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {

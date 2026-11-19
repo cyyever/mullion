@@ -543,7 +543,6 @@ public:
   SM50_SHADER_METAL_VERSION
   GetMetalVersion() {
     static_assert(
-        SM50_SHADER_METAL_310 == uint32_t(WMTMetal310) && SM50_SHADER_METAL_320 == uint32_t(WMTMetal320) &&
         SM50_SHADER_METAL_400 == uint32_t(WMTMetal400)
     );
     return metal_version_;

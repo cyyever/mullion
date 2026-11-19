@@ -2,9 +2,7 @@
 """runs the build's tests in a Wine on the native GPU by default, and prints their results.
 
 the tests are the build's own (meson's intro-tests.json: what tests/*/meson.build declares), run in a Wine the
-build's libraries are installed into. a family other than the GPU's own lowers what the Metal bridge answers
-(MULLION_GPU_FAMILY: src/winemetal/unix), so the paths an older GPU takes run here; a family ending in -metal3 also
-keeps Direct3D 12 off Metal 4 (MULLION_D3D12_METAL4=0), as on macOS 15. a test passes when it says so on
+build's libraries are installed into, using the physical GPU's capabilities. A test passes on
 every repeat: one that fails, ends without a result, outlives its time or answers differently on one repeat has failed.
 the run fails on a failure or skip that tests/known.txt does not have, by what the test said, and on a test it lists
 that passes.
@@ -584,12 +582,8 @@ def session(args):
 
 
 def as_family(base, family):
-    """the environment that runs as the Apple GPU family named as --family names one"""
-    apple = family.removesuffix("-metal3")
-    env = dict(base) if apple == "native" else dict(base, MULLION_GPU_FAMILY=apple)
-    if family.endswith("-metal3"):
-        env["MULLION_D3D12_METAL4"] = "0"
-    return env
+    """Tests run with the physical GPU's capabilities."""
+    return dict(base)
 
 
 def environment(args):
@@ -685,9 +679,8 @@ def known(path=None):
 
 def options(parser):
     """what says which of the build's tests run, and how"""
-    parser.add_argument("--family", default="native",
-                        help="the Apple GPU families to run as, 'native' for the GPU's own, '-metal3' for Direct3D 12 "
-                             "without Metal 4 (default: %(default)s)")
+    parser.add_argument("--family", choices=["native"], default="native",
+                        help="run using the physical GPU (default: %(default)s)")
     parser.add_argument("--repeat", type=int, default=1, help="how many times each test runs, giving the same answer each time")
     parser.add_argument("--jobs", type=int, default=1,
                         help="how many tests run at once; one that fails beside others runs again alone")

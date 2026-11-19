@@ -2228,8 +2228,6 @@ WINEMETAL_API void WMTGetOSVersion(uint64_t *major, uint64_t *minor, uint64_t *p
 WINEMETAL_API void WMTGetMemoryState(uint64_t *pressure, uint64_t *available);
 
 enum WMTMetalVersion : uint32_t {
-  WMTMetal310 = 310,
-  WMTMetal320 = 320,
   WMTMetal400 = 400,
   WMTMetalVersionMax = WMTMetal400,
 };

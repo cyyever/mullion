@@ -54,13 +54,11 @@ The options are listed in [`mullion.conf`](../mullion.conf) and read by
 [`config.cpp`](../src/util/config/config.cpp) in this order:
 
 1. the file `MULLION_CONFIG_FILE` names, or else `mullion.conf` in the process's working directory, which is usually
-   but not always the executable's directory, or `dxmt.conf` there when `mullion.conf` cannot be opened
+   but not always the executable's directory
 2. `MULLION_CONFIG`, which holds `option=value` pairs and replaces values from the file
 3. Mullion's built-in settings for known applications, for the options neither of the first two set
 
-A section of the file applies to the executable whose file name it names. The `DXMT_` names of variables still work,
-but empty and unset values are not treated the same way everywhere, so an investigation of an override records both
-names.
+A section of the file applies to the executable whose file name it names. Configuration variables use `MULLION_`.
 
 Changing an option is a comparison: it shows that the option changes the result, not that it fixes the defect. The
 options a run used belong in its record, above all those that change generated shaders, such as
@@ -147,8 +145,8 @@ writes `shader_dump_<hash>.cso` into the working directory on selected failure p
 before any dump, and a dump file is checked before it is used as evidence. {logging: one dump format for both APIs,
 holding the bytecode, the stages, the root signature, the conversion options and the converted output}.
 
-**The converter.** With the `build_airconv_for_windows` option, the build also makes
-[`airconv`](../src/airconv/airconv_cli.cpp), a Windows program that converts a shader outside the game:
+**The converter.** The macOS build makes
+[`airconv`](../src/airconv/airconv_cli.cpp), a macOS program that converts a shader outside the game:
 `airconv <shader> -S -o <output>` writes LLVM assembly, and `-A` a Metal library. Its conversion options are fixed,
 while a game's come from the device and the configuration, so its output is not necessarily what the game ran.
 Converted IR passes the LLVM verifier before optimization ([CODE.md 4.1](CODE.md#4-shaders)), except with `-O0`,
@@ -248,3 +246,7 @@ show that rendering was correct. Neither shows the commands that drew a frame.
 The reduction becomes a test written as [TESTING.md 5](TESTING.md#5-writing-a-test) describes, seen failing before
 the fix: it is registered in its directory's `meson.build`, and its control is a fault in `tests/breaks` that
 `tests/faults.py` shows caught ([TESTING.md 7.1](TESTING.md#7-failing-controls-and-repeats)).
+
+The optional `build_airconv_for_windows` target also builds a Windows converter using
+Windows LLVM libraries in `toolchains/llvm`. With tests enabled, `airconv_windows`
+compiles a minimal shader and invokes that converter under the test runner's Wine.

@@ -14,7 +14,7 @@ compile(uint32_t dispatcher, const std::vector<SM50_RAY_DISPATCHED_SHADER> &shad
   sm50_bitcode_t bitcode = nullptr;
   sm50_error_t error = nullptr;
   if (SM50CompileRayDispatcher(
-          SM50_RAY_DISPATCHER(dispatcher), shaders.data(), shaders.size(), table, SM50_SHADER_METAL_310, &bitcode, &error
+          SM50_RAY_DISPATCHER(dispatcher), shaders.data(), shaders.size(), table, SM50_SHADER_METAL_400, &bitcode, &error
       )) {
     if (error)
       SM50FreeError(error);

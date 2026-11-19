@@ -260,13 +260,13 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
     // optimizations.
     FunctionPassManager GlobalCleanupPM;
     // MULLION_AIRCONV_SKIP=sample-branch-merge leaves a branch per sample (SampleImplicit)
-    if (auto skip = (getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP")); !skip || !strstr(skip, "sample-branch-merge"))
+    if (auto skip = getenv("MULLION_AIRCONV_SKIP"); !skip || !strstr(skip, "sample-branch-merge"))
       GlobalCleanupPM.addPass(air::MergeSampleBranchesPass());
     else
       GlobalCleanupPM.addPass(air::MergeSampleBranchesPass(false));
     // MULLION_AIRCONV_SKIP=minmax-branch-merge leaves a minimum and maximum filter branch per sample (MinMaxFilter)
     {
-      auto skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+      auto skip = getenv("MULLION_AIRCONV_SKIP");
       GlobalCleanupPM.addPass(air::MergeMinMaxBranchesPass(!skip || !strstr(skip, "minmax-branch-merge")));
     }
     GlobalCleanupPM.addPass(InstCombinePass());
@@ -275,7 +275,7 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
 
     GlobalCleanupPM.addPass(air::Lower16BitTexReadPass());
     // MULLION_AIRCONV_SKIP names what the converter leaves out, to find the one a shader goes wrong with
-    auto skip = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto skip = getenv("MULLION_AIRCONV_SKIP");
     if (!skip || !strstr(skip, "simdgroup-barrier"))
       GlobalCleanupPM.addPass(air::SimdgroupImplicitMemBarrierPass());
     GlobalCleanupPM.addPass(air::GuardOutOfBoundsPass());
@@ -289,7 +289,7 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
     MPM.addPass(createModuleToFunctionPassAdaptor(std::move(GlobalCleanupPM), true /* ? */));
   }
 
-  if (auto temp = getenv("DXMT_TEMP_O2"))
+  if (auto temp = getenv("MULLION_TEMP_O2"))
     MPM.addPass(createModuleToFunctionPassAdaptor(PB.buildFunctionSimplificationPipeline(
         temp[0] == '3' ? OptimizationLevel::O3 : OptimizationLevel::O2, ThinOrFullLTOPhase::None
     )));

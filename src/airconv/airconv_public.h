@@ -469,8 +469,6 @@ SM50StreamOutputScratch(uint64_t groups, uint32_t invocations) {
 }
 
 enum SM50_SHADER_METAL_VERSION {
-  SM50_SHADER_METAL_310 = 310,
-  SM50_SHADER_METAL_320 = 320,
   SM50_SHADER_METAL_400 = 400,
   SM50_SHADER_METAL_MAX = 0xffffffff,
 };
@@ -773,7 +771,8 @@ struct SM50_GEOMETRY_WARP {
 static inline struct SM50_GEOMETRY_WARP
 SM50GeometryWarp(uint32_t per_primitive, bool strip, uint32_t registers) {
   uint32_t room = (SM50_GEOMETRY_PAYLOAD_SIZE / 4 - 4 - 9) / (4 * (registers ? registers : 1));
-  uint32_t threads = room < SM50_GEOMETRY_WARP_THREADS ? room : SM50_GEOMETRY_WARP_THREADS;
+  const uint32_t thread_limit = SM50_GEOMETRY_WARP_THREADS;
+  uint32_t threads = room < thread_limit ? room : thread_limit;
   struct SM50_GEOMETRY_WARP warp = {0, 0, 0};
   if (threads < per_primitive)
     return warp;

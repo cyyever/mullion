@@ -341,7 +341,7 @@ namespace mullion {
   Config Config::getUserConfig() {
     Config config;
 
-    // Load either $MULLION_CONFIG_FILE or $PWD/mullion.conf (dxmt.conf, the name it had, when there is none)
+    // Load either $MULLION_CONFIG_FILE or $PWD/mullion.conf
     std::string filePath = env::getEnvVar("MULLION_CONFIG_FILE");
     std::string confLine = env::getEnvVar("MULLION_CONFIG");
 
@@ -351,8 +351,6 @@ namespace mullion {
 
     // Open the file if it exists
     std::ifstream stream(str::topath(filePath.c_str()).c_str());
-    if (!stream && !named)
-      stream.open(str::topath((filePath = "dxmt.conf").c_str()).c_str());
 
     if (!stream && confLine.empty())
       return config;

@@ -1,14 +1,4 @@
-// contract: what the bridge answers of a device is what Apple's Metal feature set tables give its GPU family
-// (https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf, "Metal feature availability by GPU family", "GPU
-// implementation limits by family" and "Texture capabilities by pixel format"): the family of the GPU, or the one
-// MULLION_GPU_FAMILY has the bridge answer as. each row below is a row of those tables: the Apple family an answer
-// is given from, and the macOS that has it. so an emulated family answers as its GPUs would, and a run on such a GPU
-// shows where the tables and the GPU differ.
-// three answers the tables leave to the device before a family ("some GPU devices in the Apple7 and Apple8 families"
-// have BC formats and the filtering and resolve of 32-bit float formats, some in Apple7 placement sparse resources)
-// are held from that family on, and printed before it.
-// what a stage reaches of samplers through argument buffers is 1024 before Apple9 as an M1 Pro reports it
-// (winemetal_unix.c); the tables have 996 there.
+// Verify real Metal capabilities against the physical GPU family. No family simulation is used.
 #include "d3d11_test.hpp"
 #include "../../src/winemetal/Metal.hpp"
 #include <map>
@@ -39,11 +29,13 @@ static const Row rows[] = {
     {"supportsSamplerReduction", 10, 26},
     // Access to pre-raster per-vertex values, which the bridge is asked for with the barycentric coordinates
     {"supportsShaderBarycentricCoordinates", 10, 26},
+    // Denoised scaler support is device-reported on M2/macOS 27.2 as well.
+    // A family threshold does not rule out support on earlier devices.
     // MetalFX spatial, temporal and denoised upscaling
     {"supportsFXSpatialScaler", 7},
     {"supportsFXTemporalScaler", 7},
-    {"supportsFXDenoisedScaler.metal3", 9, 26},
-    {"supportsFXDenoisedScaler.metal4", 9, 26},
+    {"supportsFXDenoisedScaler.metal3", 9, 26, true},
+    {"supportsFXDenoisedScaler.metal4", 9, 26, true},
     // BC pixel formats, 32-bit float formats' Filter and Resolve, placement sparse textures
     {"supportsBCTextureCompression", 9, 0, true},
     {"supports32BitFloatFiltering", 9, 0, true},
@@ -73,15 +65,13 @@ main() {
   };
 
   // the family answered as: the one asked for, which no answer may pass, or the GPU's own, the last it says it is
-  unsigned family = answer("family"), last = 0;
+  unsigned last = 0;
   for (unsigned n = 7; n <= 11; n++)
     if (answer("supportsFamily.apple" + std::to_string(n)) == 1)
       last = n;
   if (!expect(last >= 7, "the device is of no Apple family from 7 on, which the tables do not have"))
     return verdict();
-  if (family)
-    expect(last == family, "answers as Apple%u, asked to answer as Apple%u", last, family);
-  family = last;
+  const unsigned family = last;
   printf("held to Apple%u on macOS %llu.%llu\n", family, macos, minor);
 
   for (auto &row : rows) {

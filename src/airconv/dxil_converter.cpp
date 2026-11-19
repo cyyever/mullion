@@ -457,7 +457,7 @@ ray_calls(const Function &F) {
 bool
 feedback_merge_skipped() {
   static const bool skipped = [] {
-    auto names = getenv("MULLION_AIRCONV_SKIP") ?: getenv("DXMT_AIRCONV_SKIP");
+    auto names = getenv("MULLION_AIRCONV_SKIP");
     return names && strstr(names, "feedback-merge");
   }();
   return skipped;
