@@ -639,6 +639,7 @@ public:
   // when an indirect command buffer draws them, so none is set
   bool unbiased = false;
   bool wire_slope = false;
+  bool aliased_lines = false;
   bool fragment_depth_bias = false;
   bool clamp_hardware_bias = false;
   uint32_t depth_bias_unorm_max = 0;

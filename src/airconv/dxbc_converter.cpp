@@ -863,6 +863,18 @@ llvm::Error convert_dxbc_pixel_shader(
     };
   }
 
+  std::array<uint32_t, 2> line_ends{};
+  uint32_t line_position = ~0u, line_ranges = ~0u, line_viewport = ~0u;
+  if (pso_data && pso_data->aliased_lines) {
+    for (unsigned i = 0; i < 2; i++)
+      line_ends[i] = func_signature.DefineInput(air::InputFragmentStageIn{
+          .user = "mullion_line" + std::to_string(i), .type = air::msl_float4, .interpolation = air::Interpolation::flat});
+    line_position = func_signature.DefineInput(air::InputPosition{.interpolation = air::Interpolation::center_no_perspective});
+    line_ranges = func_signature.DefineInput(air::ArgumentBindingBuffer{
+        .location_index = SM50_BINDING_INDEX_DEPTH_RANGES, .array_size = 1, .memory_access = air::MemoryAccess::read,
+        .address_space = air::AddressSpace::constant, .type = air::msl_float, .arg_name = "depth_ranges"});
+    line_viewport = func_signature.DefineInput(air::InputViewportArrayIndex{});
+  }
   uint32_t wire_gradient = ~0u, wire_ranges = ~0u, wire_viewport = ~0u;
   if (pso_data && pso_data->wire_slope) {
     wire_gradient = func_signature.DefineInput(air::InputFragmentStageIn{
@@ -1198,6 +1210,88 @@ llvm::Error convert_dxbc_pixel_shader(
     builder.CreateRetVoid();
   } else {
     builder.CreateRet(value);
+  }
+  if (line_position != ~0u) {
+    auto position = function->getArg(line_position);
+    llvm::SmallVector<llvm::User *, 16> position_users(position->users());
+    auto live = llvm::SplitBlock(entry_bb, &*entry_bb->getFirstInsertionPt());
+    entry_bb->getTerminator()->eraseFromParent();
+    builder.SetInsertPoint(entry_bb);
+    auto first = function->getArg(line_ends[0]), last = function->getArg(line_ends[1]);
+    auto at = [&](pvalue value, unsigned index) { return builder.CreateExtractElement(value, index); };
+    auto f = [&](float value) { return air.getFloat(value); };
+    auto integer = [&](int64_t value) { return builder.getInt64(value); };
+    auto absolute = [&](pvalue value) { return builder.CreateSelect(builder.CreateICmpSLT(value, integer(0)), builder.CreateNeg(value), value); };
+    std::array<pvalue, 2> start, delta;
+    for (unsigned axis = 0; axis < 2; axis++) {
+      start[axis] = builder.CreateFPToSI(builder.CreateFMul(builder.CreateFSub(at(first, axis), at(position, axis)), f(256)), types._long);
+      delta[axis] = builder.CreateFPToSI(builder.CreateFMul(builder.CreateFSub(at(last, axis), at(first, axis)), f(256)), types._long);
+    }
+    pvalue lo_n = integer(0), lo_d = integer(1), hi_n = integer(1), hi_d = integer(1);
+    pvalue keep = builder.CreateOr(builder.CreateICmpNE(delta[0], integer(0)), builder.CreateICmpNE(delta[1], integer(0)));
+    auto less = [&](pvalue an, pvalue ad, pvalue bn, pvalue bd) {
+      return builder.CreateICmpSLT(builder.CreateMul(an, bd), builder.CreateMul(bn, ad));
+    };
+    for (int sx : {-1, 1})
+      for (int sy : {-1, 1}) {
+        auto signed_value = [&](pvalue value, int sign) { return sign < 0 ? builder.CreateNeg(value) : value; };
+        auto distance = builder.CreateSub(builder.CreateAdd(signed_value(start[0], sx), signed_value(start[1], sy)), integer(128));
+        auto slope = builder.CreateAdd(signed_value(delta[0], sx), signed_value(delta[1], sy));
+        auto parallel = builder.CreateICmpEQ(slope, integer(0));
+        auto outside = builder.CreateICmpSGT(distance, integer(0));
+        if (sy < 0) outside = builder.CreateOr(outside, builder.CreateICmpEQ(distance, integer(0)));
+        keep = builder.CreateAnd(keep, builder.CreateNot(builder.CreateAnd(parallel, outside)));
+        auto exit_n = builder.CreateNeg(distance);
+        auto replace_hi = builder.CreateAnd(builder.CreateICmpSGT(slope, integer(0)), less(exit_n, slope, hi_n, hi_d));
+        hi_n = builder.CreateSelect(replace_hi, exit_n, hi_n);
+        hi_d = builder.CreateSelect(replace_hi, slope, hi_d);
+        auto enter_d = builder.CreateNeg(slope);
+        auto replace_lo = builder.CreateAnd(builder.CreateICmpSLT(slope, integer(0)), less(lo_n, lo_d, distance, enter_d));
+        lo_n = builder.CreateSelect(replace_lo, distance, lo_n);
+        lo_d = builder.CreateSelect(replace_lo, enter_d, lo_d);
+      }
+    auto inside = [&](pvalue numerator, pvalue denominator) {
+      auto x = builder.CreateAdd(builder.CreateMul(start[0], denominator), builder.CreateMul(delta[0], numerator));
+      auto y = builder.CreateAdd(builder.CreateMul(start[1], denominator), builder.CreateMul(delta[1], numerator));
+      auto sum = builder.CreateAdd(absolute(x), absolute(y)), radius = builder.CreateMul(integer(128), denominator);
+      auto corner = builder.CreateAnd(builder.CreateICmpEQ(x, radius), builder.CreateICmpSGT(absolute(delta[1]), absolute(delta[0])));
+      auto boundary = builder.CreateAnd(builder.CreateICmpEQ(sum, radius), builder.CreateOr(builder.CreateICmpSGT(y, integer(0)), corner));
+      return builder.CreateOr(builder.CreateICmpSLT(sum, radius), boundary);
+    };
+    auto equal = builder.CreateICmpEQ(builder.CreateMul(lo_n, hi_d), builder.CreateMul(hi_n, lo_d));
+    keep = builder.CreateAnd(keep, builder.CreateOr(less(lo_n, lo_d, hi_n, hi_d), builder.CreateAnd(equal, inside(lo_n, lo_d))));
+    keep = builder.CreateAnd(keep, builder.CreateICmpSGE(hi_n, integer(0)));
+    keep = builder.CreateAnd(keep, builder.CreateOr(less(hi_n, hi_d, integer(1), integer(1)), builder.CreateNot(inside(integer(1), integer(1)))));
+    auto dx = builder.CreateFSub(at(last, 0), at(first, 0)), dy = builder.CreateFSub(at(last, 1), at(first, 1));
+    auto dot = builder.CreateFAdd(builder.CreateFMul(builder.CreateFSub(at(position, 0), at(first, 0)), dx),
+                                  builder.CreateFMul(builder.CreateFSub(at(position, 1), at(first, 1)), dy));
+    auto length = builder.CreateFAdd(builder.CreateFMul(dx, dx), builder.CreateFMul(dy, dy));
+    auto denominator = builder.CreateSelect(builder.CreateFCmpOGT(length, f(0)), length, f(1));
+    auto t = builder.CreateFDiv(dot, denominator);
+    // Compute both weights directly: 1-t loses relative precision near the last endpoint.
+    auto first_dot = builder.CreateFAdd(builder.CreateFMul(builder.CreateFSub(at(last, 0), at(position, 0)), dx),
+                                       builder.CreateFMul(builder.CreateFSub(at(last, 1), at(position, 1)), dy));
+    auto first_weight = builder.CreateFDiv(first_dot, denominator);
+    auto interpolate = [&](unsigned lane) {
+      return builder.CreateFAdd(builder.CreateFMul(first_weight, at(first, lane)), builder.CreateFMul(t, at(last, lane)));
+    };
+    auto vp = function->getArg(line_viewport);
+    auto index = builder.CreateSelect(builder.CreateICmpULT(vp, builder.getInt32(SM50_VIEWPORTS)), vp, builder.getInt32(0));
+    auto load = [&](unsigned lane) {
+      auto offset = builder.CreateAdd(builder.CreateMul(index, builder.getInt32(2)), builder.getInt32(lane));
+      return builder.CreateLoad(types._float, builder.CreateGEP(types._float, function->getArg(line_ranges), offset));
+    };
+    auto low = load(0), high = load(1);
+    auto depth = builder.CreateFAdd(low, builder.CreateFMul(interpolate(2), builder.CreateFSub(high, low)));
+    auto adjusted = builder.CreateInsertElement(builder.CreateInsertElement(position, depth, 2), interpolate(3), 3);
+    for (auto user : position_users)
+      user->replaceUsesOfWith(position, adjusted);
+    auto discard = llvm::BasicBlock::Create(context, "line_discard", function, live);
+    builder.CreateCondBr(keep, live, discard);
+    builder.SetInsertPoint(discard);
+    air.CreateDiscard();
+    if (function->getReturnType()->isVoidTy()) builder.CreateRetVoid();
+    else builder.CreateRet(llvm::Constant::getNullValue(function->getReturnType()));
   }
   if (wire_gradient != ~0u) {
     builder.SetInsertPoint(&*function->getEntryBlock().getFirstInsertionPt());

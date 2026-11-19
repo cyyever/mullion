@@ -50,6 +50,29 @@ int main(int argc, char **argv) {
   all.insert(all.end(), boundaries.begin(), boundaries.end());
   auto conservative = raster_conservative::cases(options.ConservativeRasterizationTier);
   all.insert(all.end(), conservative.begin(), conservative.end());
+  for (auto weights : {std::array{1.0f, 1.0f}, std::array{0.0625f, 16.0f}, std::array{16.0f, 0.0625f}})
+    for (bool reverse : {false, true}) {
+      auto c = raster::base("aliased line position interpolation with unequal homogeneous weights");
+      c.shape = raster::Line;
+      c.viewport.low = 0.125f;
+      c.viewport.high = 0.875f;
+      c.vertices = {raster::vertex(2.25f, 3.25f, 0.2f, weights[0]),
+                    raster::vertex(12.25f, 9.25f, 0.8f, weights[1])};
+      if (reverse) std::swap(c.vertices[0], c.vertices[1]);
+      all.push_back(c);
+    }
+  for (auto viewport : {raster::Viewport{0, 0, 16384, 16384}, raster::Viewport{-16384, -8192, 32768, 16384},
+                        raster::Viewport{-32768, -32768, 65535, 65535}}) {
+    auto c = raster::base("aliased line coverage in a large viewport");
+    c.shape = raster::Line;
+    c.viewport = viewport;
+    auto vertex = [&](float x, float y) {
+      return raster::Vertex{{(x - viewport.x) * 2 / viewport.w - 1,
+                             1 - (y - viewport.y) * 2 / viewport.h, 0.5f, 1}, {}};
+    };
+    c.vertices = {vertex(2.25f, 3.25f), vertex(12.25f, 9.25f)};
+    all.push_back(c);
+  }
   const auto strip_begin = all.size();
   for (auto mode : {raster::None, raster::Clip, raster::Cull})
     for (bool tall : {false, true}) {

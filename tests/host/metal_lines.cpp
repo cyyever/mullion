@@ -52,8 +52,7 @@ fragment float4 diamond(Vertex v [[stage_in]], constant float4 *ends [[buffer(0)
 }
 struct Probe {float4 ends[2]; float4 viewport; float4 pixel_depth; float4 attributes[2];};
 struct Result {float4 attributes; float4 status;};
-kernel void probe_lines(device const Probe *probes [[buffer(0)]], device Result *results [[buffer(1)]], uint id [[thread_position_in_grid]]) {
-  auto p=probes[id];
+Result evaluate_line(Probe p) {
   float2 a=rint(((p.ends[0].xy/p.ends[0].w*float2(1,-1)+1)*p.viewport.zw*0.5+p.viewport.xy)*256)/256;
   float2 b=rint(((p.ends[1].xy/p.ends[1].w*float2(1,-1)+1)*p.viewport.zw*0.5+p.viewport.xy)*256)/256;
   float2 delta=b-a;
@@ -64,9 +63,30 @@ kernel void probe_lines(device const Probe *probes [[buffer(0)]], device Result 
   float linear=(1-t)*p.attributes[0].y+t*p.attributes[1].y;
   float z=(1-t)*p.ends[0].z/p.ends[0].w+t*p.ends[1].z/p.ends[1].w;
   z=p.pixel_depth.z+z*(p.pixel_depth.w-p.pixel_depth.z);
-  results[id]={float4(perspective,linear,p.attributes[0].z,z),float4(covered(a,b,p.pixel_depth.xy),1/inverse_w,t,0)};
+  return {float4(perspective,linear,p.attributes[0].z,z),float4(covered(a,b,p.pixel_depth.xy),1/inverse_w,t,0)};
 }
 
+kernel void probe_lines(device const Probe *probes [[buffer(0)]], device Result *results [[buffer(1)]], uint id [[thread_position_in_grid]]) {
+  results[id]=evaluate_line(probes[id]);
+}
+vertex Vertex clipped_rectangle(uint id [[vertex_id]], constant Probe &p [[buffer(2)]]) {
+  float2 a=(p.ends[0].xy/p.ends[0].w*float2(1,-1)+1)*p.viewport.zw*0.5+p.viewport.xy;
+  float2 b=(p.ends[1].xy/p.ends[1].w*float2(1,-1)+1)*p.viewport.zw*0.5+p.viewport.xy;
+  float2 origin=floor(p.pixel_depth.xy);
+  float2 lo=clamp(min(a,b)-1-origin,float2(0),float2(1));
+  float2 hi=clamp(max(a,b)+1-origin,float2(0),float2(1));
+  uint2 corners[6]={uint2(0,0),uint2(1,0),uint2(0,1),uint2(0,1),uint2(1,0),uint2(1,1)};
+  float2 screen=select(lo,hi,bool2(corners[id]));
+  return {float4(screen*float2(2,-2)+float2(-1,1),0.5,1)};
+}
+struct FragmentResult {float4 attributes [[color(0)]]; float4 status [[color(1)]];};
+fragment FragmentResult interpolated_line(Vertex input [[stage_in]], constant Probe &probe [[buffer(2)]]) {
+  Probe p=probe;
+  p.pixel_depth.xy=input.p.xy+floor(probe.pixel_depth.xy);
+  auto result=evaluate_line(p);
+  if(!result.status.x) discard_fragment();
+  return {result.attributes,result.status};
+}
 )metal";
     NSError *error = nil;
     MTLCompileOptions *options = [MTLCompileOptions new];
@@ -300,6 +320,93 @@ kernel void probe_lines(device const Probe *probes [[buffer(0)]], device Result 
         }
       }
     }
+    MTLRenderPipelineDescriptor *fragment_desc =
+        [MTLRenderPipelineDescriptor new];
+    fragment_desc.vertexFunction =
+        [library newFunctionWithName:@"clipped_rectangle"];
+    fragment_desc.fragmentFunction =
+        [library newFunctionWithName:@"interpolated_line"];
+    for (unsigned attachment = 0; attachment < 2; attachment++)
+      fragment_desc.colorAttachments[attachment].pixelFormat =
+          MTLPixelFormatRGBA32Float;
+    auto fragment_pipeline =
+        [device newRenderPipelineStateWithDescriptor:fragment_desc
+                                               error:&error];
+    if (!fragment_pipeline) {
+      fprintf(stderr, "%s\n", error.description.UTF8String);
+      return 1;
+    }
+    auto pixel_desc = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA32Float
+                                     width:1
+                                    height:1
+                                 mipmapped:NO];
+    pixel_desc.usage = MTLTextureUsageRenderTarget;
+    pixel_desc.storageMode = MTLStorageModeShared;
+    id<MTLTexture> pixel_targets[2] = {
+        [device newTextureWithDescriptor:pixel_desc],
+        [device newTextureWithDescriptor:pixel_desc]};
+    unsigned raster_probes = 0, raster_coverage_errors = 0,
+             raster_attribute_errors = 0;
+    for (size_t i = 0; i < probes.size(); i++) {
+      auto &p = probes[i];
+      auto &vp = p.viewport;
+      if (p.pixel_depth[0] < vp[0] || p.pixel_depth[0] >= vp[0] + vp[2] ||
+          p.pixel_depth[1] < vp[1] || p.pixel_depth[1] >= vp[1] + vp[3])
+        continue;
+      auto pass = [MTLRenderPassDescriptor renderPassDescriptor];
+      for (unsigned attachment = 0; attachment < 2; attachment++) {
+        pass.colorAttachments[attachment].texture = pixel_targets[attachment];
+        pass.colorAttachments[attachment].loadAction = MTLLoadActionClear;
+        pass.colorAttachments[attachment].storeAction = MTLStoreActionStore;
+      }
+      auto draw = [queue commandBuffer];
+      auto render = [draw renderCommandEncoderWithDescriptor:pass];
+      [render setRenderPipelineState:fragment_pipeline];
+      [render setViewport:MTLViewport{0, 0, 1, 1, 0, 1}];
+      [render setVertexBytes:&p length:sizeof(p) atIndex:2];
+      [render setVertexBytes:p.ends length:sizeof(p.ends) atIndex:0];
+      [render setVertexBytes:&vp length:sizeof(vp) atIndex:1];
+      [render setFragmentBytes:&p length:sizeof(p) atIndex:2];
+      [render drawPrimitives:MTLPrimitiveTypeTriangle
+                 vertexStart:0
+                 vertexCount:6];
+      [render endEncoding];
+      [draw commit];
+      [draw waitUntilCompleted];
+      if (draw.status == MTLCommandBufferStatusError) {
+        fprintf(stderr, "%s\n", draw.error.description.UTF8String);
+        return 1;
+      }
+      Result actual{};
+      [pixel_targets[0] getBytes:actual.attributes.data()
+                     bytesPerRow:16
+                      fromRegion:MTLRegionMake2D(0, 0, 1, 1)
+                     mipmapLevel:0];
+      [pixel_targets[1] getBytes:actual.status.data()
+                     bytesPerRow:16
+                      fromRegion:MTLRegionMake2D(0, 0, 1, 1)
+                     mipmapLevel:0];
+      bool covered = results[i].status[0] != 0;
+      if (covered != bool(actual.status[0])) {
+        if (raster_coverage_errors < 8)
+          printf("fragment coverage probe %zu got %g want %g\n", i,
+                 actual.status[0], results[i].status[0]);
+        raster_coverage_errors++;
+      }
+      if (covered && actual.status[0])
+        for (unsigned lane = 0; lane < 5; lane++) {
+          float got = lane < 4 ? actual.attributes[lane] : actual.status[1];
+          float want =
+              lane < 4 ? results[i].attributes[lane] : results[i].status[1];
+          raster_attribute_errors +=
+              !std::isfinite(got) ||
+              std::abs(got - want) > 2e-5f * std::max(1.0f, std::abs(want));
+        }
+      raster_probes++;
+    }
+    printf("%u fragment probes: %u coverage errors, %u attribute errors\n",
+           raster_probes, raster_coverage_errors, raster_attribute_errors);
     printf("%zu viewport probes, %u covered: %u coverage errors, %u "
            "interpolation errors, maximum absolute error %.9g\n",
            probes.size(), interpolated, coverage_errors, interpolation_errors,
@@ -307,6 +414,9 @@ kernel void probe_lines(device const Probe *probes [[buffer(0)]], device Result 
     printf("%u cases: native Metal %u coverage mismatches; diamond shader %u "
            "coverage mismatches\n",
            cases, mismatches[0], mismatches[1]);
-    return mismatches[1] || coverage_errors || interpolation_errors ? 1 : 0;
+    return mismatches[1] || coverage_errors || interpolation_errors ||
+                   raster_coverage_errors || raster_attribute_errors
+               ? 1
+               : 0;
   }
 }
