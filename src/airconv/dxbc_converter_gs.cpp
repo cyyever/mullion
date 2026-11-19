@@ -47,6 +47,76 @@ line_half_width(llvm::IRBuilder<> &builder, llvm::air::AIRBuilder &air, air::Air
     );
 }
 
+struct AliasedLine {
+  std::array<pvalue, 4> positions;
+  std::array<pvalue, 2> endpoints;
+  pvalue culled;
+};
+
+static AliasedLine
+aliased_line(llvm::IRBuilder<> &builder, llvm::air::AIRBuilder &air, air::AirType &types,
+             pvalue a, pvalue b, pvalue vp, pvalue state) {
+  std::array<pvalue, 4> line_positions{};
+  pvalue line_culled = builder.getFalse();
+  auto f = [&](float value) { return air.getFloat(value); };
+  auto at = [&](pvalue value, unsigned index) { return builder.CreateExtractElement(value, index); };
+  // Clip before projection. Every plane uses the current pair of endpoints.
+  for (unsigned plane = 0; plane < 7; plane++) {
+    auto distance = [&](pvalue v) -> pvalue {
+      if (!plane) return at(v, 3);
+      if (plane == 5) return at(v, 2);
+      if (plane == 6) return builder.CreateFSub(at(v, 3), at(v, 2));
+      return plane % 2 ? builder.CreateFAdd(at(v, 3), at(v, (plane - 1) / 2))
+                       : builder.CreateFSub(at(v, 3), at(v, (plane - 1) / 2));
+    };
+    auto da = distance(a), db = distance(b);
+    if (plane >= 5) {
+      auto enabled = builder.CreateFCmpONE(at(state, 0), f(0));
+      da = builder.CreateSelect(enabled, da, f(1)); db = builder.CreateSelect(enabled, db, f(1));
+    }
+    auto outside_a = builder.CreateFCmpULT(da, f(0)), outside_b = builder.CreateFCmpULT(db, f(0));
+    line_culled = builder.CreateOr(line_culled, builder.CreateAnd(outside_a, outside_b));
+    auto denominator = builder.CreateFSub(da, db);
+    auto t = builder.CreateFDiv(da, builder.CreateSelect(builder.CreateFCmpOEQ(denominator, f(0)), f(1), denominator));
+    auto intersection = builder.CreateFAdd(a, builder.CreateFMul(builder.CreateFSub(b, a), builder.CreateVectorSplat(4, t)));
+    auto crossing = builder.CreateXor(outside_a, outside_b);
+    a = builder.CreateSelect(builder.CreateAnd(crossing, outside_a), intersection, a);
+    b = builder.CreateSelect(builder.CreateAnd(crossing, outside_b), intersection, b);
+  }
+  auto project = [&](pvalue v) {
+    line_culled = builder.CreateOr(line_culled, builder.CreateFCmpULE(at(v, 3), f(0)));
+    auto iw = builder.CreateFDiv(f(1), builder.CreateSelect(builder.CreateFCmpOGT(at(v, 3), f(0)), at(v, 3), f(1)));
+    pvalue result = llvm::PoisonValue::get(types._float4);
+    for (unsigned axis = 0; axis < 2; axis++) {
+      auto ndc = builder.CreateFMul(at(v, axis), iw);
+      auto unit = axis ? builder.CreateFSub(f(1), ndc) : builder.CreateFAdd(ndc, f(1));
+      auto screen = builder.CreateFAdd(builder.CreateFMul(builder.CreateFMul(unit, at(vp, axis + 2)), f(0.5)), at(vp, axis));
+      auto snapped = builder.CreateFMul(air.CreateFPUnOp(llvm::air::AIRBuilder::rint, builder.CreateFMul(screen, f(256)), false), f(1.0f / 256));
+      result = builder.CreateInsertElement(result, snapped, axis);
+    }
+    result = builder.CreateInsertElement(result, builder.CreateFMul(at(v, 2), iw), 2);
+    return builder.CreateInsertElement(result, iw, 3);
+  };
+  auto first = project(a), last = project(b);
+  auto minimum = [&](pvalue x, pvalue y) { return air.CreateFPBinOp(llvm::air::AIRBuilder::fmin, x, y, false); };
+  auto maximum = [&](pvalue x, pvalue y) { return air.CreateFPBinOp(llvm::air::AIRBuilder::fmax, x, y, false); };
+  for (unsigned corner = 0; corner < 4; corner++) {
+    pvalue position = llvm::ConstantAggregateZero::get(types._float4);
+    for (unsigned axis = 0; axis < 2; axis++) {
+      auto size = at(state, axis + 2);
+      bool high = axis ? corner % 2 : corner / 2;
+      auto bound = high ? builder.CreateFAdd(maximum(at(first, axis), at(last, axis)), f(1))
+                        : builder.CreateFSub(minimum(at(first, axis), at(last, axis)), f(1));
+      bound = minimum(maximum(bound, f(0)), size);
+      auto ndc = builder.CreateFSub(builder.CreateFDiv(builder.CreateFMul(bound, f(2)), maximum(size, f(1))), f(1));
+      position = builder.CreateInsertElement(position, axis ? builder.CreateFNeg(ndc) : ndc, axis);
+    }
+    position = builder.CreateInsertElement(position, f(0.5), 2);
+    line_positions[corner] = builder.CreateInsertElement(position, f(1), 3);
+  }
+  return {line_positions, {first, last}, line_culled};
+}
+
 // the vertices of an input primitive
 static uint32_t
 vertices_per_primitive(D3D10_SB_PRIMITIVE primitive) {
@@ -700,6 +770,11 @@ convert_dxbc_geometry_shader(
                       topology == air::MeshOutputTopology::Triangle &&
                       max_vertex_out >= 3;
   const bool quads = pso_data && pso_data->quad_lines && topology == air::MeshOutputTopology::Line;
+  const bool alias = quads && pso_data->aliased_lines;
+  if (alias)
+    for (unsigned i = 0; i < 2; i++)
+      func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{
+          .user = "mullion_line" + std::to_string(i), .type = air::msl_float4, .index = i});
   const bool wire_slope = pso_data && pso_data->wire_slope && topology == air::MeshOutputTopology::Triangle;
   if (wire_slope)
     func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{.user = "mullion_wire_gradient", .type = air::msl_float2, .index = 0});
@@ -754,7 +829,7 @@ convert_dxbc_geometry_shader(
     func_signature.DefineMeshPrimitiveOutput(air::OutputPrimitiveCulled{});
   // and the viewports, and the window coordinates the pixel shader tests against
   uint32_t viewports_idx = 0, conservative_at = pShaderInternal->num_mesh_vertex_data;
-  if (conservative) {
+  if (conservative || alias) {
     viewports_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
         .buffer_size = {},
         .location_index = SM50_BINDING_INDEX_VIEWPORTS,
@@ -765,7 +840,8 @@ convert_dxbc_geometry_shader(
         .arg_name = "viewports",
         .raster_order_group = {}
     });
-    define_conservative_varyings(func_signature, conservative_at, barycentrics);
+    if (conservative)
+      define_conservative_varyings(func_signature, conservative_at, barycentrics);
   }
 
   auto raster_scale = DefineRasterScale(func_signature);
@@ -1226,11 +1302,25 @@ convert_dxbc_geometry_shader(
       pvalue viewport = zero_const;
       if (viewport_reg != ~0u)
         viewport = builder.CreateExtractElement(load(previous, viewport_reg), uint64_t(viewport_component));
-      auto half_width = line_half_width(builder, air, types, a, b, function->getArg(raster_scale), viewport);
+      std::optional<AliasedLine> line;
+      pvalue half_width = nullptr;
+      if (alias) {
+        auto index = builder.CreateSelect(builder.CreateICmpULT(viewport, builder.getInt32(SM50_VIEWPORTS)), viewport, zero_const);
+        auto vp = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), index));
+        auto state = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), builder.getInt32(SM50_VIEWPORTS)));
+        line = aliased_line(builder, air, types, a, b, vp, state);
+      } else {
+        half_width = line_half_width(builder, air, types, a, b, function->getArg(raster_scale), viewport);
+      }
       auto primitive = builder.CreateLoad(types._int, emitted);
       auto vertex_base = builder.CreateMul(primitive, two_const);
       builder.CreateStore(builder.CreateAdd(primitive, two_const), emitted);
-      pvalue culled = builder.getFalse();
+      pvalue culled = line ? line->culled : builder.getFalse();
+      if (line)
+        for (unsigned triangle = 0; triangle < 2; triangle++)
+          for (unsigned endpoint = 0; endpoint < 2; endpoint++)
+            air.CreateSetMeshPrimitiveData(builder.CreateAdd(primitive, builder.getInt32(triangle)),
+                                           builder.getInt32(endpoint), line->endpoints[endpoint]);
       for (auto &distance : pShaderInternal->cull_distance_scalars) {
         auto behind = [&](pvalue slot) {
           auto bits = builder.CreateExtractElement(load(slot, distance.reg), uint64_t(distance.component));
@@ -1250,8 +1340,13 @@ convert_dxbc_geometry_shader(
             builder.CreateStore(load(previous, reg), output_at(reg));
         }
         auto position = u < 2 ? a : b;
-        auto offset = builder.CreateFMul(half_width, builder.CreateVectorSplat(4, builder.CreateExtractElement(position, 3)));
-        auto grown = u % 2 ? builder.CreateFSub(position, offset) : builder.CreateFAdd(position, offset);
+        pvalue grown;
+        if (line) {
+          grown = line->positions[u];
+        } else {
+          auto offset = builder.CreateFMul(half_width, builder.CreateVectorSplat(4, builder.CreateExtractElement(position, 3)));
+          grown = u % 2 ? builder.CreateFSub(position, offset) : builder.CreateFAdd(position, offset);
+        }
         builder.CreateStore(builder.CreateBitCast(grown, types._int4), output_at(position_reg));
         auto vertex = builder.CreateAdd(vertex_base, builder.getInt32(u));
         // Set both triangles' primitive outputs through the ordinary GS handlers.
@@ -1261,10 +1356,11 @@ convert_dxbc_geometry_shader(
         emit_clip_distances(vertex);
       }
       constexpr uint32_t indices[] = {0, 2, 1, 1, 2, 3};
+      constexpr uint32_t box_indices[] = {0, 1, 2, 1, 3, 2};
       auto index_base = builder.CreateMul(primitive, builder.getInt32(3));
       for (uint32_t i = 0; i < 6; i++)
         air.CreateSetMeshIndex(builder.CreateAdd(index_base, builder.getInt32(i)),
-                               builder.CreateAdd(vertex_base, builder.getInt32(indices[i])));
+                               builder.CreateAdd(vertex_base, builder.getInt32(alias ? box_indices[i] : indices[i])));
       air.CreateSetMeshPrimitiveCulled(primitive, culled);
       air.CreateSetMeshPrimitiveCulled(builder.CreateAdd(primitive, one_const), culled);
       // Emit does not modify the shader's output registers.
@@ -2141,72 +2237,14 @@ convert_pass_through_geometry_shader(
   std::array<pvalue, 4> line_positions{};
   pvalue line_culled = builder.getFalse();
   if (alias && clip[0]) {
-    auto f = [&](float value) { return air.getFloat(value); };
-    auto at = [&](pvalue value, unsigned index) { return builder.CreateExtractElement(value, index); };
-    auto load = [&](unsigned index) {
-      return builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), builder.getInt32(index)));
-    };
-    auto state = load(SM50_VIEWPORTS);
+    auto state = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), builder.getInt32(SM50_VIEWPORTS)));
     auto vp = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), viewport()));
-    pvalue a = clip[0], b = clip[1];
-    // Clip before projection. Every plane uses the current pair of endpoints.
-    for (unsigned plane = 0; plane < 7; plane++) {
-      auto distance = [&](pvalue v) -> pvalue {
-        if (!plane) return at(v, 3);
-        if (plane == 5) return at(v, 2);
-        if (plane == 6) return builder.CreateFSub(at(v, 3), at(v, 2));
-        return plane % 2 ? builder.CreateFAdd(at(v, 3), at(v, (plane - 1) / 2))
-                         : builder.CreateFSub(at(v, 3), at(v, (plane - 1) / 2));
-      };
-      auto da = distance(a), db = distance(b);
-      if (plane >= 5) {
-        auto enabled = builder.CreateFCmpONE(at(state, 0), f(0));
-        da = builder.CreateSelect(enabled, da, f(1)); db = builder.CreateSelect(enabled, db, f(1));
-      }
-      auto outside_a = builder.CreateFCmpULT(da, f(0)), outside_b = builder.CreateFCmpULT(db, f(0));
-      line_culled = builder.CreateOr(line_culled, builder.CreateAnd(outside_a, outside_b));
-      auto denominator = builder.CreateFSub(da, db);
-      auto t = builder.CreateFDiv(da, builder.CreateSelect(builder.CreateFCmpOEQ(denominator, f(0)), f(1), denominator));
-      auto intersection = builder.CreateFAdd(a, builder.CreateFMul(builder.CreateFSub(b, a), builder.CreateVectorSplat(4, t)));
-      auto crossing = builder.CreateXor(outside_a, outside_b);
-      a = builder.CreateSelect(builder.CreateAnd(crossing, outside_a), intersection, a);
-      b = builder.CreateSelect(builder.CreateAnd(crossing, outside_b), intersection, b);
-    }
-    auto project = [&](pvalue v) {
-      line_culled = builder.CreateOr(line_culled, builder.CreateFCmpULE(at(v, 3), f(0)));
-      auto iw = builder.CreateFDiv(f(1), builder.CreateSelect(builder.CreateFCmpOGT(at(v, 3), f(0)), at(v, 3), f(1)));
-      pvalue result = llvm::PoisonValue::get(types._float4);
-      for (unsigned axis = 0; axis < 2; axis++) {
-        auto ndc = builder.CreateFMul(at(v, axis), iw);
-        auto unit = axis ? builder.CreateFSub(f(1), ndc) : builder.CreateFAdd(ndc, f(1));
-        auto screen = builder.CreateFAdd(builder.CreateFMul(builder.CreateFMul(unit, at(vp, axis + 2)), f(0.5)), at(vp, axis));
-        auto snapped = builder.CreateFMul(air.CreateFPUnOp(llvm::air::AIRBuilder::rint, builder.CreateFMul(screen, f(256)), false), f(1.0f / 256));
-        result = builder.CreateInsertElement(result, snapped, axis);
-      }
-      result = builder.CreateInsertElement(result, builder.CreateFMul(at(v, 2), iw), 2);
-      return builder.CreateInsertElement(result, iw, 3);
-    };
-    auto first = project(a), last = project(b);
-    for (unsigned primitive = 0; primitive < 2; primitive++) {
-      air.CreateSetMeshPrimitiveData(builder.getInt32(primitive), builder.getInt32(0), first);
-      air.CreateSetMeshPrimitiveData(builder.getInt32(primitive), builder.getInt32(1), last);
-    }
-    auto minimum = [&](pvalue x, pvalue y) { return air.CreateFPBinOp(llvm::air::AIRBuilder::fmin, x, y, false); };
-    auto maximum = [&](pvalue x, pvalue y) { return air.CreateFPBinOp(llvm::air::AIRBuilder::fmax, x, y, false); };
-    for (unsigned corner = 0; corner < 4; corner++) {
-      pvalue position = llvm::ConstantAggregateZero::get(types._float4);
-      for (unsigned axis = 0; axis < 2; axis++) {
-        auto size = at(state, axis + 2);
-        bool high = axis ? corner % 2 : corner / 2;
-        auto bound = high ? builder.CreateFAdd(maximum(at(first, axis), at(last, axis)), f(1))
-                          : builder.CreateFSub(minimum(at(first, axis), at(last, axis)), f(1));
-        bound = minimum(maximum(bound, f(0)), size);
-        auto ndc = builder.CreateFSub(builder.CreateFDiv(builder.CreateFMul(bound, f(2)), maximum(size, f(1))), f(1));
-        position = builder.CreateInsertElement(position, axis ? builder.CreateFNeg(ndc) : ndc, axis);
-      }
-      position = builder.CreateInsertElement(position, f(0.5), 2);
-      line_positions[corner] = builder.CreateInsertElement(position, f(1), 3);
-    }
+    auto line = aliased_line(builder, air, types, clip[0], clip[1], vp, state);
+    line_positions = line.positions;
+    line_culled = line.culled;
+    for (unsigned primitive = 0; primitive < 2; primitive++)
+      for (unsigned endpoint = 0; endpoint < 2; endpoint++)
+        air.CreateSetMeshPrimitiveData(builder.getInt32(primitive), builder.getInt32(endpoint), line.endpoints[endpoint]);
   }
   if (pso_data->wire_slope && own.count == 3 && clip[0])
     air.CreateSetMeshPrimitiveData(zero,zero,wire_depth_gradient(builder,air,clip[0],clip[1],clip[2]));

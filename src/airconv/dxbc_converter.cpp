@@ -2297,6 +2297,8 @@ static int SM50InitializeUncached(
           sm50_shader->gs_output_topology == microsoft::D3D10_SB_PRIMITIVE_TOPOLOGY_LINESTRIP && lines &&
           4 * lines <= 256 &&
           mullion::dxbc::mesh_size(4 * lines, line_vertex_size, 2 * lines * 4) <= mullion::dxbc::mesh_size_limit;
+      pRefl->GeometryShader.AliasedLinesFits = pRefl->GeometryShader.QuadLinesFits &&
+          mullion::dxbc::mesh_size(4 * lines, line_vertex_size, 2 * lines * 12) <= mullion::dxbc::mesh_size_limit;
       pRefl->GeometryShader.FixedEmits = mullion::dxbc::fixed_stream_primitives(sm50_shader).has_value();
     }
     if (sm50_shader->shader_type == microsoft::D3D10_SB_PIXEL_SHADER) {
