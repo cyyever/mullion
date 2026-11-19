@@ -2153,7 +2153,7 @@ convert_pass_through_geometry_shader(
     func_signature.DefineMeshVertexOutput(air::OutputPointSize{});
   // and the viewports, and the window coordinates the pixel shader tests against
   uint32_t viewports_idx = 0, conservative_at = varyings.size();
-  if (conservative || alias) {
+  if (conservative || alias || pso_data->wire_snap) {
     viewports_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
         .buffer_size = {},
         .location_index = SM50_BINDING_INDEX_VIEWPORTS,
@@ -2246,6 +2246,46 @@ convert_pass_through_geometry_shader(
       for (unsigned endpoint = 0; endpoint < 2; endpoint++)
         air.CreateSetMeshPrimitiveData(builder.getInt32(primitive), builder.getInt32(endpoint), line.endpoints[endpoint]);
   }
+  // D3D11.3 15.16 rounds screen coordinates to an eight-bit fractional grid,
+  // including ties to even. Metal's wireframe setup can choose the other side
+  // of a tie, changing both coverage and the face of a thin triangle.
+  // Only snap whole unclipped triangles: clipping must precede this rounding.
+  pvalue snapped[3] = {};
+  if (pso_data->wire_snap && own.count == 3 && clip[0]) {
+    auto vp = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), viewport()));
+    auto at = [&](pvalue v, unsigned i) { return builder.CreateExtractElement(v, i); };
+    pvalue inside = builder.getTrue();
+    for (auto position : clip) {
+      auto w = at(position, 3);
+      inside = builder.CreateAnd(inside, builder.CreateFCmpOGT(w, air.getFloat(0)));
+      for (unsigned axis = 0; axis < 3; axis++) {
+        auto coordinate = at(position, axis);
+        auto low = axis == 2 ? air.getFloat(0) : builder.CreateFNeg(w);
+        inside = builder.CreateAnd(inside, builder.CreateFCmpOGE(coordinate, low));
+        inside = builder.CreateAnd(inside, builder.CreateFCmpOLE(coordinate, w));
+      }
+    }
+    for (unsigned axis = 0; axis < 2; axis++)
+      inside = builder.CreateAnd(inside, builder.CreateFCmpOGT(at(vp, axis + 2), air.getFloat(0)));
+    for (unsigned corner = 0; corner < 3; corner++) {
+      auto position = clip[corner];
+      auto w = at(position, 3);
+      for (unsigned axis = 0; axis < 2; axis++) {
+        auto coordinate = builder.CreateFDiv(at(position, axis), w);
+        auto unit = axis ? builder.CreateFSub(air.getFloat(1), coordinate)
+                         : builder.CreateFAdd(coordinate, air.getFloat(1));
+        auto size = at(vp, axis + 2), origin = at(vp, axis);
+        auto screen = builder.CreateFAdd(builder.CreateFMul(builder.CreateFMul(unit, size), air.getFloat(0.5)), origin);
+        screen = builder.CreateFMul(air.CreateFPUnOp(llvm::air::AIRBuilder::rint,
+            builder.CreateFMul(screen, air.getFloat(256)), false), air.getFloat(1.0f / 256));
+        auto ndc = builder.CreateFSub(builder.CreateFDiv(builder.CreateFMul(
+            builder.CreateFSub(screen, origin), air.getFloat(2)), size), air.getFloat(1));
+        if (axis) ndc = builder.CreateFNeg(ndc);
+        position = builder.CreateInsertElement(position, builder.CreateFMul(ndc, w), axis);
+      }
+      snapped[corner] = builder.CreateSelect(inside, position, clip[corner]);
+    }
+  }
   if (pso_data->wire_slope && own.count == 3 && clip[0])
     air.CreateSetMeshPrimitiveData(zero,zero,wire_depth_gradient(builder,air,clip[0],clip[1],clip[2]));
   // the rectangle's half width in x and y of normalized device coordinates. on the screen the line points along
@@ -2286,7 +2326,7 @@ convert_pass_through_geometry_shader(
   auto emit = [&](pvalue vertex, uint32_t u) {
     uint32_t corner = quads ? u / 2 : hull ? 0 : u;
     if (clip[corner]) {
-      pvalue position = alias ? line_positions[u] : triangle ? grown[u] : clip[corner];
+      pvalue position = alias ? line_positions[u] : triangle ? grown[u] : snapped[corner] ? snapped[corner] : clip[corner];
       if (half_width) {
         auto offset = builder.CreateFMul(half_width, builder.CreateVectorSplat(4, builder.CreateExtractElement(position, 3)));
         position = u % 2 ? builder.CreateFSub(position, offset) : builder.CreateFAdd(position, offset);

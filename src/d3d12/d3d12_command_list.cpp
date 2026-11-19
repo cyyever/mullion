@@ -1407,7 +1407,7 @@ public:
 
     // a conservative rasterizer's mesh stage grows triangles by pixels of the viewport each chooses, clipping depth
     // as the pipeline does and facing as it does
-    if ((pso_graphics_->conservative || pso_graphics_->aliased_lines) && conservative_dirty) {
+    if ((pso_graphics_->conservative || pso_graphics_->aliased_lines || pso_graphics_->wire_snap) && conservative_dirty) {
       auto [mapped, offset] = allocator_->AllocateGPUHeap(sizeof(SM50_CONSERVATIVE_VIEWPORTS), 16);
       auto data = static_cast<SM50_CONSERVATIVE_VIEWPORTS *>(mapped);
       memset(data, 0, sizeof(*data));
