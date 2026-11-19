@@ -1311,8 +1311,8 @@ public:
         "CreateUnorderedAccessView: refused (", std::hex, hr, std::dec, ") a view of a resource of dimension ",
         dimension, ", format ", format, ", ", width, "x", height, "x", depthOrArray, ", ", mips, " mips, bind ",
         std::hex, bind, ", misc ", misc, std::dec, ", usage ", usage, ", stride ", stride, "; view ",
-        pDesc ? "format " : "(none)", pDesc ? pDesc->Format : 0, pDesc ? ", dimension " : "",
-        pDesc ? pDesc->ViewDimension : 0, pDesc ? ", " : "", view ? view[0] : 0, " ", view ? view[1] : 0, " ",
+        pDesc ? "format " : "(none)", pDesc ? pDesc->Format : DXGI_FORMAT_UNKNOWN, pDesc ? ", dimension " : "",
+        pDesc ? pDesc->ViewDimension : D3D11_UAV_DIMENSION_UNKNOWN, pDesc ? ", " : "", view ? view[0] : 0, " ", view ? view[1] : 0, " ",
         view ? view[2] : 0, " ", view ? view[3] : 0
     );
   }

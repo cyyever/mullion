@@ -138,7 +138,7 @@ Sampler::createSampler(
   };
   // both of Metal's borders are one mode to a shader that only needs to know where a coordinate lands
   auto address = [](WMTSamplerAddressMode mode) {
-    return mode == WMTSamplerAddressModeClampToBorderColor ? SM50_SAMPLER_ADDRESS_BORDER : (uint64_t)mode;
+    return mode == WMTSamplerAddressModeClampToBorderColor ? uint64_t(SM50_SAMPLER_ADDRESS_BORDER) : uint64_t(mode);
   };
   auto bias = (uint16_t)(int16_t)std::lround(
       std::clamp(std::ldexp(lod_bias, SM50_SAMPLER_METADATA_LOD_FRACTION_BITS), (float)INT16_MIN, (float)INT16_MAX)
@@ -147,7 +147,7 @@ Sampler::createSampler(
                   uint64_t(info.mag_filter == WMTSamplerMinMagFilterLinear) << SM50_SAMPLER_METADATA_MAG_LINEAR |
                   uint64_t(info.mip_filter == WMTSamplerMipFilterLinear) << SM50_SAMPLER_METADATA_MIP_LINEAR |
                   (uint64_t)info.max_anisotroy << SM50_SAMPLER_METADATA_ANISOTROPY |
-                  uint64_t(native ? SM50_SAMPLER_REDUCTION_NONE : reduction) << SM50_SAMPLER_METADATA_REDUCTION |
+                  (native ? uint64_t(SM50_SAMPLER_REDUCTION_NONE) : uint64_t(reduction)) << SM50_SAMPLER_METADATA_REDUCTION |
                   (uint64_t)address(info.r_address_mode) << SM50_SAMPLER_METADATA_ADDRESS_W |
                   field(info.lod_min_clamp) << SM50_SAMPLER_METADATA_MIN_LOD |
                   (field_max - field(info.lod_max_clamp)) << SM50_SAMPLER_METADATA_MAX_LOD |

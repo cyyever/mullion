@@ -275,9 +275,9 @@ public:
       if (Multisample)
         gpu_storage.SRVTexture.metadata =
             TextureMetadata(Texture->arrayLength(View), 0) |
-            (Texture->sampleCount() == 1 ? SM50_TEXTURE_MULTISAMPLE_METADATA_SINGLE : 0) |
-            (Texture->centered ? SM50_TEXTURE_MULTISAMPLE_METADATA_CENTERED : 0) |
-            (Texture->paired ? SM50_TEXTURE_MULTISAMPLE_METADATA_PAIRED : 0);
+            (Texture->sampleCount() == 1 ? uint64_t(SM50_TEXTURE_MULTISAMPLE_METADATA_SINGLE) : uint64_t{0}) |
+            (Texture->centered ? uint64_t(SM50_TEXTURE_MULTISAMPLE_METADATA_CENTERED) : uint64_t{0}) |
+            (Texture->paired ? uint64_t(SM50_TEXTURE_MULTISAMPLE_METADATA_PAIRED) : uint64_t{0});
       gpu_storage.SRVTexture.padding[0] = std::bit_cast<uint64_t>(BorderRange);
       // the view's place in its resource, which sampler feedback is recorded for: the first mip and how many mips the
       // resource has, a byte each, then 16 bits each for the first slice and the resource's width and height

@@ -178,7 +178,7 @@ main(int argc, char **argv) {
   auto vs = compiler.compile(hlsl, "vs", "vs", {"BIAS=0"});
   for (UINT i = 0; i < count; i++) {
     bias[i] = random(), number[i] = random();
-    masks[i] = i == 0 ? 0 : i == 1 ? D3D12_COLOR_WRITE_ENABLE_ALL : random() % (D3D12_COLOR_WRITE_ENABLE_ALL + 1);
+    masks[i] = i == 0 ? 0 : i == 1 ? UINT(D3D12_COLOR_WRITE_ENABLE_ALL) : random() % (D3D12_COLOR_WRITE_ENABLE_ALL + 1);
     auto defines = std::vector<std::string>{"BIAS=" + std::to_string(bias[i]) + "u"};
     ps[i] = compiler.compile(hlsl, "ps", "ps", defines);
     cs[i] = compiler.compile(hlsl, "cs", "cs", defines);

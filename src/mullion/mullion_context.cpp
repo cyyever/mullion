@@ -446,9 +446,9 @@ ArgumentEncodingContext::encodeShaderResources(
             if (arg.Flags & MTL_SM50_SHADER_ARGUMENT_TEXTURE_MULTISAMPLE)
               encoded_buffer[arg.StructurePtrOffset + 1] =
                   TextureMetadata(srv.texture->arrayLength(viewIdChecked), 0) |
-                  (srv.texture->sampleCount() == 1 ? SM50_TEXTURE_MULTISAMPLE_METADATA_SINGLE : 0) |
-                  (srv.texture->centered ? SM50_TEXTURE_MULTISAMPLE_METADATA_CENTERED : 0) |
-                  (srv.texture->paired ? SM50_TEXTURE_MULTISAMPLE_METADATA_PAIRED : 0);
+                  (srv.texture->sampleCount() == 1 ? uint64_t(SM50_TEXTURE_MULTISAMPLE_METADATA_SINGLE) : uint64_t{0}) |
+                  (srv.texture->centered ? uint64_t(SM50_TEXTURE_MULTISAMPLE_METADATA_CENTERED) : uint64_t{0}) |
+                  (srv.texture->paired ? uint64_t(SM50_TEXTURE_MULTISAMPLE_METADATA_PAIRED) : uint64_t{0});
             makeResident<stage, kind>(srv.texture.ptr(), viewIdChecked);
           }
         } else {

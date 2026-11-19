@@ -5953,7 +5953,7 @@ public:
                                  uint32_t(specular->pixelFormat()),
                                  uint32_t(normals->pixelFormat()),
                                  uint32_t(roughness->pixelFormat()),
-                                 uint32_t(hit_distance ? hit_distance->pixelFormat() : 0) << 1 | !!pDesc->AutoExposure};
+                                 (hit_distance ? uint32_t(hit_distance->pixelFormat()) : uint32_t{0}) << 1 | !!pDesc->AutoExposure};
     if (!cache->denoised || cache->key != key) {
       WMTFXDenoisedScalerInfo info{};
       info.color_format = color->pixelFormat();

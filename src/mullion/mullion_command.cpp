@@ -207,7 +207,7 @@ InternalCommandLibrary::UnboundTexture(WMTTextureType type, SM50_SAMPLE_TYPE sam
     info.usage = WMTTextureUsageShaderRead;
     if (write)
       info.usage = WMTTextureUsage(
-          info.usage | WMTTextureUsageShaderWrite | (sample != SM50_SAMPLE_FLOAT ? WMTTextureUsageShaderAtomic : 0)
+          info.usage | WMTTextureUsageShaderWrite | (sample != SM50_SAMPLE_FLOAT ? WMTTextureUsageShaderAtomic : WMTTextureUsage{0})
       );
     info.options = WMTResourceStorageModePrivate | WMTResourceHazardTrackingModeUntracked;
     if (type == WMTTextureTypeTextureBuffer) {
