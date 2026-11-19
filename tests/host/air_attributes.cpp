@@ -7,6 +7,7 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
+#include <tuple>
 
 static void require(bool ok, const char *message) {
   if (!ok) { llvm::errs() << message << "\n"; std::exit(1); }
@@ -76,6 +77,38 @@ int main() {
   require(memory->getFunction("arg")->getMemoryEffects().onlyAccessesArgPointees(), "argmem translation lost");
   require(memory->getFunction("restricted")->hasFnAttribute(llvm::Attribute::Convergent) &&
           memory->getFunction("restricted")->hasFnAttribute(llvm::Attribute::NoDuplicate), "execution restrictions lost");
+
+  for (auto [vertices, primitives, topology, index, vertex, count, valid] : {
+           std::tuple{256, 512, "air.triangle", 1535, 255, 512, true},
+           std::tuple{4, 2, "air.triangle", 5, 3, 2, true},
+           std::tuple{257, 2, "air.triangle", 0, 0, 0, false},
+           std::tuple{4, 513, "air.triangle", 0, 0, 0, false},
+           std::tuple{4, 2, "unknown", 0, 0, 0, false},
+           std::tuple{4, 2, "air.triangle", 6, 0, 0, false},
+           std::tuple{4, 2, "air.triangle", 0, 4, 0, false},
+           std::tuple{4, 2, "air.triangle", 0, 0, 3, false},
+           std::tuple{4, 2, "air.line", 4, 0, 0, false},
+           std::tuple{4, 2, "air.point", 2, 0, 0, false}}) {
+    std::string ir =
+        "declare void @air.set_index_mesh(ptr addrspace(7), i32, i8)\n"
+        "declare void @air.set_primitive_count_mesh(ptr addrspace(7), i32)\n"
+        "define void @mesh(ptr addrspace(7) %mesh) {\n"
+        "call void @air.set_index_mesh(ptr addrspace(7) %mesh, i32 " + std::to_string(index) + ", i8 " + std::to_string(vertex) + ")\n"
+        "call void @air.set_primitive_count_mesh(ptr addrspace(7) %mesh, i32 " + std::to_string(count) + ")\nret void\n}\n"
+        "!air.mesh = !{!0}\n!0 = !{ptr @mesh, !2, !3}\n"
+        "!1 = !{!\"air.mesh_type_info\", !2, !2, i32 " + std::to_string(vertices) + ", i32 " +
+        std::to_string(primitives) + ", !\"" + topology + "\"}\n!2 = !{}\n!3 = !{!4}\n!4 = !{i32 0, !\"air.mesh\", !1, !\"air.arg_type_name\", !\"mesh<>\"}\n";
+    llvm::SMDiagnostic diagnostic;
+    auto module = llvm::parseAssemblyString(ir, diagnostic, context);
+    require(module && !llvm::verifyModule(*module, &llvm::errs()), "invalid mesh verifier fixture");
+    llvm::SmallVector<char, 0> bytes;
+    auto error = mullion::air::writeTypedBitcode(*module, bytes);
+    require(bool(error) != valid, "mesh verifier accepted an invalid output or rejected a valid one");
+    if (error) {
+      require(llvm::toString(std::move(error)).find("AIR mesh") != std::string::npos, "missing mesh diagnostic");
+      require(bytes.empty(), "invalid mesh wrote partial bitcode");
+    }
+  }
 
   for (auto tuple : {"!{}", "!{i32 2}", "!{i32 2, !\"nine\", i32 0}", "!{i32 2, null, i32 0}",
                      "!{i32 2, i32 65536, i32 0}", "!{i32 3, i32 9, i32 0}"}) {
