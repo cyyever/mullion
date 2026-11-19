@@ -1,0 +1,1 @@
+- [ ] Evaluate an optional Core ML temporal denoiser on M2. Replay identical inputs through native MetalFX and the candidate model, including history resets, motion, and disocclusion. Measure device placement and end-to-end frame time including conversion and synchronization, and compare noise and ghosting before considering runtime integration.
