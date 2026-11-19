@@ -76,8 +76,10 @@ void EncodePipelineStatisticsDraw(Emit emit, WMT::RenderPipelineState count, WMT
 // centers, and the stage before the rasterizer multiplies x and y by the inverse (SM50_BINDING_INDEX_RASTER_SCALE):
 // positions land on the same pixels, and the cut moves out by the factor. a cut past that of the largest viewport, a
 // whole target of `largest` pixels, loses the depth plane (#72; an M5 Pro keeps it exact up to the cut of its own
-// largest, 32768 pixels). the factor is the largest power of two, which keeps the scale exact, that keeps every cut
-// inside that one. returns the inverse
+// largest, 32768 pixels). Use a power of two to keep scaling exact, bounded by that cut and by four: the smallest
+// power of two that keeps a full-screen triangle (extent 3) strictly inside the 1.5 guard band. Growing a tiny
+// viewport to the maximum needlessly loses depth precision when clipping primitives that cross w=0.
+// Returns the inverse.
 inline float
 EnlargeViewports(std::span<WMTViewport> viewports, double largest) {
   constexpr double cut = 1.5;
@@ -86,7 +88,7 @@ EnlargeViewports(std::span<WMTViewport> viewports, double largest) {
     for (auto [origin, size] : {std::pair{v.originX, v.width}, std::pair{v.originY, v.height}})
       if (size > 0)
         reach = std::min(reach, (largest - std::abs(2 * origin + size - largest) / cut) / size);
-  double factor = std::isfinite(reach) && reach >= 1 ? std::exp2(std::floor(std::log2(reach))) : 1;
+  double factor = std::isfinite(reach) && reach >= 1 ? std::min(4.0, std::exp2(std::floor(std::log2(reach)))) : 1;
   for (auto &v : viewports) {
     v.originX -= (factor - 1) * v.width / 2, v.originY -= (factor - 1) * v.height / 2;
     v.width *= factor, v.height *= factor;
