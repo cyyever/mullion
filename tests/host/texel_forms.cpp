@@ -222,15 +222,19 @@ verify(const std::string &module) {
       return std::string("xcrun -sdk macosx metal-opt");
     return "SDKROOT='" + sdk + "' '" + found + "'";
   }();
-  std::string said, command = tool + " -S '" + path + "' -o /dev/null 2>&1";
+  std::string said, command = tool + " -S '" + path + "' -o - 2>&1";
   FILE *out = popen(command.c_str(), "r");
   char line[512];
   while (out && fgets(line, sizeof(line), out))
     said += line;
   int status = out ? pclose(out) : -1;
   unlink(path);
-  if (!status)
+  if (!status) {
+    if (auto *expected = getenv("MULLION_EXPECTED_AIR_TRIPLE"); expected &&
+        said.find(std::string("target triple = \"") + expected + "\"") == std::string::npos)
+      return std::string("AIR target differs from Apple compiler: expected ") + expected;
     return "";
+  }
   // the verifier names the module's file, which is gone
   return said.empty() ? "the verifier did not run (xcrun -sdk macosx metal-opt)" : said.substr(0, said.find('\n'));
 }

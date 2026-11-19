@@ -219,6 +219,16 @@ endif
 subdir('libs')
 subdir('src')
 
+# Validate generated AIR even when the optional test suite is disabled.
+texel_forms = executable('host_texel_forms', 'tests/host/texel_forms.cpp',
+  dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
+  cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true)
+custom_target('verify_air_build',
+  output : 'verified-air.stamp',
+  command : [find_program('python3', native : true), files('tests/host/verify_air_build.py'), texel_forms, '@OUTPUT@'],
+  build_by_default : true)
+
+
 if get_option('enable_tests')
 subdir('tests')
 endif
