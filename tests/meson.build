@@ -57,3 +57,9 @@ endif
 if is_variable('llvm_include_path_darwin')
   subdir('host')
 endif
+
+if get_option('build_airconv_for_windows')
+  test('airconv_windows', executable('airconv_windows_test', 'airconv_windows.cpp',
+       dependencies : [cpp.find_library('d3dcompiler_47')]),
+       args : [airconv_windows.full_path()], suite : 'converter', timeout : 120)
+endif
