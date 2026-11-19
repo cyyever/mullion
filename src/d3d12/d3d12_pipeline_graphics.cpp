@@ -1537,8 +1537,8 @@ public:
     if (auto input = pDesc->GS.pShaderBytecode ? ref_gs.GeometryShader.Primitive : 0;
         input && input <= D3D_PRIMITIVE_TRIANGLE_ADJ) {
       bool adjacent = input == D3D_PRIMITIVE_LINE_ADJ || input == D3D_PRIMITIVE_TRIANGLE_ADJ;
-      uint32_t takes = input == D3D_PRIMITIVE_LINE_ADJ       ? D3D_PRIMITIVE_LINE
-                       : input == D3D_PRIMITIVE_TRIANGLE_ADJ ? D3D_PRIMITIVE_TRIANGLE
+      uint32_t takes = input == D3D_PRIMITIVE_LINE_ADJ       ? uint32_t(D3D_PRIMITIVE_LINE)
+                       : input == D3D_PRIMITIVE_TRIANGLE_ADJ ? uint32_t(D3D_PRIMITIVE_TRIANGLE)
                                                              : input;
       // D3D12_PRIMITIVE_TOPOLOGY_TYPE's point, line and triangle are D3D_PRIMITIVE's, and the tessellator's two
       // windings are both triangles
