@@ -1,3 +1,4 @@
+#include <ranges>
 #include "air_operations.hpp"
 #include "air_signature.hpp"
 #include "airconv_error.hpp"
@@ -45,6 +46,45 @@ line_half_width(llvm::IRBuilder<> &builder, llvm::air::AIRBuilder &air, air::Air
         builder.CreateInsertElement(llvm::ConstantAggregateZero::get(types._float4), builder.CreateFDiv(builder.CreateFMul(scale, sy), w), (uint64_t)0),
         builder.CreateFNeg(builder.CreateFDiv(builder.CreateFMul(scale, sx), h)), 1
     );
+}
+
+static std::array<pvalue, 3>
+snap_wire_triangle(llvm::IRBuilder<> &builder, llvm::air::AIRBuilder &air,
+                   const std::array<pvalue, 3> &clip, pvalue vp) {
+  std::array<pvalue, 3> snapped{};
+  auto at = [&](pvalue v, unsigned i) { return builder.CreateExtractElement(v, i); };
+  pvalue inside = builder.getTrue();
+  for (auto position : clip) {
+    auto w = at(position, 3);
+    inside = builder.CreateAnd(inside, builder.CreateFCmpOGT(w, air.getFloat(0)));
+    for (unsigned axis = 0; axis < 3; axis++) {
+      auto coordinate = at(position, axis);
+      auto low = axis == 2 ? air.getFloat(0) : builder.CreateFNeg(w);
+      inside = builder.CreateAnd(inside, builder.CreateFCmpOGE(coordinate, low));
+      inside = builder.CreateAnd(inside, builder.CreateFCmpOLE(coordinate, w));
+    }
+  }
+  for (unsigned axis = 0; axis < 2; axis++)
+    inside = builder.CreateAnd(inside, builder.CreateFCmpOGT(at(vp, axis + 2), air.getFloat(0)));
+  for (unsigned corner = 0; corner < 3; corner++) {
+    auto position = clip[corner];
+    auto w = at(position, 3);
+    for (unsigned axis = 0; axis < 2; axis++) {
+      auto coordinate = builder.CreateFDiv(at(position, axis), w);
+      auto unit = axis ? builder.CreateFSub(air.getFloat(1), coordinate)
+                       : builder.CreateFAdd(coordinate, air.getFloat(1));
+      auto size = at(vp, axis + 2), origin = at(vp, axis);
+      auto screen = builder.CreateFAdd(builder.CreateFMul(builder.CreateFMul(unit, size), air.getFloat(0.5)), origin);
+      screen = builder.CreateFMul(air.CreateFPUnOp(llvm::air::AIRBuilder::rint,
+          builder.CreateFMul(screen, air.getFloat(256)), false), air.getFloat(1.0f / 256));
+      auto ndc = builder.CreateFSub(builder.CreateFDiv(builder.CreateFMul(
+          builder.CreateFSub(screen, origin), air.getFloat(2)), size), air.getFloat(1));
+      if (axis) ndc = builder.CreateFNeg(ndc);
+      position = builder.CreateInsertElement(position, builder.CreateFMul(ndc, w), axis);
+    }
+    snapped[corner] = builder.CreateSelect(inside, position, clip[corner]);
+  }
+  return snapped;
 }
 
 struct AliasedLine {
@@ -210,7 +250,7 @@ add_stream_output_statistics(llvm::IRBuilder<> &builder, air::AirType &types, pv
   auto yes = llvm::BasicBlock::Create(context, "so_statistics", function), no = llvm::BasicBlock::Create(context, "so_counted", function);
   builder.CreateCondBr(builder.CreateICmpNE(address, builder.getInt64(0)), yes, no);
   builder.SetInsertPoint(yes);
-  auto data = builder.CreateIntToPtr(address, types._long->getPointerTo((uint32_t)air::AddressSpace::device));
+  auto data = builder.CreateIntToPtr(address, llvm::PointerType::get(types._long->getContext(), (uint32_t)air::AddressSpace::device));
   pvalue values[2] = {written, needed};
   for (uint32_t i = 0; i < 2; i++) {
     auto ptr = builder.CreateConstInBoundsGEP1_32(types._long, data, i);
@@ -775,6 +815,13 @@ convert_dxbc_geometry_shader(
     for (unsigned i = 0; i < 2; i++)
       func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{
           .user = "mullion_line" + std::to_string(i), .type = air::msl_float4, .index = i});
+  // One output triangle has no shared strip vertices that another clipped
+  // primitive could need unsnapped. Viewport-indexed GS output is left native.
+  const bool wire_snap = pso_data && pso_data->wire_snap && max_vertex_out == 3 &&
+      topology == air::MeshOutputTopology::Triangle &&
+      std::ranges::none_of(pShaderInternal->output_signature, [](const auto &e) {
+        return e.systemValue() == D3D10_SB_NAME_VIEWPORT_ARRAY_INDEX;
+      });
   const bool wire_slope = pso_data && pso_data->wire_slope && topology == air::MeshOutputTopology::Triangle;
   if (wire_slope)
     func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{.user = "mullion_wire_gradient", .type = air::msl_float2, .index = 0});
@@ -829,7 +876,7 @@ convert_dxbc_geometry_shader(
     func_signature.DefineMeshPrimitiveOutput(air::OutputPrimitiveCulled{});
   // and the viewports, and the window coordinates the pixel shader tests against
   uint32_t viewports_idx = 0, conservative_at = pShaderInternal->num_mesh_vertex_data;
-  if (conservative || alias) {
+  if (conservative || alias || wire_snap) {
     viewports_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
         .buffer_size = {},
         .location_index = SM50_BINDING_INDEX_VIEWPORTS,
@@ -883,7 +930,7 @@ convert_dxbc_geometry_shader(
       return builder.CreateLoad(
           types._int, builder.CreateGEP(
                           tessellation_payload,
-                          builder.CreateBitCast(function->getArg(payload_idx), tessellation_payload->getPointerTo(6)),
+                          builder.CreateBitCast(function->getArg(payload_idx), llvm::PointerType::get(tessellation_payload->getContext(), 6)),
                           {builder.getInt32(0), builder.getInt32(field)}
                       )
       );
@@ -914,18 +961,18 @@ convert_dxbc_geometry_shader(
   resource_map.mesh = mesh_ptr;
 
   auto emit_clip_distances = [&](llvm::Value *vertex) {
-    for (auto x : llvm::enumerate(pShaderInternal->clip_distance_scalars)) {
-      if (x.value().reg >= max_output_register)
+    for (auto [x_index, x_value] : std::views::enumerate(pShaderInternal->clip_distance_scalars)) {
+      if (x_value.reg >= max_output_register)
         continue;
       auto src_ptr = builder.CreateGEP(
           llvm::ArrayType::get(types._float4, max_output_register), resource_map.output.ptr_float4,
-          {builder.getInt32(0), builder.getInt32(x.value().reg), builder.getInt32(x.value().component)}
+          {builder.getInt32(0), builder.getInt32(x_value.reg), builder.getInt32(x_value.component)}
       );
       auto distance = builder.CreateLoad(types._float, src_ptr);
       if (clip_varyings)
-        air.CreateSetMeshVertexData(vertex, clip_data + x.index(), distance);
+        air.CreateSetMeshVertexData(vertex, clip_data + x_index, distance);
       else
-        air.CreateSetMeshClipDistance(vertex, builder.getInt32(x.index()), distance);
+        air.CreateSetMeshClipDistance(vertex, builder.getInt32(x_index), distance);
     }
   };
 
@@ -942,17 +989,17 @@ convert_dxbc_geometry_shader(
     if (!culls)
       return nullptr;
     llvm::Value *mine = zero_const;
-    for (auto distance : llvm::enumerate(pShaderInternal->cull_distance_scalars)) {
+    for (auto [distance_index, distance_value] : std::views::enumerate(pShaderInternal->cull_distance_scalars)) {
       auto value = builder.CreateLoad(
           types._float, builder.CreateGEP(
                             llvm::ArrayType::get(types._float4, max_output_register), resource_map.output.ptr_float4,
-                            {zero_const, builder.getInt32(distance.value().reg), builder.getInt32(distance.value().component)}
+                            {zero_const, builder.getInt32(distance_value.reg), builder.getInt32(distance_value.component)}
                         )
       );
       mine = builder.CreateOr(
           mine, builder.CreateShl(
                     builder.CreateZExt(builder.CreateFCmpULT(value, llvm::ConstantFP::get(types._float, 0)), types._int),
-                    distance.index()
+                    distance_index
                 )
       );
     }
@@ -973,7 +1020,7 @@ convert_dxbc_geometry_shader(
 
   pvalue history[2] = {};
   uint32_t wire_position = ~0u;
-  if (wire_slope) {
+  if (wire_slope || wire_snap) {
     for (auto &e : pShaderInternal->output_signature)
       if (e.systemValue() == D3D10_SB_NAME_POSITION) wire_position = e.reg();
     for (auto &slot : history)
@@ -1012,14 +1059,17 @@ convert_dxbc_geometry_shader(
       auto current_primitive_count = builder.CreateLoad(types._int, primitive_count);
       auto current_primitive_idx = builder.CreateAdd(current_primitive_count, current_write_vertex);
 
-      if (wire_slope && wire_position != ~0u) {
+      std::array<pvalue, 3> wire_vertices{};
+      if ((wire_slope || wire_snap) && wire_position != ~0u) {
         auto ptr = builder.CreateGEP(llvm::ArrayType::get(types._float4, max_output_register),
                                      resource_map.output.ptr_float4, {zero_const,builder.getInt32(wire_position)});
         auto c = builder.CreateLoad(types._float4,ptr);
         auto a = builder.CreateLoad(types._float4,history[0]), b = builder.CreateLoad(types._float4,history[1]);
         auto idx = builder.CreateSelect(builder.CreateICmpUGE(current_write_vertex,two_const),
                                         builder.CreateSub(current_primitive_idx,two_const),current_primitive_count);
-        air.CreateSetMeshPrimitiveData(idx,zero_const,wire_depth_gradient(builder,air,a,b,c));
+        if (wire_slope)
+          air.CreateSetMeshPrimitiveData(idx,zero_const,wire_depth_gradient(builder,air,a,b,c));
+        wire_vertices = {a, b, c};
         builder.CreateStore(b,history[0]);
         builder.CreateStore(c,history[1]);
       }
@@ -1030,6 +1080,27 @@ convert_dxbc_geometry_shader(
       MeshOutputContext gs_out_ctx{current_vertex_with_offset, current_primitive_idx};
       for (auto &h : gs_output_handlers) {
         co_yield h(gs_out_ctx);
+      }
+      if (wire_snap && wire_vertices[0]) {
+        auto complete = builder.CreateICmpEQ(current_write_vertex, two_const);
+        auto head = builder.GetInsertBlock();
+        auto then = llvm::BasicBlock::Create(context, "wire_snap", function);
+        auto after = llvm::BasicBlock::Create(context, "wire_snap_after", function);
+        if (builder.GetInsertPoint() != head->end()) {
+          auto rest = llvm::SplitBlock(head, &*builder.GetInsertPoint());
+          head->getTerminator()->eraseFromParent();
+          builder.SetInsertPoint(after);
+          builder.CreateBr(rest);
+          builder.SetInsertPoint(head);
+        }
+        builder.CreateCondBr(complete, then, after);
+        builder.SetInsertPoint(then);
+        auto vp = builder.CreateLoad(types._float4, function->getArg(viewports_idx));
+        auto snapped = snap_wire_triangle(builder, air, wire_vertices, vp);
+        for (unsigned i = 0; i < 3; i++)
+          air.CreateSetMeshPosition(builder.getInt32(i), snapped[i]);
+        builder.CreateBr(after);
+        builder.SetInsertPoint(after, after->getFirstInsertionPt());
       }
       emit_clip_distances(current_vertex_with_offset);
       cull_primitive(current_write_vertex, current_primitive_count, 3);
@@ -1446,7 +1517,7 @@ convert_dxbc_geometry_shader(
             builder.CreateAdd(builder.CreateMul(vertex, builder.getInt64(so->strides[e.output_slot])), builder.getInt64(e.offset))
         );
         builder.CreateStore(
-            value(j, k), builder.CreateIntToPtr(at, types._int->getPointerTo((uint32_t)air::AddressSpace::device))
+            value(j, k), builder.CreateIntToPtr(at, llvm::PointerType::get(types._int->getContext(), (uint32_t)air::AddressSpace::device))
         );
       }
     rejoin(written);
@@ -1555,7 +1626,7 @@ convert_dxbc_geometry_shader(
   resource_map.input.ptr_int4 = builder.CreateAlloca(input_ptr_int4_type);
   resource_map.input.ptr_float4 = builder.CreateBitCast(
       resource_map.input.ptr_int4,
-      llvm::ArrayType::get(input_per_vertex_type_float, vertex_per_primitive)->getPointerTo()
+      llvm::PointerType::get(llvm::ArrayType::get(input_per_vertex_type_float, vertex_per_primitive)->getContext(), 0)
   );
   resource_map.input_element_count = pVertexStage->max_output_register;
 
@@ -1564,7 +1635,7 @@ convert_dxbc_geometry_shader(
   builder.CreateStore(llvm::ConstantAggregateZero::get(llvm::ArrayType::get(types._int4, max_output_register)),
                       resource_map.output.ptr_int4);
   resource_map.output.ptr_float4 = builder.CreateBitCast(
-      resource_map.output.ptr_int4, llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo()
+      resource_map.output.ptr_int4, llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_output_register)->getContext(), 0)
   );
   resource_map.output_element_count = max_output_register;
 
@@ -1582,7 +1653,7 @@ convert_dxbc_geometry_shader(
         ptr = builder.CreateConstInBoundsGEP2_32(targets_type->getElementType(f), ptr, 0, i);
       return builder.CreateLoad(i < 0 ? targets_type->getElementType(f) : types._long, ptr);
     };
-    so_scratch = builder.CreateIntToPtr(field(3), types._int->getPointerTo((uint32_t)air::AddressSpace::device));
+    so_scratch = builder.CreateIntToPtr(field(3), llvm::PointerType::get(types._int->getContext(), (uint32_t)air::AddressSpace::device));
     auto warps = field(4), instances = field(5);
     auto instance = builder.CreateLoad(types._int, builder.CreateConstInBoundsGEP1_32(types._int, payload, 0));
     so_warp = builder.CreateAdd(builder.CreateMul(instance, warps), warp_id);
@@ -1595,7 +1666,7 @@ convert_dxbc_geometry_shader(
     );
     so_groups = builder.CreateMul(warps, instances);
     so_counts = stream_output_counts(builder, so_groups);
-    auto snapshots = builder.CreateBitCast(so_scratch, types._long->getPointerTo((uint32_t)air::AddressSpace::device));
+    auto snapshots = builder.CreateBitCast(so_scratch, llvm::PointerType::get(types._long->getContext(), (uint32_t)air::AddressSpace::device));
     for (uint32_t b = 0; b < 4; b++) {
       so_address[b] = field(0, b);
       so_snapshot[b] = so->counting ? nullptr : builder.CreateLoad(types._long, builder.CreateConstInBoundsGEP1_32(types._long, snapshots, b));
@@ -1626,7 +1697,7 @@ convert_dxbc_geometry_shader(
       auto before = builder.CreateLoad(
           types._long, builder.CreateBitCast(
                            builder.CreateConstInBoundsGEP1_32(types._int, payload, kPayloadStreamOutputBase + 2 * s),
-                           types._long->getPointerTo(payload->getType()->getPointerAddressSpace())
+                           llvm::PointerType::get(types._long->getContext(), payload->getType()->getPointerAddressSpace())
                        )
       );
       // in one pass every invocation of the group's whole primitives, the first ones, completes the same
@@ -1719,7 +1790,7 @@ convert_dxbc_geometry_shader(
 
   auto vertices_ptr = builder.CreateBitCast(
       builder.CreateConstInBoundsGEP1_32(types._int, function->getArg(payload_idx), 4),
-      types._int4->getPointerTo((uint32_t)air::AddressSpace::object_data)
+      llvm::PointerType::get(types._int4->getContext(), (uint32_t)air::AddressSpace::object_data)
   );
 
   auto load_vertex = [&](pvalue vertex_index, uint32_t vid) {
@@ -1927,7 +1998,7 @@ convert_dxbc_geometry_shader(
     auto once = llvm::BasicBlock::Create(context, "so_once", function), end = llvm::BasicBlock::Create(context, "so_end", function);
     builder.CreateCondBr(last, once, end);
     builder.SetInsertPoint(once);
-    auto snapshots = builder.CreateBitCast(so_scratch, types._long->getPointerTo((uint32_t)air::AddressSpace::device));
+    auto snapshots = builder.CreateBitCast(so_scratch, llvm::PointerType::get(types._long->getContext(), (uint32_t)air::AddressSpace::device));
     for (uint32_t b = 0; b < 4; b++) {
       uint32_t stream = 4;
       for (uint32_t s = 0; s < 4; s++)
@@ -1936,7 +2007,7 @@ convert_dxbc_geometry_shader(
       if (stream == 4)
         continue;
       // a filled size is 32 bits (Microsoft Learn, Stream Output Counters), 4-byte aligned
-      auto location = builder.CreateIntToPtr(filled(b), types._int->getPointerTo((uint32_t)air::AddressSpace::device));
+      auto location = builder.CreateIntToPtr(filled(b), llvm::PointerType::get(types._int->getContext(), (uint32_t)air::AddressSpace::device));
       auto bound = llvm::BasicBlock::Create(context, "so_bound", function), skip = llvm::BasicBlock::Create(context, "so_skip", function);
       builder.CreateCondBr(builder.CreateICmpNE(filled(b), builder.getInt64(0)), bound, skip);
       builder.SetInsertPoint(bound);
@@ -2253,38 +2324,8 @@ convert_pass_through_geometry_shader(
   pvalue snapped[3] = {};
   if (pso_data->wire_snap && own.count == 3 && clip[0]) {
     auto vp = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), viewport()));
-    auto at = [&](pvalue v, unsigned i) { return builder.CreateExtractElement(v, i); };
-    pvalue inside = builder.getTrue();
-    for (auto position : clip) {
-      auto w = at(position, 3);
-      inside = builder.CreateAnd(inside, builder.CreateFCmpOGT(w, air.getFloat(0)));
-      for (unsigned axis = 0; axis < 3; axis++) {
-        auto coordinate = at(position, axis);
-        auto low = axis == 2 ? air.getFloat(0) : builder.CreateFNeg(w);
-        inside = builder.CreateAnd(inside, builder.CreateFCmpOGE(coordinate, low));
-        inside = builder.CreateAnd(inside, builder.CreateFCmpOLE(coordinate, w));
-      }
-    }
-    for (unsigned axis = 0; axis < 2; axis++)
-      inside = builder.CreateAnd(inside, builder.CreateFCmpOGT(at(vp, axis + 2), air.getFloat(0)));
-    for (unsigned corner = 0; corner < 3; corner++) {
-      auto position = clip[corner];
-      auto w = at(position, 3);
-      for (unsigned axis = 0; axis < 2; axis++) {
-        auto coordinate = builder.CreateFDiv(at(position, axis), w);
-        auto unit = axis ? builder.CreateFSub(air.getFloat(1), coordinate)
-                         : builder.CreateFAdd(coordinate, air.getFloat(1));
-        auto size = at(vp, axis + 2), origin = at(vp, axis);
-        auto screen = builder.CreateFAdd(builder.CreateFMul(builder.CreateFMul(unit, size), air.getFloat(0.5)), origin);
-        screen = builder.CreateFMul(air.CreateFPUnOp(llvm::air::AIRBuilder::rint,
-            builder.CreateFMul(screen, air.getFloat(256)), false), air.getFloat(1.0f / 256));
-        auto ndc = builder.CreateFSub(builder.CreateFDiv(builder.CreateFMul(
-            builder.CreateFSub(screen, origin), air.getFloat(2)), size), air.getFloat(1));
-        if (axis) ndc = builder.CreateFNeg(ndc);
-        position = builder.CreateInsertElement(position, builder.CreateFMul(ndc, w), axis);
-      }
-      snapped[corner] = builder.CreateSelect(inside, position, clip[corner]);
-    }
+    auto positions = snap_wire_triangle(builder, air, {clip[0], clip[1], clip[2]}, vp);
+    std::copy(positions.begin(), positions.end(), snapped);
   }
   if (pso_data->wire_slope && own.count == 3 && clip[0])
     air.CreateSetMeshPrimitiveData(zero,zero,wire_depth_gradient(builder,air,clip[0],clip[1],clip[2]));
@@ -2348,14 +2389,14 @@ convert_pass_through_geometry_shader(
       }
       air.CreateSetMeshVertexData(vertex, builder.getInt32(v.index), integer ? value : real(value));
     }
-    for (auto distance : llvm::enumerate(pVertexStage->clip_distance_scalars)) {
-      auto &d = distance.value();
+    for (auto [distance_index, distance_value] : std::views::enumerate(pVertexStage->clip_distance_scalars)) {
+      auto &d = distance_value;
       auto value = triangle ? blend(over_w, u, [&](uint32_t k) { return component(k, d.reg, d.component); })
                             : real(component(corner, d.reg, d.component));
       if (clip_varyings)
-        air.CreateSetMeshVertexData(vertex, varyings.size() + distance.index(), value);
+        air.CreateSetMeshVertexData(vertex, varyings.size() + distance_index, value);
       else
-        air.CreateSetMeshClipDistance(vertex, builder.getInt32(distance.index()), value);
+        air.CreateSetMeshClipDistance(vertex, builder.getInt32(distance_index), value);
     }
     if (triangle)
       conservative_varyings(
@@ -2485,7 +2526,7 @@ stream_out_primitives(
     return builder.CreateLoad(i < 0 ? targets_type->getElementType(f) : types._long, ptr);
   };
   auto device = [&](llvm::Type *ty, pvalue address) {
-    return builder.CreateIntToPtr(address, ty->getPointerTo((uint32_t)air::AddressSpace::device));
+    return builder.CreateIntToPtr(address, llvm::PointerType::get(ty->getContext(), (uint32_t)air::AddressSpace::device));
   };
   auto when = [&](pvalue cond, auto then) {
     auto yes = llvm::BasicBlock::Create(context, "so_yes", function), no = llvm::BasicBlock::Create(context, "so_no", function);
@@ -2607,7 +2648,7 @@ stream_out_vertex(
     return builder.CreateLoad(i < 0 ? targets_type->getElementType(f) : types._long, ptr);
   };
   auto device = [&](llvm::Type *ty, pvalue address) {
-    return builder.CreateIntToPtr(address, ty->getPointerTo((uint32_t)air::AddressSpace::device));
+    return builder.CreateIntToPtr(address, llvm::PointerType::get(ty->getContext(), (uint32_t)air::AddressSpace::device));
   };
   auto when = [&](pvalue cond, auto then) {
     auto yes = llvm::BasicBlock::Create(context, "so_yes", function), no = llvm::BasicBlock::Create(context, "so_no", function);
@@ -2957,7 +2998,7 @@ convert_dxbc_vertex_for_geometry_shader(
 
   resource_map.input.ptr_int4 = builder.CreateAlloca(llvm::ArrayType::get(types._int4, max_input_register));
   resource_map.input.ptr_float4 = builder.CreateBitCast(
-      resource_map.input.ptr_int4, llvm::ArrayType::get(types._float4, max_input_register)->getPointerTo()
+      resource_map.input.ptr_int4, llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_input_register)->getContext(), 0)
   );
   resource_map.input_element_count = max_input_register;
 
@@ -2982,7 +3023,7 @@ convert_dxbc_vertex_for_geometry_shader(
     );
     resource_map.output.ptr_float4 = builder.CreateBitCast(
         resource_map.output.ptr_int4,
-        llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo((uint32_t)air::AddressSpace::threadgroup)
+        llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_output_register)->getContext(), (uint32_t)air::AddressSpace::threadgroup)
     );
   }
   auto payload_output_ptr = mesh_only ? nullptr : builder.CreateConstInBoundsGEP1_32(
@@ -2996,12 +3037,12 @@ convert_dxbc_vertex_for_geometry_shader(
     builder.CreateStore(llvm::ConstantAggregateZero::get(llvm::ArrayType::get(types._int4, max_output_register)), direct_outputs);
     resource_map.output.ptr_int4 = direct_outputs;
     resource_map.output.ptr_float4 = builder.CreateBitCast(
-        direct_outputs, llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo()
+        direct_outputs, llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_output_register)->getContext(), 0)
     );
   } else if (!mesh_only) {
     resource_map.output.ptr_int4 = builder.CreateBitCast(
         payload_output_ptr,
-        llvm::ArrayType::get(types._int4, max_output_register)->getPointerTo((uint32_t)air::AddressSpace::object_data)
+        llvm::PointerType::get(llvm::ArrayType::get(types._int4, max_output_register)->getContext(), (uint32_t)air::AddressSpace::object_data)
     );
     resource_map.output.ptr_int4 = builder.CreateGEP(
         llvm::ArrayType::get(types._int4, max_output_register), resource_map.output.ptr_int4,
@@ -3009,7 +3050,7 @@ convert_dxbc_vertex_for_geometry_shader(
     );
     resource_map.output.ptr_float4 = builder.CreateBitCast(
         payload_output_ptr,
-        llvm::ArrayType::get(types._float4, max_output_register)->getPointerTo((uint32_t)air::AddressSpace::object_data)
+        llvm::PointerType::get(llvm::ArrayType::get(types._float4, max_output_register)->getContext(), (uint32_t)air::AddressSpace::object_data)
     );
     resource_map.output.ptr_float4 = builder.CreateGEP(
         llvm::ArrayType::get(types._float4, max_output_register), resource_map.output.ptr_float4,
@@ -3317,7 +3358,7 @@ convert_dxbc_vertex_for_geometry_shader(
     auto field = [&](uint32_t f) {
       return builder.CreateLoad(targets_type->getElementType(f), builder.CreateStructGEP(targets_type, targets, f));
     };
-    auto scratch = builder.CreateIntToPtr(field(3), types._int->getPointerTo((uint32_t)air::AddressSpace::device));
+    auto scratch = builder.CreateIntToPtr(field(3), llvm::PointerType::get(types._int->getContext(), (uint32_t)air::AddressSpace::device));
     auto group = builder.CreateAdd(builder.CreateMul(instance_id, field(4)), warp_id);
     auto blocks_before = builder.CreateLShr(group, kStreamOutputBlockShift);
     auto block_start = builder.CreateShl(blocks_before, kStreamOutputBlockShift);
@@ -3521,12 +3562,12 @@ convert_dxbc_vertex_for_geometry_shader(
         auto value = component(from, v.reg, v.component);
         air.CreateSetMeshVertexData(vertex, builder.getInt32(v.index), v.integer ? value : real(value));
       }
-      for (auto distance : llvm::enumerate(pShaderInternal->clip_distance_scalars)) {
-        auto value = real(component(from, distance.value().reg, distance.value().component));
+      for (auto [distance_index, distance_value] : std::views::enumerate(pShaderInternal->clip_distance_scalars)) {
+        auto value = real(component(from, distance_value.reg, distance_value.component));
         if (mesh_clip_varyings)
-          air.CreateSetMeshVertexData(vertex, builder.getInt32(mesh_clip_at + distance.index()), value);
+          air.CreateSetMeshVertexData(vertex, builder.getInt32(mesh_clip_at + distance_index), value);
         else
-          air.CreateSetMeshClipDistance(vertex, builder.getInt32(distance.index()), value);
+          air.CreateSetMeshClipDistance(vertex, builder.getInt32(distance_index), value);
       }
       air.CreateSetMeshIndex(vertex, vertex);
     }
@@ -3546,7 +3587,7 @@ convert_dxbc_vertex_for_geometry_shader(
     builder.CreateStore(
         so_before[s], builder.CreateBitCast(
                           builder.CreateConstInBoundsGEP1_32(types._int, payload, kPayloadStreamOutputBase + 2 * s),
-                          types._long->getPointerTo(payload->getType()->getPointerAddressSpace())
+                          llvm::PointerType::get(types._long->getContext(), payload->getType()->getPointerAddressSpace())
                       )
     );
 

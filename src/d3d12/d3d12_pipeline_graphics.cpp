@@ -1687,8 +1687,10 @@ public:
         !stream_output && !tessellation &&
         !mesh_shader && (plain ? pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
                                : ref_gs.GeometryShader.ConservativeFits);
-    wire_snap = plain && !stream_output && !ref_vs.ClipDistances && !ref_vs.CullDistances &&
-        pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE &&
+    wire_snap = !stream_output && !tessellation && !mesh_shader &&
+        (plain ? !ref_vs.ClipDistances && !ref_vs.CullDistances &&
+                 pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+               : ref_gs.GeometryShader.ConservativeFits && !ref_gs.ClipDistances && !ref_gs.CullDistances) &&
         pDesc->RasterizerState.FillMode == D3D12_FILL_MODE_WIREFRAME;
     bool pass_through = plain && pDesc->PrimitiveTopologyType != D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH &&
                         ((ref_vs.CullDistances && !culls) || (stream_output && so_data.rasterized_stream == 0) || wire_slope || wire_snap || quad_lines ||
