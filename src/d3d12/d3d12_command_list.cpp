@@ -1362,7 +1362,7 @@ public:
       cmd_setrs.fill_mode = pso_graphics_->fill_mode;
       // one by one: libstdc++ assigns no std::array to a std::tuple of references
       auto [depth_bias, depth_bias_clamp, scole_scale] =
-          (pso_graphics_->unbiased || (pso_graphics_->fragment_depth_bias && !pso_graphics_->clamp_hardware_bias)) ? std::array<FLOAT, 3>{}
+          (pso_graphics_->wire_slope || pso_graphics_->unbiased || (pso_graphics_->fragment_depth_bias && !pso_graphics_->clamp_hardware_bias)) ? std::array<FLOAT, 3>{}
                                   : depth_bias_.value_or(std::array{
                                         pso_graphics_->depth_bias, pso_graphics_->depth_bias_clamp, pso_graphics_->scole_scale
                                     });
@@ -1444,16 +1444,27 @@ public:
     // empty scissor says to Metal, whatever viewport it has there
     static_assert(SM50_VIEWPORTS == D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
     // the depth ranges, then the blend factor of a pixel shader that blends itself (SM50_SHADER_BLEND)
-    if (dirty_state_.test(DirtyState::Viewport) || (pso_graphics_->fragment_depth_bias && conservative_dirty) ||
+    if (dirty_state_.test(DirtyState::Viewport) || ((pso_graphics_->fragment_depth_bias || pso_graphics_->wire_slope) && conservative_dirty) ||
         (dirty_state_.test(DirtyState::BlendFactor) && pso_graphics_->shader_blend)) {
       auto [ranges, ranges_offset] =
-          allocator_->AllocateGPUHeap((2 * count + std::size(blend_factor_) + (pso_graphics_->fragment_depth_bias ? 4 : 0)) * sizeof(float), alignof(float));
+          allocator_->AllocateGPUHeap((2 * count + std::size(blend_factor_) + (pso_graphics_->wire_slope ? 4 * count : pso_graphics_->fragment_depth_bias ? 4 : 0)) * sizeof(float), alignof(float));
       // with no viewport set, Metal's own has the range 0 to 1
       for (auto i = 0u; i < count; i++) {
         ((float *)ranges)[2 * i] = num_viewports ? viewports[i < num_viewports ? i : 0].MinDepth : 0;
         ((float *)ranges)[2 * i + 1] = num_viewports ? viewports[i < num_viewports ? i : 0].MaxDepth : 1;
       }
       std::copy_n(blend_factor_, std::size(blend_factor_), (float *)ranges + 2 * count);
+      if (pso_graphics_->wire_slope) {
+        auto bias = static_cast<float *>(ranges) + 2 * count + std::size(blend_factor_);
+        for (UINT i = 0; i < count; ++i) {
+          const auto &vp = viewports[i < num_viewports ? i : 0];
+          float span = num_viewports ? 2 * std::abs(vp.MaxDepth - vp.MinDepth) : 0;
+          bias[4*i] = num_viewports && vp.Width ? span / vp.Width : 0;
+          bias[4*i+1] = num_viewports && vp.Height ? span / vp.Height : 0;
+          bias[4*i+2] = depth_bias_ ? (*depth_bias_)[2] : pso_graphics_->scole_scale;
+          bias[4*i+3] = depth_bias_ ? (*depth_bias_)[1] : pso_graphics_->depth_bias_clamp;
+        }
+      }
       if (pso_graphics_->fragment_depth_bias) {
         auto [constant, clamp, slope] = depth_bias_.value_or(std::array{
             pso_graphics_->depth_bias, pso_graphics_->depth_bias_clamp, pso_graphics_->scole_scale});

@@ -638,6 +638,7 @@ public:
   // it rasterizes points or lines, which take no depth bias (D3D11.3 15.10); Metal gives them one with a stray slope
   // when an indirect command buffer draws them, so none is set
   bool unbiased = false;
+  bool wire_slope = false;
   bool fragment_depth_bias = false;
   bool clamp_hardware_bias = false;
   uint32_t depth_bias_unorm_max = 0;

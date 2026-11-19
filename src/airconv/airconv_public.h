@@ -650,6 +650,7 @@ struct SM50_SHADER_PSO_PIXEL_SHADER_DATA {
   uint32_t shading_rate_varying;
   /* lines reach the rasterizer as quadrilaterals (SM50_SHADER_PSO_GEOMETRY_SHADER_DATA's quad_lines), whose
      barycentrics are SM50_BARYCENTRIC_ROWS */
+  bool wire_slope;
   bool quad_lines;
   /* with conservative: the mesh stage passes on the polygon of the pixels the primitive touches
      (SM50_SHADER_PSO_GEOMETRY_SHADER_DATA's conservative_hull), so the shader tests no pixel, and writes the depth
@@ -831,6 +832,7 @@ struct SM50_SHADER_PSO_GEOMETRY_SHADER_DATA {
   bool cull_distance_varyings;
   /* the lines passed on are quadrilaterals (D3D11.3 3.4.5): two counterclockwise triangles, which the pipeline
      draws with no culling, no depth bias, solid fill and counterclockwise front faces, as lines are drawn */
+  bool wire_slope;
   bool quad_lines;
   /* the pixel shader reads barycentrics, which quadrilaterals and conservative triangles pass on as
      SM50_BARYCENTRIC_ROWS */
