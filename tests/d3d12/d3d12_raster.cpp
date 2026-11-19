@@ -46,6 +46,22 @@ int main(int argc, char **argv) {
   if (!expect(!!rs, "root signature was not created"))
     return verdict();
   auto all = raster::cases();
+  const auto original_cases = all.size();
+  for (size_t i = 0; i < original_cases; i++) {
+    if (all[i].geometry || all[i].name != "post-snap degeneracy, ties and face culling")
+      continue;
+    for (bool horizontal : {false, true}) {
+      auto c = all[i];
+      c.name = "wireframe ties with translated viewport and homogeneous scale";
+      c.viewport.x = 0.25f;
+      c.viewport.y = 0.25f;
+      for (auto &v : c.vertices) {
+        if (horizontal) std::swap(v.position[0], v.position[1]);
+        for (auto &coordinate : v.position) coordinate *= 2;
+      }
+      all.push_back(std::move(c));
+    }
+  }
   auto boundaries = raster::viewport_boundaries(D3D12_VIEWPORT_BOUNDS_MIN, D3D12_VIEWPORT_BOUNDS_MAX);
   all.insert(all.end(), boundaries.begin(), boundaries.end());
   auto conservative = raster_conservative::cases(options.ConservativeRasterizationTier);

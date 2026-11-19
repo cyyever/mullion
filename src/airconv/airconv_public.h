@@ -837,6 +837,8 @@ struct SM50_SHADER_PSO_GEOMETRY_SHADER_DATA {
   bool cull_distance_varyings;
   /* the lines passed on are quadrilaterals (D3D11.3 3.4.5): two counterclockwise triangles, which the pipeline
      draws with no culling, no depth bias, solid fill and counterclockwise front faces, as lines are drawn */
+  /* round unclipped wireframe triangle positions to the D3D subpixel grid */
+  bool wire_snap;
   bool wire_slope;
   bool quad_lines;
   bool aliased_lines;
