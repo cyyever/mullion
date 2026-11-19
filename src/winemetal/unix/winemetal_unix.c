@@ -2863,6 +2863,7 @@ struct SM50_SHADER_PSO_PIXEL_SHADER_DATA32 {
   uint32_t sample_mask;
   bool dual_source_blending;
   bool disable_depth_output;
+  bool quantize_d24;
   uint32_t unorm_output_reg_mask;
   /** MTLPixelFormat */
   uint32_t pixel_formats[8];
@@ -2981,6 +2982,7 @@ sm50_compilation_argument32_convert(
       data->type = src->type;
       data->unorm_output_reg_mask = src->unorm_output_reg_mask;
       data->disable_depth_output = src->disable_depth_output;
+      data->quantize_d24 = src->quantize_d24;
       data->sample_mask = src->sample_mask;
       data->dual_source_blending = src->dual_source_blending;
       memcpy(data->pixel_formats, src->pixel_formats, sizeof(data->pixel_formats));
