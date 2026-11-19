@@ -36,6 +36,16 @@ static std::unique_ptr<llvm::Module> convert(llvm::StringRef ir, llvm::LLVMConte
 
 int main() {
   llvm::LLVMContext context;
+  // Cleaning one constant's dead users must not invalidate another expression
+  // still queued for expansion/cleanup (the ptrtoint uses the same GEP).
+  auto nested = convert(R"(
+    @words = internal addrspace(3) global [2 x i32] zeroinitializer
+    define i64 @nested_constants() {
+      %value = load volatile i32, ptr addrspace(3) getelementptr ([2 x i32], ptr addrspace(3) @words, i64 0, i64 1)
+      ret i64 ptrtoint (ptr addrspace(3) getelementptr ([2 x i32], ptr addrspace(3) @words, i64 0, i64 1) to i64)
+    }
+  )", context);
+  require(!llvm::verifyModule(*nested, &llvm::errs()), "invalid nested constant round trip");
   auto values = convert(R"(
     define noundef range(i32 0, 128) i32 @f(i32 noundef range(i32 0, 128) %x) norecurse {
       ret i32 %x
