@@ -50,6 +50,7 @@ int main(int argc, char **argv) {
   all.insert(all.end(), boundaries.begin(), boundaries.end());
   auto conservative = raster_conservative::cases(options.ConservativeRasterizationTier);
   all.insert(all.end(), conservative.begin(), conservative.end());
+  const auto alias_begin = all.size();
   for (auto weights : {std::array{1.0f, 1.0f}, std::array{0.0625f, 16.0f}, std::array{16.0f, 0.0625f}})
     for (bool reverse : {false, true}) {
       auto c = raster::base("aliased line position interpolation with unequal homogeneous weights");
@@ -73,6 +74,13 @@ int main(int argc, char **argv) {
     c.vertices = {vertex(2.25f, 3.25f), vertex(12.25f, 9.25f)};
     all.push_back(c);
   }
+  const auto alias_end = all.size();
+  for (auto i = alias_begin; i < alias_end; i++) {
+    auto c = all[i];
+    c.geometry = true;
+    c.name += " through GS";
+    all.push_back(std::move(c));
+  }
   const auto strip_begin = all.size();
   for (auto mode : {raster::None, raster::Clip, raster::Cull})
     for (bool tall : {false, true}) {
@@ -86,6 +94,11 @@ int main(int argc, char **argv) {
       b.distance.fill(mode == raster::Cull ? -1 : 1);
       c.vertices = {a, b, b, a, a, b};
       all.push_back(c);
+      if (mode == raster::None) {
+        c.multisample = false;
+        c.name = "aliased GS line strips retain adjacent vertices and RestartStrip boundaries";
+        all.push_back(std::move(c));
+      }
     }
   const auto capacity = std::max_element(all.begin(), all.end(), [](const auto &a, const auto &b) {
                           return a.vertices.size() < b.vertices.size();

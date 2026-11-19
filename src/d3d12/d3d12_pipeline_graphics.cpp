@@ -1661,12 +1661,15 @@ public:
                          : 0;
     // and passes lines on as quadrilaterals (D3D11.3 15.14.1, SM50_SHADER_PSO_GEOMETRY_SHADER_DATA)
     // Position-only single-sample lines can reconstruct their position after exact coverage testing.
-    aliased_lines = plain && !stream_output && pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE &&
+    aliased_lines = !tessellation && !mesh_shader && !stream_output &&
+        (plain ? pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
+               : ref_gs.GeometryShader.AliasedLinesFits) &&
         !pDesc->RasterizerState.MultisampleEnable && !pDesc->RasterizerState.AntialiasedLineEnable &&
         pDesc->SampleDesc.Count == 1 && !pDesc->RasterizerState.ForcedSampleCount &&
         pDesc->PS.BytecodeLength && !ref_ps.PixelShader.EarlyTests && !ref_ps.PixelShader.Barycentrics &&
-        !PixelShaderVaryings(pDesc->PS) && VertexShaderVaryings(pDesc->VS) <= 116 &&
-        !ref_vs.ClipDistances && !ref_vs.CullDistances &&
+        !PixelShaderVaryings(pDesc->PS) &&
+        (plain ? VertexShaderVaryings(pDesc->VS) <= 116 && !ref_vs.ClipDistances && !ref_vs.CullDistances
+               : !ref_gs.ClipDistances && !ref_gs.CullDistances) &&
         pDesc->DSVFormat == DXGI_FORMAT_UNKNOWN && !pDesc->DepthStencilState.DepthEnable &&
         !pDesc->DepthStencilState.StencilEnable;
     bool quad_lines = aliased_lines ||

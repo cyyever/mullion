@@ -144,6 +144,8 @@ struct MTL_GEOMETRY_SHADER_REFLECTION {
   uint32_t ConservativeFits;
   /* whether four vertices and two triangles per output line fit a Metal mesh */
   uint32_t QuadLinesFits;
+  /* includes two float4 endpoints per generated triangle */
+  uint32_t AliasedLinesFits;
   /* whether every invocation emits and cuts the same on each stream, its code having no branches, and no more than
      its maxvertexcount: stream output then knows each invocation's primitives before it runs
      (SM50_SHADER_STREAM_OUTPUT_DATA's single_pass) */
