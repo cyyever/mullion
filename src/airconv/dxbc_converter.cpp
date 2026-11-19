@@ -2201,6 +2201,13 @@ static int SM50InitializeUncached(
           sm50_shader->gs_output_topology == microsoft::D3D10_SB_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP && triangles &&
           3 * triangles <= 256 && triangles <= 512 &&
           mullion::dxbc::mesh_size(3 * triangles, vertex_size, triangles * 4) <= mullion::dxbc::mesh_size_limit;
+      uint32_t lines = sm50_shader->gs_max_vertex_output > 1 ? sm50_shader->gs_max_vertex_output - 1 : 0;
+      uint32_t line_vertex_size = sizeof(float[4]) + sm50_shader->num_mesh_vertex_data * 4 +
+                                  sm50_shader->clip_distance_scalars.size() * sizeof(float);
+      pRefl->GeometryShader.QuadLinesFits =
+          sm50_shader->gs_output_topology == microsoft::D3D10_SB_PRIMITIVE_TOPOLOGY_LINESTRIP && lines &&
+          4 * lines <= 256 &&
+          mullion::dxbc::mesh_size(4 * lines, line_vertex_size, 2 * lines * 4) <= mullion::dxbc::mesh_size_limit;
       pRefl->GeometryShader.FixedEmits = mullion::dxbc::fixed_stream_primitives(sm50_shader).has_value();
       pRefl->GeometryShader.MeshInvocations = mullion::dxbc::geometry_mesh_invocations(sm50_shader);
     }

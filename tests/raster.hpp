@@ -139,6 +139,11 @@ V vs(Input i) {
 #endif
   return v;
 }
+[maxvertexcount(5)] void gs_line_strips(line V input[2], inout LineStream<V> stream) {
+  stream.Append(input[0]); stream.Append(input[1]); stream.Append(input[0]);
+  stream.RestartStrip();
+  stream.Append(input[0]); stream.Append(input[1]);
+}
 [maxvertexcount(1)] void gs_point(point V input[1], inout PointStream<V> stream) { stream.Append(input[0]); }
 [maxvertexcount(2)] void gs_line(line V input[2], inout LineStream<V> stream) { stream.Append(input[0]);stream.Append(input[1]); }
 [maxvertexcount(3)] void gs_triangle(triangle V input[3], inout TriangleStream<V> stream) {

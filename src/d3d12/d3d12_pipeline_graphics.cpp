@@ -869,7 +869,7 @@ protected:
     pso_gs.clip_distance_varyings = in.clip_distance_varyings;
     pso_gs.cull_distance_varyings = in.cull_distance_varyings && pso_gs.pass_through;
     pso_gs.wire_slope = in.wire_slope && !counting;
-    pso_gs.quad_lines = in.quad_lines && pass_through && !counting;
+    pso_gs.quad_lines = in.quad_lines && !counting;
     pso_gs.conservative = in.conservative && !counting && (in.gs || pass_through);
     pso_gs.conservative_hull = pso_gs.conservative && in.conservative_hull && !in.gs;
     pso_gs.conservative_inner = in.conservative_inner;
@@ -1660,7 +1660,10 @@ public:
                          : 0;
     // and passes lines on as quadrilaterals (D3D11.3 15.14.1, SM50_SHADER_PSO_GEOMETRY_SHADER_DATA)
     bool quad_lines =
-        plain && pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE && pDesc->RasterizerState.MultisampleEnable;
+        pDesc->RasterizerState.MultisampleEnable &&
+        (plain ? pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
+               : !tessellation && !mesh_shader && !stream_output && ref_gs.GeometryShader.QuadLinesFits &&
+                 !ref_ps.PixelShader.Barycentrics);
     // D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS is absent from the current MinGW headers.
     constexpr unsigned dynamic_depth_bias = 4;
     // Metal wireframe uses edge slopes. Carry the final triangle plane to SV_Position.z instead.
@@ -1681,7 +1684,8 @@ public:
     // as the geometry stage's arguments have them (GeometryArguments): its invocations share mesh threadgroups where
     // the pipeline rasterizes what it emits as it is
     gs_mesh_invocations = bool(pDesc->GS.pShaderBytecode) && !tessellation
-                              ? SM50GeometryMeshInvocations(ref_gs.GeometryShader.MeshInvocations, conservative, stream_output)
+                              ? SM50GeometryMeshInvocations(ref_gs.GeometryShader.MeshInvocations,
+                                                            conservative || quad_lines || wire_slope, stream_output)
                               : 1;
     adjacency = plain && (pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE ||
                           pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);

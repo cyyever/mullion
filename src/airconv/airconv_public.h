@@ -142,6 +142,8 @@ struct MTL_GEOMETRY_SHADER_REFLECTION {
   /* whether a conservative rasterizer can grow the triangles it emits: three vertices for each, as many as its strip
      of the most vertices has, fit a mesh (SM50_SHADER_PSO_GEOMETRY_SHADER_DATA's conservative) */
   uint32_t ConservativeFits;
+  /* whether four vertices and two triangles per output line fit a Metal mesh */
+  uint32_t QuadLinesFits;
   /* whether every invocation emits and cuts the same on each stream, its code having no branches, and no more than
      its maxvertexcount: stream output then knows each invocation's primitives before it runs
      (SM50_SHADER_STREAM_OUTPUT_DATA's single_pass) */

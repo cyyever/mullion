@@ -27,6 +27,29 @@ namespace mullion::dxbc {
 
 using namespace microsoft;
 
+// Offset a line by half its 1.4-pixel width in homogeneous coordinates.
+static pvalue
+line_half_width(llvm::IRBuilder<> &builder, llvm::air::AIRBuilder &air, air::AirType &types,
+                pvalue a, pvalue b, pvalue raster_scale, pvalue chosen_viewport) {
+    auto at = [&](pvalue v, uint32_t i) { return builder.CreateExtractElement(v, i); };
+    auto size = [&](uint32_t i) {
+      auto index = builder.CreateAdd(builder.CreateShl(chosen_viewport, 1), builder.getInt32(1 + i));
+      return builder.CreateLoad(types._float, builder.CreateGEP(types._float, raster_scale, index));
+    };
+    auto w = size(0), h = size(1);
+    auto sx = builder.CreateFMul(w, builder.CreateFSub(builder.CreateFMul(at(b, 0), at(a, 3)), builder.CreateFMul(at(a, 0), at(b, 3))));
+    auto sy = builder.CreateFMul(h, builder.CreateFSub(builder.CreateFMul(at(b, 1), at(a, 3)), builder.CreateFMul(at(a, 1), at(b, 3))));
+    constexpr float line_width = 1.4f;
+    auto scale = builder.CreateFDiv(
+        llvm::ConstantFP::get(types._float, line_width),
+        air.CreateFPUnOp(llvm::air::AIRBuilder::sqrt, builder.CreateFAdd(builder.CreateFMul(sx, sx), builder.CreateFMul(sy, sy)), false)
+    );
+    return builder.CreateInsertElement(
+        builder.CreateInsertElement(llvm::ConstantAggregateZero::get(types._float4), builder.CreateFDiv(builder.CreateFMul(scale, sy), w), (uint64_t)0),
+        builder.CreateFNeg(builder.CreateFDiv(builder.CreateFMul(scale, sx), h)), 1
+    );
+}
+
 // the vertices of an input primitive
 static uint32_t
 vertices_per_primitive(D3D10_SB_PRIMITIVE primitive) {
@@ -99,7 +122,10 @@ geometry_mesh_invocations(const SM50ShaderInternal *pShaderInternal, SM50_SHADER
   args_get_data<SM50_SHADER_PSO_GEOMETRY_SHADER, SM50_SHADER_PSO_GEOMETRY_SHADER_DATA>(pArgs, &pso_data);
   SM50_SHADER_STREAM_OUTPUT_DATA *so = nullptr;
   args_get_data<SM50_SHADER_STREAM_OUTPUT, SM50_SHADER_STREAM_OUTPUT_DATA>(pArgs, &so);
-  return SM50GeometryMeshInvocations(geometry_mesh_invocations(pShaderInternal), pso_data && pso_data->conservative, so);
+  return SM50GeometryMeshInvocations(
+      geometry_mesh_invocations(pShaderInternal),
+      pso_data && (pso_data->conservative || pso_data->quad_lines || pso_data->wire_slope), so
+  );
 }
 
 std::optional<std::array<uint32_t, 4>>
@@ -731,6 +757,7 @@ convert_dxbc_geometry_shader(
   bool conservative = (pso_tess ? pso_tess->conservative : pso_data && pso_data->conservative) &&
                       topology == air::MeshOutputTopology::Triangle &&
                       max_vertex_out >= 3;
+  const bool quads = pso_data && pso_data->quad_lines && topology == air::MeshOutputTopology::Line;
   const bool wire_slope = pso_data && pso_data->wire_slope && topology == air::MeshOutputTopology::Triangle;
   if (wire_slope)
     func_signature.DefineMeshPrimitiveOutput(air::OutputMeshData{.user = "mullion_wire_gradient", .type = air::msl_float2, .index = 0});
@@ -745,12 +772,13 @@ convert_dxbc_geometry_shader(
   // it leaves are culled, so the mesh has all of them. a conservative or stream output pipeline's runs one
   uint32_t invocations = pHullStage ? 1 : geometry_mesh_invocations(pShaderInternal, pArgs);
   bool packed = invocations > 1;
-  if (packed && conservative)
-    return llvm::make_error<UnsupportedFeature>("conservative geometry shader invocations sharing a mesh threadgroup");
+  if (packed && (conservative || quads))
+    return llvm::make_error<UnsupportedFeature>("conservative or quad-line geometry shader invocations sharing a mesh threadgroup");
   // it's intended to declare a bit more max primitive count
   auto mesh_idx = func_signature.DefineInput(air::InputMesh{
-      conservative ? 3 * triangles : invocations * mesh_vertices, conservative ? triangles : invocations * mesh_vertices,
-      topology
+      quads ? 4 * (max_vertex_out - 1) : conservative ? 3 * triangles : invocations * mesh_vertices,
+      quads ? 2 * (max_vertex_out - 1) : conservative ? triangles : invocations * mesh_vertices,
+      quads ? air::MeshOutputTopology::Triangle : topology
   });
   uint32_t tg_in_grid_idx = func_signature.DefineInput(air::InputThreadgroupPositionInGrid{});
   // a tessellated draw's mesh threadgroups have the domain stage's threads, of which the first does the work; a
@@ -788,7 +816,7 @@ convert_dxbc_geometry_shader(
     func_signature.DefineMeshVertexOutput(air::OutputPointSize{});
   // Metal culls by primitive, where Direct3D discards one whose vertices are all behind a cull distance (15.4.2), and
   // a conservative rasterizer one that its clipping leaves nothing of
-  bool culls = pShaderInternal->cull_distance_scalars.size() || conservative;
+  bool culls = pShaderInternal->cull_distance_scalars.size() || conservative || quads;
   // and the primitives a packed invocation leaves are culled
   if (culls || packed)
     func_signature.DefineMeshPrimitiveOutput(air::OutputPrimitiveCulled{});
@@ -955,6 +983,27 @@ convert_dxbc_geometry_shader(
       builder.CreateStore(llvm::ConstantAggregateZero::get(types._float4), slot = builder.CreateAlloca(types._float4));
   }
 
+  // Indices are prepared when a strip's first vertex is emitted. Do not prepare
+  // a trailing primitive whose future vertices cannot fit the declared mesh.
+  auto prepare_indices = [&](pvalue first_vertex, uint32_t corners, auto emit) {
+    auto head = builder.GetInsertBlock();
+    auto write = llvm::BasicBlock::Create(context, "mesh_indices", function);
+    auto after = llvm::BasicBlock::Create(context, "mesh_indices_after", function);
+    if (builder.GetInsertPoint() != head->end()) {
+      auto rest = llvm::SplitBlock(head, &*builder.GetInsertPoint());
+      head->getTerminator()->eraseFromParent();
+      builder.SetInsertPoint(after);
+      builder.CreateBr(rest);
+      builder.SetInsertPoint(head);
+    }
+    builder.CreateCondBr(builder.CreateICmpULT(builder.CreateAdd(first_vertex, builder.getInt32(corners - 1)),
+                                               builder.getInt32(mesh_vertices)), write, after);
+    builder.SetInsertPoint(write);
+    emit();
+    builder.CreateBr(after);
+    builder.SetInsertPoint(after, after->getFirstInsertionPt());
+  };
+
   // what the rasterized stream's emit and cut make of the mesh
   std::function<IREffect()> mesh_emit, mesh_cut;
   if (topology == air::MeshOutputTopology::Triangle) {
@@ -988,6 +1037,7 @@ convert_dxbc_geometry_shader(
       emit_clip_distances(current_vertex_with_offset);
       cull_primitive(current_write_vertex, current_primitive_count, 3);
 
+      prepare_indices(current_vertex_with_offset, 3, [&] {
       auto triple_primitive_idx = builder.CreateMul(current_primitive_idx, builder.getInt32(3));
       air.CreateSetMeshIndex(
           builder.CreateAdd(triple_primitive_idx, zero_const), current_vertex_with_offset
@@ -1000,6 +1050,7 @@ convert_dxbc_geometry_shader(
           builder.CreateAdd(triple_primitive_idx, two_const),
           builder.CreateAdd(builder.CreateAdd(current_vertex_with_offset, one_const), even_winding)
       );
+      });
 
       builder.CreateStore(builder.CreateAdd(one_const, current_write_vertex), next_write_vertex);
 
@@ -1048,11 +1099,12 @@ convert_dxbc_geometry_shader(
             builder.CreateSelect(
                 complete,
                 builder.CreateSelect(culled, builder.CreateSub(current_vertex_with_offset, one_const), current_vertex_with_offset),
-                builder.CreateAdd(current_vertex_with_offset, one_const)
+                current_vertex_with_offset
             )
         );
       }
 
+      prepare_indices(current_vertex_with_offset, 2, [&] {
       auto double_primitive_idx = builder.CreateMul(current_primitive_idx, builder.getInt32(2));
       air.CreateSetMeshIndex(
           builder.CreateAdd(double_primitive_idx, zero_const), current_vertex_with_offset
@@ -1061,6 +1113,7 @@ convert_dxbc_geometry_shader(
           builder.CreateAdd(double_primitive_idx, one_const),
           builder.CreateAdd(current_vertex_with_offset, one_const)
       );
+      });
 
       co_return {};
     };
@@ -1196,6 +1249,107 @@ convert_dxbc_geometry_shader(
         culled = builder.CreateOr(culled, behind);
       }
       air.CreateSetMeshPrimitiveCulled(primitive, culled);
+      builder.CreateBr(after);
+      builder.SetInsertPoint(after, after->getFirstInsertionPt());
+      co_return {};
+    };
+    mesh_cut = [&]() -> IREffect {
+      builder.CreateStore(zero_const, next_write_vertex);
+      co_return {};
+    };
+  }
+
+  if (quads) {
+    {
+      llvm::IRBuilder<>::InsertPointGuard guard(builder);
+      builder.SetInsertPoint(&*function->getEntryBlock().getFirstInsertionPt());
+      ring = builder.CreateAlloca(ring_type);
+      emitted = builder.CreateAlloca(types._int);
+    }
+    builder.CreateStore(zero_const, emitted);
+    for (auto &element : pShaderInternal->output_signature) {
+      if (element.systemValue() == D3D10_SB_NAME_POSITION)
+        position_reg = element.reg();
+      if (element.systemValue() == D3D10_SB_NAME_VIEWPORT_ARRAY_INDEX)
+        viewport_reg = element.reg(), viewport_component = std::countr_zero(element.mask());
+    }
+    auto output_at = [&](uint32_t reg) {
+      return builder.CreateGEP(registers_type, resource_map.output.ptr_int4, {zero_const, builder.getInt32(reg)});
+    };
+    auto ring_at = [&](pvalue slot, uint32_t reg) {
+      return builder.CreateGEP(ring_type, ring, {zero_const, slot, builder.getInt32(reg)});
+    };
+    mesh_emit = [&, output_at, ring_at]() -> IREffect {
+      auto written = builder.CreateLoad(types._int, next_write_vertex);
+      builder.CreateStore(builder.CreateAdd(written, one_const), next_write_vertex);
+      auto current = builder.CreateAnd(written, one_const);
+      auto previous = builder.CreateXor(current, one_const);
+      for (uint32_t reg = 0; reg < max_output_register; reg++)
+        builder.CreateStore(builder.CreateLoad(types._int4, output_at(reg)), ring_at(current, reg));
+      if (position_reg == ~0u)
+        co_return {};
+      auto head = builder.GetInsertBlock();
+      auto complete = llvm::BasicBlock::Create(context, "line_rectangle", function);
+      auto after = llvm::BasicBlock::Create(context, "line_after", function);
+      if (builder.GetInsertPoint() != head->end()) {
+        auto rest = llvm::SplitBlock(head, &*builder.GetInsertPoint());
+        head->getTerminator()->eraseFromParent();
+        builder.SetInsertPoint(after);
+        builder.CreateBr(rest);
+        builder.SetInsertPoint(head);
+      }
+      builder.CreateCondBr(builder.CreateICmpUGE(written, one_const), complete, after);
+      builder.SetInsertPoint(complete);
+      auto load = [&](pvalue slot, uint32_t reg) { return builder.CreateLoad(types._int4, ring_at(slot, reg)); };
+      auto a = builder.CreateBitCast(load(previous, position_reg), types._float4);
+      auto b = builder.CreateBitCast(load(current, position_reg), types._float4);
+      pvalue viewport = zero_const;
+      if (viewport_reg != ~0u)
+        viewport = builder.CreateExtractElement(load(previous, viewport_reg), uint64_t(viewport_component));
+      auto half_width = line_half_width(builder, air, types, a, b, function->getArg(raster_scale), viewport);
+      auto primitive = builder.CreateLoad(types._int, emitted);
+      auto vertex_base = builder.CreateMul(primitive, two_const);
+      builder.CreateStore(builder.CreateAdd(primitive, two_const), emitted);
+      pvalue culled = builder.getFalse();
+      for (auto &distance : pShaderInternal->cull_distance_scalars) {
+        auto behind = [&](pvalue slot) {
+          auto bits = builder.CreateExtractElement(load(slot, distance.reg), uint64_t(distance.component));
+          return builder.CreateFCmpULT(builder.CreateBitCast(bits, types._float), air.getFloat(0));
+        };
+        culled = builder.CreateOr(culled, builder.CreateAnd(behind(previous), behind(current)));
+      }
+      for (uint32_t u = 0; u < 4; u++) {
+        auto slot = u < 2 ? previous : current;
+        for (uint32_t reg = 0; reg < max_output_register; reg++)
+          builder.CreateStore(load(slot, reg), output_at(reg));
+        // The first endpoint supplies flat attributes and primitive system values.
+        for (auto &element : pShaderInternal->output_signature) {
+          auto reg = element.reg();
+          if ((flat_inputs >> reg & 1) || element.systemValue() == D3D10_SB_NAME_VIEWPORT_ARRAY_INDEX ||
+              element.systemValue() == D3D10_SB_NAME_RENDER_TARGET_ARRAY_INDEX)
+            builder.CreateStore(load(previous, reg), output_at(reg));
+        }
+        auto position = u < 2 ? a : b;
+        auto offset = builder.CreateFMul(half_width, builder.CreateVectorSplat(4, builder.CreateExtractElement(position, 3)));
+        auto grown = u % 2 ? builder.CreateFSub(position, offset) : builder.CreateFAdd(position, offset);
+        builder.CreateStore(builder.CreateBitCast(grown, types._int4), output_at(position_reg));
+        auto vertex = builder.CreateAdd(vertex_base, builder.getInt32(u));
+        // Set both triangles' primitive outputs through the ordinary GS handlers.
+        MeshOutputContext output{vertex, builder.CreateAdd(primitive, builder.getInt32(u / 2))};
+        for (auto &handler : gs_output_handlers)
+          co_yield handler(output);
+        emit_clip_distances(vertex);
+      }
+      constexpr uint32_t indices[] = {0, 2, 1, 1, 2, 3};
+      auto index_base = builder.CreateMul(primitive, builder.getInt32(3));
+      for (uint32_t i = 0; i < 6; i++)
+        air.CreateSetMeshIndex(builder.CreateAdd(index_base, builder.getInt32(i)),
+                               builder.CreateAdd(vertex_base, builder.getInt32(indices[i])));
+      air.CreateSetMeshPrimitiveCulled(primitive, culled);
+      air.CreateSetMeshPrimitiveCulled(builder.CreateAdd(primitive, one_const), culled);
+      // Emit does not modify the shader's output registers.
+      for (uint32_t reg = 0; reg < max_output_register; reg++)
+        builder.CreateStore(load(current, reg), output_at(reg));
       builder.CreateBr(after);
       builder.SetInsertPoint(after, after->getFirstInsertionPt());
       co_return {};
@@ -1698,7 +1852,7 @@ convert_dxbc_geometry_shader(
   }
   // a point is a primitive as it is emitted; a strip's are counted where it ends
   llvm::Value *rasterized = builder.CreateLoad(
-      types._int, conservative ? emitted : topology == air::MeshOutputTopology::Point ? next_write_vertex : primitive_count
+      types._int, (conservative || quads) ? emitted : topology == air::MeshOutputTopology::Point ? next_write_vertex : primitive_count
   );
   if (packed) {
     // this invocation's own, from its slots' first on
@@ -1754,7 +1908,7 @@ convert_dxbc_geometry_shader(
     };
     add(SM50_STATISTIC_GS_INVOCATIONS, one_const);
     add(SM50_STATISTIC_GS_PRIMITIVES, builder.CreateLoad(types._int, generated));
-    add(SM50_STATISTIC_RASTERIZED, rasterized);
+    add(SM50_STATISTIC_RASTERIZED, quads ? builder.CreateUDiv(rasterized, two_const) : rasterized);
     // an input primitive's first instance takes it; after a tessellator the hull stage took the patch
     if (!pHullStage)
       add(SM50_STATISTIC_GS_INPUTS, builder.CreateZExt(builder.CreateICmpEQ(resource_map.gs_instance_id, zero_const), types._int));
@@ -2115,25 +2269,7 @@ convert_pass_through_geometry_shader(
   // discarded
   pvalue half_width = nullptr;
   if (quads && clip[0]) {
-    auto a = clip[0], b = clip[1];
-    auto at = [&](pvalue v, uint32_t i) { return builder.CreateExtractElement(v, i); };
-    auto chosen_viewport = viewport();
-    auto size = [&](uint32_t i) {
-      auto index = builder.CreateAdd(builder.CreateShl(chosen_viewport, 1), builder.getInt32(1 + i));
-      return builder.CreateLoad(types._float, builder.CreateGEP(types._float, function->getArg(raster_scale), index));
-    };
-    auto w = size(0), h = size(1);
-    auto sx = builder.CreateFMul(w, builder.CreateFSub(builder.CreateFMul(at(b, 0), at(a, 3)), builder.CreateFMul(at(a, 0), at(b, 3))));
-    auto sy = builder.CreateFMul(h, builder.CreateFSub(builder.CreateFMul(at(b, 1), at(a, 3)), builder.CreateFMul(at(a, 1), at(b, 3))));
-    constexpr float line_width = 1.4f;
-    auto scale = builder.CreateFDiv(
-        llvm::ConstantFP::get(types._float, line_width),
-        air.CreateFPUnOp(llvm::air::AIRBuilder::sqrt, builder.CreateFAdd(builder.CreateFMul(sx, sx), builder.CreateFMul(sy, sy)), false)
-    );
-    half_width = builder.CreateInsertElement(
-        builder.CreateInsertElement(llvm::ConstantAggregateZero::get(types._float4), builder.CreateFDiv(builder.CreateFMul(scale, sy), w), (uint64_t)0),
-        builder.CreateFNeg(builder.CreateFDiv(builder.CreateFMul(scale, sx), h)), 1
-    );
+    half_width = line_half_width(builder, air, types, clip[0], clip[1], function->getArg(raster_scale), viewport());
   }
   // what of each of the primitive's corners each of a triangle's vertices has: its own corner's, or for a conservative
   // rasterizer's triangle what conservative_triangle finds there
