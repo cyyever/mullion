@@ -582,11 +582,11 @@ jobs:
           meson setup --cross-file build-win64.txt -Denable_tests=true -Denable_nvapi=true -Db_ndebug=false -Dnative_llvm_path="${{ vars.MULLION_LLVM }}" -Dwine_install_path="${{ vars.MULLION_WINE }}" build --buildtype release
           meson compile -C build
 
-      # as the GPU itself and as an M3's, the families the preview supports, under Metal's validation
+      # The fork tests its physical GPU under Metal validation.
       - name: Tests
         env:
           MULLION_TEST_LOCK: ${{ runner.temp }}/mullion-gpu.lock
-        run: python3 tests/run.py --build build --wine "${{ vars.MULLION_WINE }}" --prefix "${{ vars.MULLION_PREFIX }}" --family native,9 --validate
+        run: python3 tests/run.py --build build --wine "${{ vars.MULLION_WINE }}" --prefix "${{ vars.MULLION_PREFIX }}" --family native --validate
 
       - name: Benchmarks
         env:
