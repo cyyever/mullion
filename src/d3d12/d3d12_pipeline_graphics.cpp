@@ -478,10 +478,10 @@ CompileFunction(
       break;
     }
     case SM50_SHADER_PSO_PIXEL_SHADER: {
-      auto &[next, type, mask, dual, depth, unorm, formats, statistics, coverage, centered, single, paired, clips,
+      auto &[next, type, mask, dual, depth, d24, unorm, formats, statistics, coverage, centered, single, paired, clips,
              culls, cull_depth, blend, bounds, late, conservative, coarse, rate, quads, hull, patch] =
           *(SM50_SHADER_PSO_PIXEL_SHADER_DATA *)arg;
-      hash(mask, dual, depth, unorm, formats, statistics, coverage, centered, single, paired, clips, culls, cull_depth,
+      hash(mask, dual, depth, d24, unorm, formats, statistics, coverage, centered, single, paired, clips, culls, cull_depth,
            blend, bounds, late, conservative, coarse, rate, quads, hull, patch);
       break;
     }
@@ -1741,6 +1741,13 @@ public:
       data_ps.dual_source_blending = dual_source_blending;
       data_ps.disable_depth_output =
           (mesh ? mesh_info.depth_pixel_format : info.depth_pixel_format) == WMTPixelFormatInvalid;
+      // D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS is absent from the current MinGW headers.
+      constexpr unsigned dynamic_depth_bias = 4;
+      data_ps.quantize_d24 = pDesc->DSVFormat == DXGI_FORMAT_D24_UNORM_S8_UINT && pDesc->DepthStencilState.DepthEnable &&
+          (ref_ps.PixelShader.DepthOutput ||
+           (pDesc->SampleDesc.Count == 1 && !pDesc->RasterizerState.ForcedSampleCount &&
+            !(pDesc->Flags & dynamic_depth_bias) && pDesc->RasterizerState.DepthClipEnable && !pDesc->RasterizerState.DepthBias &&
+            !pDesc->RasterizerState.SlopeScaledDepthBias));
       data_ps.unorm_output_reg_mask = 0;
       data_ps.sample_mask = sample_mask;
       data_ps.type = SM50_SHADER_PSO_PIXEL_SHADER;

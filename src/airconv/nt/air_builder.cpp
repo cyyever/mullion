@@ -1979,7 +1979,7 @@ Value *
 AIRBuilder::CreateFPUnOp(FPUnOp Op, Value *Operand, bool FastVariant) {
   static char const *FnNames[] = {
       "saturate", "log2", "exp2", "sqrt", "rsqrt", "fract", "rint", "floor", "ceil", "trunc", "cos", "sin", "fabs",
-      "tan", "acos", "asin", "atan", "cosh", "sinh", "tanh",
+      "tan", "acos", "asin", "atan", "cosh", "sinh", "tanh", "round",
   };
 
   if (uint32_t(Op) >= std::size(FnNames)) {

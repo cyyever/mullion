@@ -408,6 +408,7 @@ public:
     cosh,
     sinh,
     tanh,
+    round,
   };
 
   Value *CreateFPUnOp(FPUnOp Op, Value *Operand, bool FastVariant = true);

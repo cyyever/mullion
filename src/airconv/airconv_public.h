@@ -613,6 +613,7 @@ struct SM50_SHADER_PSO_PIXEL_SHADER_DATA {
   uint32_t sample_mask;
   bool dual_source_blending;
   bool disable_depth_output;
+  bool quantize_d24;
   uint32_t unorm_output_reg_mask;
   /** MTLPixelFormat in the low 8 bits; with SM50_PIXEL_FORMAT_CHANNELS, SM50_PIXEL_FORMAT_CHANNEL names the output
       component each stored channel takes */

@@ -838,6 +838,32 @@ llvm::Error convert_dxbc_pixel_shader(
     }
   }
 
+  if (pso_data && pso_data->quantize_d24 && !pso_disable_depth_output && !func_signature.EarlyFragmentTests()) {
+    const auto &outputs = func_signature.Outputs();
+    auto depth = std::ranges::find_if(outputs, [](const auto &output) {
+      return std::holds_alternative<air::OutputDepth>(output);
+    });
+    const bool written = depth != outputs.end();
+    const unsigned index = written ? unsigned(depth - outputs.begin())
+                                   : func_signature.DefineOutput(air::OutputDepth{air::DepthArgument::any});
+    const unsigned position = written ? 0 : func_signature.DefineInput(
+        air::InputPosition{.interpolation = air::Interpolation::center_no_perspective});
+    epilogue >> [=](pvalue value) {
+      return make_irvalue([=](struct context ctx) {
+        auto &ir = ctx.builder;
+        llvm::IRBuilderBase::FastMathFlagGuard guard(ir);
+        ir.clearFastMathFlags();
+        auto z = written ? ir.CreateExtractValue(value, {index})
+                         : ir.CreateExtractElement(ctx.function->getArg(position), uint64_t(2));
+        // Compare the same normalized D24 code as a value uploaded into the emulated depth attachment.
+        auto maximum = llvm::ConstantFP::get(ctx.types._float, 16777215);
+        auto scaled = ir.CreateFMul(z, maximum);
+        auto code = ctx.air.CreateFPUnOp(llvm::air::AIRBuilder::round, scaled, false);
+        return ir.CreateInsertValue(value, ir.CreateFDiv(code, maximum), {index});
+      });
+    };
+  }
+
   std::optional<CoarseShading> coarse;
   if (coarse_shading)
     coarse.emplace(
