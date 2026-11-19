@@ -15,6 +15,6 @@ with tempfile.TemporaryDirectory(prefix="mullion-air-check-") as directory:
     triple = re.search(r'target triple = "([^"\n]+)"', output.read_text())
     if not triple:
         raise SystemExit("Apple compiler output has no AIR target triple")
-    env = dict(os.environ, MULLION_EXPECTED_AIR_TRIPLE=triple[1])
+    env = dict(os.environ, MULLION_EXPECTED_AIR_TRIPLE=triple[1], MULLION_VERIFY_EACH="1")
     subprocess.run([sys.argv[1]], env=env, check=True, timeout=120)
 pathlib.Path(sys.argv[2]).write_text("Apple AIR encoding and verification passed\n")
