@@ -17,7 +17,7 @@ struct InputAttribute {
   // TODO: extend patch/control point here
 };
 
-llvm::Error MetallibWriter::Write(const llvm::Module &module, raw_ostream &OS) {
+llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
 
   // The container and its bitcode must advertise the same AIR version.
   unsigned airMinor = 9;

@@ -6,23 +6,23 @@ struct Error {
 };
 }
 namespace mullion::metallib {
-struct MetallibWriter { llvm::Error Write(); };
+llvm::Error write();
 }
 void consume(llvm::Error);
-void ignored(mullion::metallib::MetallibWriter &writer) {
-  writer.Write(); // EXPECT: custom-air-write-error
-  (void)writer.Write(); // EXPECT: custom-air-write-error
-  static_cast<void>(writer.Write()); // EXPECT: custom-air-write-error
+void ignored() {
+  mullion::metallib::write(); // EXPECT: custom-air-write-error
+  (void)mullion::metallib::write(); // EXPECT: custom-air-write-error
+  static_cast<void>(mullion::metallib::write()); // EXPECT: custom-air-write-error
 }
-void handled(mullion::metallib::MetallibWriter &writer) {
-  if (auto error = writer.Write()) consume(static_cast<llvm::Error &&>(error));
-  consume(writer.Write());
+void handled() {
+  if (auto error = mullion::metallib::write()) consume(static_cast<llvm::Error &&>(error));
+  consume(mullion::metallib::write());
 }
-llvm::Error returned(mullion::metallib::MetallibWriter &writer) {
-  return writer.Write();
+llvm::Error returned() {
+  return mullion::metallib::write();
 }
-struct OtherWriter { llvm::Error Write(); };
-void unrelated(OtherWriter &writer) { writer.Write(); }
+namespace other { llvm::Error write(); }
+void unrelated() { other::write(); }
 
 struct Record {
   Record(const Record &);

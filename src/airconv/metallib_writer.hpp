@@ -116,10 +116,6 @@ struct __attribute__((packed)) MTLB_VATY {
 
 static_assert(sizeof(MTLB_VATY) == 2, "");
 
-class MetallibWriter {
-
-public:
-  llvm::Error Write(const llvm::Module &module, llvm::raw_ostream &OS);
-};
+llvm::Error write(const llvm::Module &module, llvm::raw_ostream &OS);
 
 } // namespace mullion::metallib

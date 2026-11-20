@@ -117,7 +117,7 @@ int main() {
     require(module && !llvm::verifyModule(*module, &llvm::errs()), "expected LLVM-valid AIR metadata fixture");
     llvm::SmallVector<char, 0> bytes;
     llvm::raw_svector_ostream output(bytes);
-    auto error = mullion::metallib::MetallibWriter{}.Write(*module, output);
+    auto error = mullion::metallib::write(*module, output);
     require(bool(error), "invalid AIR version accepted");
     require(llvm::toString(std::move(error)).find("air.version") != std::string::npos, "missing version diagnostic");
     require(bytes.empty(), "invalid version wrote a partial metallib");
@@ -131,8 +131,7 @@ int main() {
     require(module && !llvm::verifyModule(*module, &llvm::errs()), "invalid rejection fixture");
     llvm::SmallVector<char, 0> bytes;
     llvm::raw_svector_ostream output(bytes);
-    mullion::metallib::MetallibWriter writer;
-    auto error = writer.Write(*module, output);
+    auto error = mullion::metallib::write(*module, output);
     require(bool(error), "unsupported semantic attribute was silently accepted");
     auto message = llvm::toString(std::move(error));
     require(message.find("AIR cannot encode attribute") != std::string::npos, "missing attribute diagnostic");

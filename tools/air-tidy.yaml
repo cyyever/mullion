@@ -3,8 +3,8 @@ Checks: '-*,custom-air-write-error,performance-for-range-copy,performance-ineffi
 CustomChecks:
   - Name: air-write-error
     Query: |
-      match cxxMemberCallExpr(
-        callee(cxxMethodDecl(hasName("mullion::metallib::MetallibWriter::Write"))),
+      match callExpr(
+        callee(functionDecl(hasName("mullion::metallib::write"))),
         anyOf(hasParent(compoundStmt()),
               hasParent(cxxBindTemporaryExpr(hasParent(explicitCastExpr(hasType(voidType()))))),
               hasParent(exprWithCleanups(hasParent(compoundStmt()))),
