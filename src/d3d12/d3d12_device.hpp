@@ -570,6 +570,7 @@ public:
   uint32_t threads_per_patch = 0;
   // the object threadgroups that share a patch group's mesh threadgroups (tessellation_parts)
   uint32_t tessellation_parts = 1;
+  uint32_t tessellation_meshes_per_object = 1;
   // with Metal's tessellator, `hull` runs its vertex and hull shaders before the pass, writing each group of patches'
   // control points and constants (patch_group_size bytes) and each patch's factors (patch_factor_size bytes, Metal's
   // MTL*TessellationFactorsHalf) for `pso_patches`, its domain and pixel shaders; `pso` stays the mesh pipeline, for the

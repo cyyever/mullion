@@ -60,6 +60,9 @@ public:
   // the first whole blocks in one piece that hold `bytes`, of those handed out
   std::optional<Run>
   Acquire(size_t bytes) {
+    // Reject impossible requests before rounding, which also avoids size_t overflow.
+    if (bytes > kSize)
+      return {};
     size_t count = std::max<size_t>(bytes + block_ - 1, block_) / block_;
     std::lock_guard<mullion::mutex> lock(mutex_);
     for (size_t i = 0, free = 0; i < limit_; i++) {

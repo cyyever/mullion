@@ -61,16 +61,19 @@ get_gs_vertex_count(D3D_PRIMITIVE_TOPOLOGY topology, uint32_t registers) {
 // Apple7/8 share 4 GB between payload and mesh geometry (Metal Feature Set Tables, footnote 10). allocation
 // rounding is not public: bound the payload by the tables' 16 KB cap and each mesh by its 16 KB cap
 // (WWDC22 10162, 11:47).
+[[nodiscard]] constexpr uint64_t
+get_mesh_max_object_threadgroups(uint64_t meshes, uint64_t max_object_threadgroups, uint64_t mesh_budget) {
+  constexpr uint64_t payload_bytes = 16 * 1024, mesh_bytes = 16 * 1024;
+  return std::min(max_object_threadgroups, mesh_budget / (payload_bytes + meshes * mesh_bytes));
+}
+
 inline uint64_t
 get_gs_max_object_threadgroups(
     D3D_PRIMITIVE_TOPOLOGY topology, uint32_t registers, uint32_t instances, uint64_t max_object_threadgroups,
     uint64_t mesh_budget
 ) {
-  constexpr uint32_t max_payload_bytes = 16 * 1024;
-  constexpr uint32_t max_mesh_output_bytes = 16 * 1024;
-  uint64_t per_object = max_payload_bytes +
-      uint64_t(get_gs_warp(topology, registers).primitives) * instances * max_mesh_output_bytes;
-  return std::min(max_object_threadgroups, mesh_budget / per_object);
+  return get_mesh_max_object_threadgroups(
+      uint64_t(get_gs_warp(topology, registers).primitives) * instances, max_object_threadgroups, mesh_budget);
 }
 
 // the most object threadgroups each Metal draw of a geometry draw of `warps` x `instances` may have, when it has more

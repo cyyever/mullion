@@ -420,7 +420,7 @@ public:
         if (!run && held > Length)
           run = arena.Acquire(Length);
         // what the GPU reads grows, and a list goes on in a buffer that covers its new run (GrowArguments)
-        if (&arena == &device_->recording.arguments) {
+        if (&arena == &device_->recording.arguments && Length <= RecordingArena::kSize) {
           for (size_t seen = arena.Usable(); !run && GrowArguments(seen); seen = arena.Usable())
             run = arena.Acquire(Length);
           if (run && run->offset + run->length > gpu_heap_buffer_length_)

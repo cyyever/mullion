@@ -1708,6 +1708,12 @@ public:
     auto patches = ControlPoints ? Count / ControlPoints : 0, per_group = 32 / pso_graphics_->threads_per_patch;
     if (!patches || !Args.InstanceCount)
       return 0;
+    const auto max_groups = get_mesh_max_object_threadgroups(
+        pso_graphics_->tessellation_meshes_per_object, UINT32_MAX, device_->mesh_bytes_per_draw);
+    if (!max_groups) {
+      WARN("Omitted mesh draw (TS): one object threadgroup exceeds the draw memory budget");
+      return 0;
+    }
     TessellationInputs inputs{View, ControlPoints};
     auto [Mapped, Offset] = allocator_->AllocateGPUHeap(sizeof(inputs) + sizeof(Args), 16);
     if (allocator_->records_)
@@ -1732,6 +1738,7 @@ public:
     cmd.patch_per_group = per_group;
     cmd.patch_per_mesh_instance = (patches + per_group - 1) / per_group;
     cmd.parts = pso_graphics_->tessellation_parts;
+    cmd.max_object_threadgroups = uint32_t(max_groups);
     // the word the object stage counts patches from
     return uint32_t((Offset + sizeof(inputs)) / sizeof(uint32_t));
   }
@@ -1794,9 +1801,11 @@ public:
     // the hull kernel's groups and factors grow with the draw's patches, where its mesh draw holds none of them: when
     // the recording arena has no room for them, that draws the whole draw instead of the list being cut off
     auto [header, patches_offset] = allocator_->AllocateGPUHeap(SM50_TESSELLATION_HEADER + group_bytes, 16, false);
+    if (!header)
+      return true;
     auto [factors, factors_offset] =
         allocator_->AllocateGPUHeap(factor_stride * Args.InstanceCount, sizeof(uint32_t), false);
-    if (!header || !factors)
+    if (!factors)
       return true;
     auto [mapped, offset] = allocator_->AllocateGPUHeap(sizeof(inputs) + sizeof(Args), 16);
     if (!mapped)
@@ -4487,10 +4496,10 @@ public:
       object = {cmd->threads_per_patch, 32 / cmd->threads_per_patch, 1};
       mesh = {32, 1, 1};
     }
-    // a geometry draw's object stage adds its origin (SM50_BINDING_INDEX_DRAW_ORIGIN), none here
-    if (!dispatch_mesh && !cmd->threads_per_patch) {
-      auto [origin, origin_offset] = allocator_->AllocateGPUHeap(2 * sizeof(uint32_t), 8);
-      memset(origin, 0, 2 * sizeof(uint32_t));
+    // GS and tessellation object stages add the physical draw's origin; these indirect grids start at zero.
+    if (!dispatch_mesh) {
+      auto [origin, origin_offset] = allocator_->AllocateGPUHeap(3 * sizeof(uint32_t), 16);
+      memset(origin, 0, 3 * sizeof(uint32_t));
       EncodeBuffer(stage, origin_offset, SM50_BINDING_INDEX_DRAW_ORIGIN);
     }
     for (UINT i = 0; i < MaxCommandCount; i++) {
