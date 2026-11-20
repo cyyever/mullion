@@ -434,7 +434,7 @@ bench(Compiler &compiler) {
               times.push_back(double(stamps[1] - stamps[0]) * 1000 / frequency);
             readback->Unmap(0, nullptr);
           }
-          std::sort(times.begin(), times.end());
+          std::ranges::sort(times);
           printf("bench %-10s %-9s layers %2u %-14s gpu median %.3f ms (p10 %.3f)\n", blended ? "ps_blend" : ps_entry,
                  cull ? "cull" : "no-cull", layers, front_first ? "front-to-back" : "back-to-front",
                  times[times.size() / 2], times[times.size() / 10]);

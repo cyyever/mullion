@@ -9,6 +9,8 @@
 // unsupported counts and qualities at/past the advertised range must fail creation (19.2.3/.4).
 #include "../d3d11/d3d11_test.hpp"
 #include <d3d10_1.h>
+
+#include <algorithm>
 #include "../depth_formats.hpp"
 #include "../format_msaa.hpp"
 
@@ -134,8 +136,8 @@ main() {
           qualities.push_back(D3D11_STANDARD_MULTISAMPLE_PATTERN);
           qualities.push_back(D3D11_CENTER_MULTISAMPLE_PATTERN);
         }
-        std::sort(qualities.begin(), qualities.end());
-        qualities.erase(std::unique(qualities.begin(), qualities.end()), qualities.end());
+        std::ranges::sort(qualities);
+        qualities.erase(std::ranges::unique(qualities).begin(), qualities.end());
         auto raw = format_msaa::palette(f, samples);
         auto values = format_msaa::values(f, raw);
         std::array<float, 4> clear;
@@ -247,7 +249,7 @@ main() {
               auto expected_values = format_msaa::values(f, expected_raw);
               std::vector<uint8_t> seed(width * height * f.bytes);
               if (format_msaa::resolved(f, expected_raw, expected_values, seed.data()))
-                std::fill(seed.begin(), seed.end(), UINT8_MAX);
+                std::ranges::fill(seed, UINT8_MAX);
               if (!expect(
                       !format_msaa::resolved(f, expected_raw, expected_values, seed.data()),
                       "resolve destination seed aliases the expected result"

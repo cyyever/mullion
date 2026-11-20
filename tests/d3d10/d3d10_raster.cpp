@@ -5,6 +5,7 @@
 #include "../d3d11/d3d11_test.hpp"
 #include <d3d10_1.h>
 #include "../raster.hpp"
+#include <algorithm>
 #include <cstddef>
 
 int main() {
@@ -35,7 +36,7 @@ int main() {
   all.insert(all.end(), boundaries.begin(), boundaries.end());
   auto resets = raster::reset_cases();
   all.insert(all.end(), resets.begin(), resets.end());
-  const auto capacity = std::max_element(all.begin(), all.end(), [](const auto &a, const auto &b) {
+  const auto capacity = std::ranges::max_element(all, [](const auto &a, const auto &b) {
                           return a.vertices.size() < b.vertices.size();
                         })->vertices.size();
   for (auto level : {D3D10_FEATURE_LEVEL_10_0, D3D10_FEATURE_LEVEL_10_1}) {
@@ -137,7 +138,7 @@ int main() {
       if (!c.clear_state)
         device->RSSetScissorRects(1, &rect);
       std::vector<raster::Vertex> vertices(capacity);
-      std::copy(c.vertices.begin(), c.vertices.end(), vertices.begin());
+      std::ranges::copy(c.vertices, vertices.begin());
       device->UpdateSubresource(vb.Get(), 0, nullptr, vertices.data(), 0, 0);
       const UINT stride = sizeof(raster::Vertex), offset = 0;
       device->IASetVertexBuffers(0, 1, vb.GetAddressOf(), &stride, &offset);

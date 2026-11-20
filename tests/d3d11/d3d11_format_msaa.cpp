@@ -6,6 +6,8 @@
 // run through immediate/deferred contexts; source and resolved targets have their own readback checks.
 // center patterns use pixel-frequency coverage masks: sample-frequency execution is undefined there (19.2.4.1).
 // unsupported counts and qualities at/past the advertised range must fail creation (19.2.3/.4).
+#include <algorithm>
+
 #include "d3d11_test.hpp"
 #include "../depth_formats.hpp"
 #include "../format_msaa.hpp"
@@ -107,8 +109,8 @@ main() {
         qualities.push_back(D3D11_STANDARD_MULTISAMPLE_PATTERN);
         qualities.push_back(D3D11_CENTER_MULTISAMPLE_PATTERN);
       }
-      std::sort(qualities.begin(), qualities.end());
-      qualities.erase(std::unique(qualities.begin(), qualities.end()), qualities.end());
+      std::ranges::sort(qualities);
+      qualities.erase(std::ranges::unique(qualities).begin(), qualities.end());
       for (UINT q : qualities)
         for (bool listed : {false, true}) {
           const UINT width = 3, height = 3, kind = f.shader_kind();

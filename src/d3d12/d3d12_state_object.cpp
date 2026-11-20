@@ -343,7 +343,7 @@ RayDispatchers(
                     : kind == SM50_RAY_SHADER_INTERSECTION ? SM50_RAY_DISPATCHER_INTERSECTION
                                                            : SM50_RAY_DISPATCHER_CALLABLE;
       if (of != dispatcher ||
-          std::any_of(direct.begin(), direct.end(), [&](auto &other) { return other.slot == function->slot; }))
+          std::ranges::any_of(direct, [&](auto &other) { return other.slot == function->slot; }))
         continue;
       uint32_t reaching = of == SM50_RAY_DISPATCHER_CLOSEST ? SM50_RAY_SHADER_CALLS_TRACE
                           : of == SM50_RAY_DISPATCHER_CALLABLE
@@ -665,7 +665,7 @@ public:
       exports_ = pParent->exports_;
       root_signatures_ = pParent->root_signatures_;
       pipeline_config_ = pParent->pipeline_config_;
-      std::copy(std::begin(pParent->configurations_), std::end(pParent->configurations_), configurations_);
+      std::ranges::copy(pParent->configurations_, configurations_);
     }
     std::span subobjects(pDesc->pSubobjects, pDesc->NumSubobjects);
 
@@ -1033,8 +1033,8 @@ public:
         if (function(to, 0, name, nullptr))
           exports_.insert_or_assign(name, std::move(to));
       } else if ((!pParent || !pParent->shaders_.count(name)) &&
-               std::none_of(hit_groups.begin(), hit_groups.end(), [&](const HitGroup &group) {
-                 return std::find(std::begin(group.imports), std::end(group.imports), name) != std::end(group.imports);
+               std::ranges::none_of(hit_groups, [&](const HitGroup &group) {
+                 return std::ranges::find(group.imports, name) != std::end(group.imports);
                })) {
         if (configured.count(shader.library.get())) {
           unresolved = false;
@@ -1139,7 +1139,7 @@ public:
     bool part = at != std::wstring::npos;
     if (part) {
       const std::wstring_view parts[] = {L"closesthit", L"anyhit", L"intersection"};
-      index = std::find(std::begin(parts), std::end(parts), std::wstring_view(name).substr(at + 2)) - parts;
+      index = std::ranges::find(parts, std::wstring_view(name).substr(at + 2)) - parts;
       name.resize(at);
     }
     auto found = exports_.find(name);

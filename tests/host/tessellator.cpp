@@ -21,6 +21,7 @@
 // each triangle advances one edge segment: a complete frame has the sum of its edges' segments in triangles.
 #include "../tessellator.hpp"
 #include "tessellation_limits.hpp"
+#include <algorithm>
 #include <set>
 // last: it names Metal's address spaces away
 #include "metal/metal_stdlib"
@@ -198,7 +199,7 @@ main() {
           for (auto [limit, primitive_limit] :
                {std::pair{most, 2 * most}, std::pair{most, most}, std::pair{mesh_vertices, (int)mesh_primitive_limit}}) {
             int next[5] = {};
-            std::fill(groups.begin(), groups.end(), -1);
+            std::ranges::fill(groups, -1);
             generate(next, workloads.size(), pack_group_size(limit, primitive_limit));
             if (next[0] != count)
               fail("workloads written with groups", f, next[0], count);

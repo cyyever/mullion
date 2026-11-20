@@ -26,6 +26,7 @@ points(Domain domain, Partitioning partitioning, const float *f) {
   CHWTessellator tessellator;
   tessellate(tessellator, domain, partitioning, f, D3D11_TESSELLATOR_OUTPUT_POINT);
   std::vector<Point> out;
+  out.reserve(tessellator.GetPointCount());
   for (int i = 0; i < tessellator.GetPointCount(); i++)
     out.push_back({tessellator.GetPoints()[i].u, tessellator.GetPoints()[i].v});
   return out;

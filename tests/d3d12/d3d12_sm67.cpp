@@ -463,7 +463,7 @@ main(int argc, char **argv) {
       UINT active = 0, helpers = 0;
       for (auto &[lane, r] : lanes) r[1] ? helpers++ : active++;
       // WaveReadLaneFirst reads the lowest-indexed participating lane, the first lane here or the first non-helper
-      auto first = std::find_if(lanes.begin(), lanes.end(), [&](auto &lane) { return include || !lane.second[1]; });
+      auto first = std::ranges::find_if(lanes, [&](auto &lane) { return include || !lane.second[1]; });
       expect(first != lanes.end() && key == first->second[0], "wave %u reads its first lane as pixel %u, want %u",
              lanes.begin()->first, key, first == lanes.end() ? ~0u : first->second[0]);
       saw_helpers |= helpers != 0;

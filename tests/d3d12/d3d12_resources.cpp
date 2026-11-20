@@ -239,7 +239,7 @@ main(int argc, char **argv) {
     expect("guard after the typed UAV", i, u32(rwtyped_at + (n + i) * 4), rwtyped_in[n + i]);
   }
   // order-dependent results: the counter hands out 0..n-1 once each, cmpxchg lets exactly one thread's i + 1 in
-  std::sort(counters.begin(), counters.end());
+  std::ranges::sort(counters);
   for (UINT i = 0; i < n; i++)
     expect("counter value", i, counters[i], i);
   expect("counter", 0, u32(counter_at), n);

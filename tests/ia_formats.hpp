@@ -127,7 +127,7 @@ inline std::vector<Layout> layouts(const Format &f, uint32_t slots, uint32_t app
 inline std::vector<DXGI_FORMAT> other_formats() {
   std::vector<DXGI_FORMAT> out;
   for (uint32_t value = DXGI_FORMAT_UNKNOWN; value <= DXGI_FORMAT_B4G4R4A4_UNORM; value++)
-    if (std::none_of(std::begin(formats), std::end(formats), [=](auto &f) { return uint32_t(f.format) == value; }))
+    if (std::ranges::none_of(formats, [=](auto &f) { return uint32_t(f.format) == value; }))
       out.push_back(DXGI_FORMAT(value));
   out.insert(out.end(), {DXGI_FORMAT_P208, DXGI_FORMAT_V208, DXGI_FORMAT_V408, DXGI_FORMAT_FORCE_UINT});
   return out;
@@ -145,7 +145,7 @@ inline std::vector<uint32_t> values32() {
   return out;
 }
 inline uint32_t enumerated_count(const Format &f) {
-  const uint32_t bits = *std::max_element(std::begin(f.bits), std::end(f.bits));
+  const uint32_t bits = *std::ranges::max_element(f.bits);
   return bits == 32 ? uint32_t(values32().size()) : uint32_t(1) << bits;
 }
 inline constexpr uint32_t legacy_vertices = 12;

@@ -382,8 +382,8 @@ main(int argc, char **argv) {
         options.WaveLaneCountMax - 1, options.WaveLaneCountMax, options.WaveLaneCountMax + 1, group - 1, group})
     for (UINT mask = 0; mask < 4; mask++)
       cases.push_back({n, mask});
-  std::sort(cases.begin(), cases.end());
-  cases.erase(std::unique(cases.begin(), cases.end()), cases.end());
+  std::ranges::sort(cases);
+  cases.erase(std::ranges::unique(cases).begin(), cases.end());
   auto sizes =
       buffer(device.Get(), D3D12_HEAP_TYPE_UPLOAD, cases.size() * sizeof(cases[0]), D3D12_RESOURCE_STATE_GENERIC_READ);
   if (!expect(bool(sizes), "wave case buffer"))

@@ -94,7 +94,7 @@ main() {
           if (via10)
             context1->SwapDeviceContextState(previous.Get(), nullptr);
           CHECK(hr);
-          std::fill(source.begin(), source.end(), sentinel);
+          std::ranges::fill(source, sentinel);
           context->CopyResource(staging.Get(), resource.Get());
           CHECK(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped));
           bool ok = true;

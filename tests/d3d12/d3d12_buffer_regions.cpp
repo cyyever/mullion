@@ -18,8 +18,8 @@ int main(int, char **) {
   for (UINT64 boundary : {UINT64(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT), UINT64(system.dwPageSize), allocation})
     for (UINT64 n : {boundary - 1, boundary, boundary + 1})
       edges.push_back(n);
-  std::sort(edges.begin(), edges.end());
-  edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+  std::ranges::sort(edges);
+  edges.erase(std::ranges::unique(edges).begin(), edges.end());
   auto value = [](UINT64 i) { return UINT8(i ^ (i >> 8) ^ (i >> 16)); };
   auto source = buffer(device.Get(), D3D12_HEAP_TYPE_UPLOAD, bytes, D3D12_RESOURCE_STATE_GENERIC_READ);
   auto initial = buffer(device.Get(), D3D12_HEAP_TYPE_UPLOAD, bytes, D3D12_RESOURCE_STATE_GENERIC_READ);

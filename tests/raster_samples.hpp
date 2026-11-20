@@ -235,6 +235,7 @@ inline void compare(const Color *got, const Case &c, unsigned count, unsigned ma
   if (centered)
     positions.assign(count, {0, 0});
   std::vector<std::vector<Color>> coverage;
+  coverage.reserve(positions.size());
   for (auto p : positions)
     coverage.push_back(expected(c, double(p[0]) / sample_grid, double(p[1]) / sample_grid));
   unsigned wrong = 0;
@@ -298,6 +299,7 @@ inline void compare(const Color *got, const Case &c, unsigned count, unsigned ma
             want = {float(px / width * 2 - 1), float(1 - py / height * 2), x + 0.5f, y + 0.5f};
             if (pass == PerspectiveVarying || pass == PerspectiveCentroid) {
               std::vector<Screen> points;
+              points.reserve(c.vertices.size());
               for (auto &v : c.vertices)
                 points.push_back(project(v, c.viewport));
               std::vector<double> weights(c.shape, 1);

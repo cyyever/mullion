@@ -164,7 +164,7 @@ main(int argc, char **argv) {
   const WCHAR *generators[] = {L"first", L"second", L"third"};
   D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION association{&subobjects[5], 3, generators};
   D3D12_STATE_SUBOBJECT all[std::size(subobjects) + 1];
-  std::copy(std::begin(subobjects), std::end(subobjects), all);
+  std::ranges::copy(subobjects, all);
   all[std::size(subobjects)] = {D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &association};
   D3D12_STATE_OBJECT_DESC desc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, (UINT)std::size(all), all};
   ComPtr<ID3D12StateObject> state;

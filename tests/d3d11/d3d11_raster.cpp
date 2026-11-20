@@ -6,7 +6,9 @@
 #include "../raster.hpp"
 #include "../raster_conservative.hpp"
 #include <d3d11_3.h>
+#include <algorithm>
 #include <cstddef>
+#include <numeric>
 
 int main() {
   if (!raster::reference_contract() || !raster_conservative::reference_contract())
@@ -71,7 +73,7 @@ int main() {
   all.insert(all.end(), resets.begin(), resets.end());
   auto conservative = raster_conservative::cases(tier);
   all.insert(all.end(), conservative.begin(), conservative.end());
-  const auto capacity = std::max_element(all.begin(), all.end(), [](const auto &a, const auto &b) {
+  const auto capacity = std::ranges::max_element(all, [](const auto &a, const auto &b) {
                           return a.vertices.size() < b.vertices.size();
                         })->vertices.size();
   D3D11_BLEND_DESC blend_desc{};
@@ -86,7 +88,7 @@ int main() {
   ComPtr<ID3D11Buffer> vb;
   CHECK(device->CreateBuffer(&vb_desc, nullptr, &vb));
   std::vector<UINT> indices(capacity);
-  std::iota(indices.begin(), indices.end(), 0);
+  std::ranges::iota(indices, 0);
   D3D11_BUFFER_DESC index_desc{UINT(indices.size() * sizeof(UINT)), D3D11_USAGE_IMMUTABLE, D3D11_BIND_INDEX_BUFFER};
   D3D11_SUBRESOURCE_DATA index_data{indices.data()};
   ComPtr<ID3D11Buffer> index_buffer, arguments;
@@ -159,7 +161,7 @@ int main() {
         if (!c.clear_state)
           context->RSSetScissorRects(1, &rect);
         std::vector<raster::Vertex> vertices(capacity);
-        std::copy(c.vertices.begin(), c.vertices.end(), vertices.begin());
+        std::ranges::copy(c.vertices, vertices.begin());
         context->UpdateSubresource(vb.Get(), 0, nullptr, vertices.data(), 0, 0);
         const UINT stride = sizeof(raster::Vertex), offset = 0;
         context->IASetVertexBuffers(0, 1, vb.GetAddressOf(), &stride, &offset);

@@ -2,6 +2,8 @@
 // "Out of bounds addressing on u#/t# of any given 32-bit component returns 0 for that component." (D3D11.3 22.4.10,
 // 22.4.12). DXIL's native 16-bit and 64-bit values are checked as bytes too, including partial 64-bit raw reads.
 // SM6.3 adds native 64-bit raw operations; DWORD alignment remains valid (DXC HLOperationLower.cpp, RawBufferLoad).
+#include <algorithm>
+
 #include "d3d12_test.hpp"
 #include "../buffer_loads.hpp"
 
@@ -30,14 +32,14 @@ main(int argc, char **argv) {
             auto &test = cases.back();
             if (minor != 2) {
               // the native vector's component-offset wrap has no independent contract; scalar HLSL wrap is defined.
-              test.addresses.erase(std::remove_if(test.addresses.begin(), test.addresses.end(), [&](Address at) {
+              test.addresses.erase(std::ranges::remove_if(test.addresses, [&](Address at) {
                 for (UINT extra : {0u, components * test.word_bytes}) {
                   const UINT start = at[0] * test.raw_step + extra;
                   if (uint64_t(start) + width * test.word_bytes > uint64_t(UINT32_MAX) + 1)
                     return true;
                 }
                 return false;
-              }), test.addresses.end());
+              }).begin(), test.addresses.end());
               test.reference();
             }
             profiles.push_back(bits == sizeof(UINT) * CHAR_BIT ? "cs" : "cs_6_" + std::to_string(minor));

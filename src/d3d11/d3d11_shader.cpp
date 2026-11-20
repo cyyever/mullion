@@ -5,6 +5,7 @@
 #include "mullion_info.hpp"
 #include "d3d11_input_layout.hpp"
 #include "sha1/sha1_util.hpp"
+#include <algorithm>
 #include <mutex>
 
 namespace mullion {
@@ -204,7 +205,7 @@ CreateVariantShader(MTLD3D11Device *pDevice, ManagedShader shader,
     data.dual_source_blending = variant.dual_source_blending;
     data.disable_depth_output = variant.disable_depth_output;
     data.unorm_output_reg_mask = variant.unorm_output_reg_mask;
-    std::copy(variant.pixel_formats.begin(), variant.pixel_formats.end(), data.pixel_formats);
+    std::ranges::copy(variant.pixel_formats, data.pixel_formats);
     data.pipeline_statistics = variant.pipeline_statistics;
     data.alpha_to_coverage = variant.alpha_to_coverage;
     data.centered_samples = variant.centered_samples;
@@ -213,7 +214,7 @@ CreateVariantShader(MTLD3D11Device *pDevice, ManagedShader shader,
     data.clip_distances = variant.clip_distances;
     data.cull_distances = 0;
     data.cull_depth = false;
-    std::copy(variant.blend.begin(), variant.blend.end(), data.blend);
+    std::ranges::copy(variant.blend, data.blend);
     data.depth_bounds = false;
     data.late_tests = false;
     data.conservative = false;

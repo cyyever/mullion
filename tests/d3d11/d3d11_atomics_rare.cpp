@@ -130,7 +130,7 @@ main() {
   std::vector<uint32_t> chain{got[9]};
   for (UINT i = 0; i < threads; i++)
     chain.push_back(got_originals[i * 8 + 4]);
-  std::sort(chain.begin(), chain.end());
+  std::ranges::sort(chain);
   for (UINT k = 0; k <= threads; k++)
     expect(chain[k] == k, "exchange: value %u of the chain is %u, want %u", k, chain[k], k);
   // each change from an original to its result must add up to the word's total change, in any thread order
@@ -159,7 +159,7 @@ main() {
     expect(deltas[k] == want_deltas[k], "%s originals: total change %lld, want %lld", original_names[k],
            (long long)deltas[k], (long long)want_deltas[k]);
   std::vector<uint32_t> taken(got_consumed.begin(), got_consumed.end());
-  std::sort(taken.begin(), taken.end());
+  std::ranges::sort(taken);
   for (UINT k = 0; k < threads; k++)
     expect(taken[k] == 1000 + k, "consume: element %u taken is %u, want %u", k, taken[k], 1000 + k);
   return verdict();

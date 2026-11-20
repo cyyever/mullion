@@ -97,6 +97,7 @@ main() {
       CHECK(output.As(&output10));
     struct Configuration { UINT first_slot, stride, rate; bool bound; };
     std::vector<Configuration> configurations;
+    configurations.reserve(slots + 4 * 6 * 2);
     for (UINT slot = 0; slot < slots; slot++)
       configurations.push_back({slot, word, 3, true});
     for (UINT stride : {0u, word, maximum_stride - word, maximum_stride})

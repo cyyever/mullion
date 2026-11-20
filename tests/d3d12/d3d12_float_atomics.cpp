@@ -180,8 +180,8 @@ main(int argc, char **argv) {
       seen.push_back(value(got_at + 4 * (6 + r * threads + t)));
       want.push_back(t + 10.0f);
     }
-    std::sort(seen.begin(), seen.end());
-    std::sort(want.begin(), want.end());
+    std::ranges::sort(seen);
+    std::ranges::sort(want);
     unsigned wrong = 0;
     for (UINT i = 0; i < seen.size(); i++)
       if (seen[i] != want[i] && wrong++ < 4)

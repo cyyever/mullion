@@ -94,11 +94,13 @@ main() {
         HRESULT hr;
         if (device10) {
           std::vector<D3D10_INPUT_ELEMENT_DESC> elements;
+          elements.reserve(input_layout.elements.size());
           for (const auto &e : input_layout.elements)
             elements.push_back({e.name, 0, e.format, e.slot, e.offset, D3D10_INPUT_PER_VERTEX_DATA, 0});
           hr = device10->CreateInputLayout(elements.data(), elements.size(), code->GetBufferPointer(), code->GetBufferSize(), &layout10);
         } else {
           std::vector<D3D11_INPUT_ELEMENT_DESC> elements;
+          elements.reserve(input_layout.elements.size());
           for (const auto &e : input_layout.elements)
             elements.push_back({e.name, 0, e.format, e.slot, e.offset, D3D11_INPUT_PER_VERTEX_DATA, 0});
           hr = device->CreateInputLayout(elements.data(), elements.size(), code->GetBufferPointer(), code->GetBufferSize(), &layout);

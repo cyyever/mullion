@@ -203,8 +203,8 @@ main() {
         if (i < first_element * std::tuple_size_v<Record> ||
             i >= (first_element + capacity) * std::tuple_size_v<Record>)
           expect(words[i] == sentinel, "append wrote outside its view at word %u", i);
-      std::sort(packed.begin(), packed.end());
-      std::sort(expected.begin(), expected.end());
+      std::ranges::sort(packed);
+      std::ranges::sort(expected);
       expect(packed == expected, "packed append records differ");
       context->CSSetConstantBuffers(0, 1, constants.GetAddressOf());
       context->CSSetShader(shaders[3].Get(), nullptr, 0);
@@ -222,7 +222,7 @@ main() {
         return verdict();
       if (amount)
         memcpy(packed.data(), words.data(), amount * sizeof(Record));
-      std::sort(packed.begin(), packed.end());
+      std::ranges::sort(packed);
       expect(packed == expected, "consumed records differ");
       for (UINT i = amount * std::tuple_size_v<Record>; i < words.size(); i++)
         expect(words[i] == sentinel, "consume wrote past its records at word %u", i);

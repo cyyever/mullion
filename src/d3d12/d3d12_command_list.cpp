@@ -16,6 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <algorithm>
 #include <atomic>
 #include <bit>
 #include <functional>
@@ -697,7 +698,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
       cmd.usage = WMTResourceUsageRead;
       cmd.resource = window;
     }
-    std::stable_sort(occlusion_sums_.begin(), occlusion_sums_.end(), [](auto &x, auto &y) { return x.first < y.first; });
+    std::ranges::stable_sort(occlusion_sums_, [](auto &x, auto &y) { return x.first < y.first; });
     for (auto first = occlusion_sums_.begin(); first != occlusion_sums_.end();) {
       auto last = std::find_if(first, occlusion_sums_.end(), [&](auto &x) { return x.first != first->first; });
       std::vector<OcclusionSum> sums;
@@ -752,7 +753,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
     );
     auto draws =
         upload(draw_statistics_.data(), draw_statistics_.size() * sizeof(uint64_t), "draw statistics addresses");
-    std::stable_sort(statistics_sums_.begin(), statistics_sums_.end(), [](auto &x, auto &y) { return x.first < y.first; });
+    std::ranges::stable_sort(statistics_sums_, [](auto &x, auto &y) { return x.first < y.first; });
     for (auto first = statistics_sums_.begin(); first != statistics_sums_.end();) {
       auto last = std::find_if(first, statistics_sums_.end(), [&](auto &x) { return x.first != first->first; });
       std::vector<StatisticsSum> sums;
@@ -812,7 +813,7 @@ public:
     }
 
     num_rtvs = {};
-    std::fill(std::begin(rtvs), std::end(rtvs), MTL_RENDER_TARGET_DESC{});
+    std::ranges::fill(rtvs, MTL_RENDER_TARGET_DESC{});
     dsv = {};
 
     topology_ = {};
@@ -850,7 +851,7 @@ public:
     rootarg_compute_uploaded_ = {};
 
     memset(vertex_buffers_.data(), 0, sizeof(vertex_buffers_));
-    std::fill(std::begin(so_views_), std::end(so_views_), D3D12_STREAM_OUTPUT_BUFFER_VIEW{});
+    std::ranges::fill(so_views_, D3D12_STREAM_OUTPUT_BUFFER_VIEW{});
 
     index_buffer_address = 0;
     index_buffer = {};
@@ -3882,7 +3883,7 @@ public:
       return;
     }
     if (Type == D3D12_QUERY_TYPE_PIPELINE_STATISTICS || Type == D3D12_QUERY_TYPE_PIPELINE_STATISTICS1) {
-      auto query = std::find_if(active_statistics_.begin(), active_statistics_.end(), [&](auto &q) {
+      auto query = std::ranges::find_if(active_statistics_, [&](auto &q) {
         return q.first == heap && q.second.query == Index;
       });
       if (query == active_statistics_.end()) {
@@ -3933,7 +3934,7 @@ public:
       pass->stamps = new (allocator_->AllocateCommandData<Stamp>(1)) Stamp{heap, Index, pass->stamps};
       return;
     }
-    auto query = std::find_if(active_queries_.begin(), active_queries_.end(), [&](auto &q) {
+    auto query = std::ranges::find_if(active_queries_, [&](auto &q) {
       return q.heap == heap && q.index == Index;
     });
     if (query == active_queries_.end()) {

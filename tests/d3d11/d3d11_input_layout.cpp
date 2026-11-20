@@ -170,7 +170,7 @@ main() {
               if (elements.empty())
                 elements.push_back(unused);
               if (reverse)
-                std::reverse(elements.begin(), elements.end());
+                std::ranges::reverse(elements);
               IUnknown *device = sig.d3d10 ? static_cast<IUnknown *>(device10.Get()) : device11.Get();
               device->AddRef();
               const ULONG before = device->Release();
@@ -179,6 +179,7 @@ main() {
               HRESULT hr;
               if (sig.d3d10) {
                 std::vector<D3D10_INPUT_ELEMENT_DESC> elements10;
+                elements10.reserve(elements.size());
                 for (auto &e : elements)
                   elements10.push_back({e.SemanticName, e.SemanticIndex, e.Format, e.InputSlot, e.AlignedByteOffset,
                                         D3D10_INPUT_CLASSIFICATION(e.InputSlotClass), e.InstanceDataStepRate});

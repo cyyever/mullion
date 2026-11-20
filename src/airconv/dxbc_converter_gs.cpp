@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <ranges>
 #include "air_operations.hpp"
 #include "air_signature.hpp"
@@ -2601,7 +2602,7 @@ convert_pass_through_geometry_shader(
   if (pso_data->wire_snap && own.count == 3 && clip[0]) {
     auto vp = builder.CreateLoad(types._float4, builder.CreateGEP(types._float4, function->getArg(viewports_idx), viewport()));
     auto positions = snap_wire_triangle(builder, air, {clip[0], clip[1], clip[2]}, vp);
-    std::copy(positions.begin(), positions.end(), snapped);
+    std::ranges::copy(positions, snapped);
   }
   if (pso_data->wire_slope && own.count == 3 && clip[0])
     air.CreateSetMeshPrimitiveData(zero,zero,wire_depth_gradient(builder,air,clip[0],clip[1],clip[2]));

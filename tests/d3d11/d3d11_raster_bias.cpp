@@ -5,6 +5,7 @@
 // depth independently; all depth formats are checked through immediate and deferred draws.
 #include "d3d11_test.hpp"
 #include "../raster_bias.hpp"
+#include <algorithm>
 #include <cstddef>
 
 int main() {
@@ -78,7 +79,7 @@ int main() {
         D3D11_VIEWPORT vp{0, 0, raster::width, raster::height, c.low, c.high};
         context->RSSetViewports(1, &vp);
         std::array<raster::Vertex, raster::Triangle> vertices{};
-        std::copy(geometry.vertices.begin(), geometry.vertices.end(), vertices.begin());
+        std::ranges::copy(geometry.vertices, vertices.begin());
         context->UpdateSubresource(vb.Get(), 0, nullptr, vertices.data(), 0, 0);
         const UINT stride = sizeof(raster::Vertex), offset = 0;
         context->IASetVertexBuffers(0, 1, vb.GetAddressOf(), &stride, &offset);

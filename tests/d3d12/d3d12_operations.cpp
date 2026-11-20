@@ -294,6 +294,7 @@ values() {
     list.insert(list.end(), {V(0), V(3), V(5), V(10), V(100), V(-100), V(0x5555555555555555u), V(0xaaaaaaaaaaaaaaaau)});
   }
   std::vector<uint64_t> bits;
+  bits.reserve(list.size());
   for (V value : list)
     bits.push_back(hlsl::raw(value));
   return bits;

@@ -170,6 +170,7 @@ main(int argc, char **argv) {
   step("waits first: a wait and %u lists on the compute queue, then the copy and the signal they wait for", behind);
   // the lists read the number the copy queue has not copied yet: only after the signal is it the new one
   std::vector<ID3D12CommandList *> waiting;
+  waiting.reserve(behind);
   for (UINT i = 0; i < behind; i++)
     waiting.push_back(computes(i));
   ID3D12CommandList *copy = copies(frames), *read = reads(0, behind);
@@ -316,6 +317,7 @@ main(int argc, char **argv) {
     returns("the threads' Signals", [&] {
       // the threads are there before the list is, so that it still keeps the GPU when they start
       std::vector<std::thread> pool;
+      pool.reserve(threads);
       for (UINT t = 0; t < threads; t++)
         pool.emplace_back([&, t] {
           for (ready++; !go;)

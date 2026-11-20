@@ -111,7 +111,7 @@ main() {
         CHECK(legacy->GetDesc(&old_desc));
         expect(same(desc.AdapterLuid, old_desc.AdapterLuid), "enumerators disagree on LUID");
         expect(
-            std::none_of(luids.begin(), luids.end(), [&](LUID l) { return same(l, desc.AdapterLuid); }),
+            std::ranges::none_of(luids, [&](LUID l) { return same(l, desc.AdapterLuid); }),
             "duplicate adapter LUID"
         );
         luids.push_back(desc.AdapterLuid);
@@ -148,11 +148,11 @@ main() {
           DXGI_ADAPTER_DESC1 desc{};
           CHECK(adapter->GetDesc1(&desc));
           expect(
-              std::any_of(luids.begin(), luids.end(), [&](LUID l) { return same(l, desc.AdapterLuid); }),
+              std::ranges::any_of(luids, [&](LUID l) { return same(l, desc.AdapterLuid); }),
               "preference returned an unenumerated adapter"
           );
           expect(
-              std::none_of(seen.begin(), seen.end(), [&](LUID l) { return same(l, desc.AdapterLuid); }),
+              std::ranges::none_of(seen, [&](LUID l) { return same(l, desc.AdapterLuid); }),
               "preference duplicated an adapter"
           );
           if (preference == DXGI_GPU_PREFERENCE_UNSPECIFIED)
@@ -161,7 +161,7 @@ main() {
         }
       }
       LUID missing{};
-      while (std::any_of(luids.begin(), luids.end(), [&](LUID l) { return same(l, missing); }))
+      while (std::ranges::any_of(luids, [&](LUID l) { return same(l, missing); }))
         missing.LowPart++;
       ComPtr<IDXGIAdapter> absent;
       expect(

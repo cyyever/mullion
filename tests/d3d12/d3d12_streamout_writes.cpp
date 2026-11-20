@@ -171,7 +171,7 @@ main(int argc, char **argv) {
       // the first draw found the word zero and stored id + 1, which the second found
       expect("original value", draw * points + id, word(at + 8), draw ? id + 1 : 0);
     }
-    std::sort(seen.begin(), seen.end());
+    std::ranges::sort(seen);
     for (UINT i = 0; i < points; i++)
       expect("counter seen", draw * points + i, seen[i], draw * points + i);
   }

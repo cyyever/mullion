@@ -25,6 +25,7 @@
 #include "mullion_tessellation_templates.hpp"
 #include "mullion_presenter.hpp"
 #include "wsi_platform.hpp"
+#include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <cfloat>
@@ -1927,19 +1928,16 @@ ArgumentEncodingContext::checkEncoderRelation(EncoderData *former, EncoderData *
       }
       r1->use_tessellation = r0->use_tessellation || r1->use_tessellation;
       r1->use_geometry = r0->use_geometry || r1->use_geometry;
-      std::move(
-        r1->gs_arg_marshal_tasks.begin(),
-        r1->gs_arg_marshal_tasks.end(),
+      std::ranges::move(
+        r1->gs_arg_marshal_tasks,
         std::back_inserter(r0->gs_arg_marshal_tasks)
       );
-      std::move(
-        r1->ts_arg_marshal_tasks.begin(),
-        r1->ts_arg_marshal_tasks.end(),
+      std::ranges::move(
+        r1->ts_arg_marshal_tasks,
         std::back_inserter(r0->ts_arg_marshal_tasks)
       );
-      std::move(
-        r1->draw_auto_marshal_tasks.begin(),
-        r1->draw_auto_marshal_tasks.end(),
+      std::ranges::move(
+        r1->draw_auto_marshal_tasks,
         std::back_inserter(r0->draw_auto_marshal_tasks)
       );
       r1->draw_auto_marshal_tasks = std::move(r0->draw_auto_marshal_tasks);

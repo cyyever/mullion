@@ -174,10 +174,12 @@ main(int argc, char **argv) {
       CHECK(roots[i]->SetPrivateDataInterface(__uuidof(ID3D12Fence), lifetime[i].Get()));
     }
     std::vector<std::wstring> names;
+    names.reserve(size_t(count) + 2);
     for (UINT i = 0; i < count; i++)
       names.push_back(L"miss_" + std::to_wstring(i));
     names.insert(names.end(), {L"generate", L"called"});
     std::vector<D3D12_EXPORT_DESC> exports;
+    exports.reserve(names.size() + 3);
     for (UINT i = 0; i < names.size(); i++)
       exports.push_back({names[i].c_str(), i < count ? L"missed" : nullptr});
     for (auto name : {L"closest", L"accepted", L"intersected"})
@@ -207,9 +209,11 @@ main(int argc, char **argv) {
                : D3D12_STATE_OBJECT_FLAG_NONE)
     )};
     std::vector<std::wstring> group_names;
+    group_names.reserve(count);
     for (UINT i = 0; i < count; i++)
       group_names.push_back(L"hit_" + std::to_wstring(i));
     std::vector<D3D12_HIT_GROUP_DESC> groups;
+    groups.reserve(group_names.size());
     for (UINT i = 0; i < group_names.size(); i++)
       groups.push_back({group_names[i].c_str(),
                         i % 2 ? D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE : D3D12_HIT_GROUP_TYPE_TRIANGLES,
@@ -242,8 +246,10 @@ main(int argc, char **argv) {
     }
     std::vector<std::wstring> renamed;
     std::vector<D3D12_EXPORT_DESC> taken;
+    renamed.reserve(names.size());
     for (auto &name : names)
       renamed.push_back(L"import_" + name);
+    taken.reserve(names.size());
     for (UINT i = 0; i < names.size(); i++)
       taken.push_back({renamed[i].c_str(), names[i].c_str()});
     D3D12_EXISTING_COLLECTION_DESC existing{collection.Get(), order ? (UINT)taken.size() : 0,
@@ -306,6 +312,7 @@ main(int argc, char **argv) {
     CHECK(child.As(&inherited));
     expect(!!inherited->GetShaderIdentifier(added_group.HitGroupExport), "addition has no hit group identifier");
     std::vector<D3D12_EXPORT_DESC> misses;
+    misses.reserve(count);
     for (UINT i = 0; i < count; i++)
       misses.push_back({names[i].c_str()});
     D3D12_EXISTING_COLLECTION_DESC only_misses{collection.Get(), (UINT)misses.size(), misses.data()};

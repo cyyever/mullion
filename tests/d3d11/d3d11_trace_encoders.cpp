@@ -287,7 +287,7 @@ main(int argc, char **argv) {
                "invalid trace: %s", line.c_str());
       }
     }
-    std::sort(records.begin(), records.end(), [](auto &a, auto &b) {
+    std::ranges::sort(records, [](auto &a, auto &b) {
       return std::tie(a.seq, a.index) < std::tie(b.seq, b.index);
     });
     for (auto &record : records) {

@@ -38,8 +38,8 @@ inline std::vector<SampleCase> sample_cases(UINT samples) {
   masks.push_back(alternating);
   masks.push_back(~alternating);
   masks.push_back(UINT(~((uint64_t(1) << samples) - 1)));
-  std::sort(masks.begin(), masks.end());
-  masks.erase(std::unique(masks.begin(), masks.end()), masks.end());
+  std::ranges::sort(masks);
+  masks.erase(std::ranges::unique(masks).begin(), masks.end());
   std::vector<SampleCase> result;
   for (auto mask : masks)
     for (bool alpha : {false, true})

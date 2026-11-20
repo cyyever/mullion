@@ -88,6 +88,7 @@ main(int argc, char **argv) {
             values.push_back(d.substr(d.find('=') + 1));
           }
           std::vector<D3D_SHADER_MACRO> macros;
+          macros.reserve(keys.size() + 1);
           for (UINT i = 0; i < keys.size(); i++) macros.push_back({keys[i].c_str(), values[i].c_str()});
           macros.push_back({});
           ComPtr<ID3DBlob> blob, errors;

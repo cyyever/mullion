@@ -109,6 +109,7 @@ main(int argc, char **argv) {
       lists.push_back(list);
     }
     std::vector<ID3D12CommandList *> submitted;
+    submitted.reserve(lists.size());
     for (auto &list : lists)
       submitted.push_back(list.Get());
     queue->ExecuteCommandLists(submitted.size(), submitted.data());

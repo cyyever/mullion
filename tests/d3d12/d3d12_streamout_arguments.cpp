@@ -5,6 +5,7 @@
 // according to the format defined by a particular command signature" (Microsoft Learn, Indirect Drawing).
 #include "d3d12_test.hpp"
 #include "../../src/airconv/airconv_public.h"
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <memory>
@@ -421,7 +422,7 @@ main(int argc, char **argv) {
           CHECK(counted->Map(0, nullptr, (void **)&runs));
           CHECK(clocks->Map(0, nullptr, (void **)&times));
           std::vector<UINT> wanted_runs(columns * rows);
-          std::fill(want.begin(), want.end(), 0);
+          std::ranges::fill(want, 0);
           arguments(0, commands);
           for (UINT round = 0; round < counts.size(); round++) {
             UINT turn = round + 1;

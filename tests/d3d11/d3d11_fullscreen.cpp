@@ -262,10 +262,10 @@ main(int argc, char **argv) {
                 return reduces(registry.dmPelsWidth, mode.Width) && reduces(registry.dmPelsHeight, mode.Height);
               };
               auto available = modes;
-              available.erase(std::remove_if(available.begin(), available.end(), [&](const auto &mode) {
+              available.erase(std::ranges::remove_if(available, [&](const auto &mode) {
                                 return (mode.Width == desktop.dmPelsWidth && mode.Height == desktop.dmPelsHeight) ||
                                        !held(mode);
-                              }),
+                              }).begin(),
                               available.end());
               if (!expect(!available.empty(), "no enumerated mode differs from the desktop"))
                 return verdict();

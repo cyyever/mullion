@@ -96,7 +96,7 @@ inline bool
 required_vertex(const Format &f) {
   return f.id == DXGI_FORMAT_R10G10B10A2_UNORM ||
          (f.components.front().channel == 0 && f.kind != Srgb && f.kind != Shared &&
-          std::all_of(f.components.begin(), f.components.end(), [](auto &c) {
+          std::ranges::all_of(f.components, [](auto &c) {
             return c.channel < 4 && c.bits >= CHAR_BIT && std::has_single_bit(c.bits);
           }));
 }
@@ -175,8 +175,8 @@ inputs(const Format &f) {
         for (unsigned exponent = 0; exponent <= mask(8); exponent++)
           for (uint32_t mantissa : {0u, 1u, mask(23) / 2, mask(23)})
             words.push_back(sign << 31 | exponent << 23 | mantissa);
-    std::sort(words.begin(), words.end());
-    words.erase(std::unique(words.begin(), words.end()), words.end());
+    std::ranges::sort(words);
+    words.erase(std::ranges::unique(words).begin(), words.end());
   }
   const unsigned count = widest == 32                  ? unsigned(words.size())
                          : f.kind == Shared            ? 1u << (f.components.front().bits + f.components.back().bits)
@@ -237,7 +237,7 @@ loaded(const Format &f, const uint8_t *bytes, const Pixel &have, bool sampled = 
         std::signbit(a) == std::signbit(b))
       continue;
     if (f.kind == Srgb && c < 3 && a > 0 && a < 1 && b > 0 && b < 1) {
-      auto component = std::find_if(f.components.begin(), f.components.end(), [&](auto &v) { return v.channel == c; });
+      auto component = std::ranges::find_if(f.components, [&](auto &v) { return v.channel == c; });
       if (component != f.components.end() &&
           std::fabs(srgb(a) * mask(component->bits) - field(bytes, *component)) <= 0.5)
         continue;
@@ -344,7 +344,7 @@ ordered(const Format &f, const std::vector<Pixel> &source, const uint8_t *bytes,
       int64_t code = f.kind == Snorm && (raw >> (c.bits - 1)) ? int64_t(raw) - (int64_t(1) << c.bits) : raw;
       values.emplace_back(input, code);
     }
-    std::sort(values.begin(), values.end());
+    std::ranges::sort(values);
     for (size_t i = 1; i < values.size(); i++)
       if (values[i].second < values[i - 1].second ||
           (values[i].first == values[i - 1].first && values[i].second != values[i - 1].second))
@@ -405,8 +405,8 @@ sources(const Format &f, const std::vector<uint8_t> &bytes) {
       }
     }
   }
-  std::sort(edges.begin(), edges.end());
-  edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+  std::ranges::sort(edges);
+  edges.erase(std::ranges::unique(edges).begin(), edges.end());
   for (size_t i = 0; i < edges.size(); i++) {
     Pixel p;
     for (unsigned c = 0; c < p.size(); c++)

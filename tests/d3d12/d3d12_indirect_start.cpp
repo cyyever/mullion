@@ -33,7 +33,7 @@ main(int argc, char **argv) {
   const INT base = 2;
   const char *modes[] = {"direct", "bound view", "view argument"};
   const DXGI_FORMAT formats[] = {DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R32_UINT};
-  const UINT width = *std::max_element(std::begin(indices), std::end(indices)) + base + 2;
+  const UINT width = *std::ranges::max_element(indices) + base + 2;
   SYSTEM_INFO system;
   GetSystemInfo(&system);
   const UINT last = std::numeric_limits<UINT>::max();

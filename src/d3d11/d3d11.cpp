@@ -22,6 +22,7 @@
 #include "config/config.hpp"
 #include "d3d11_device.hpp"
 #include "d3d11_on12.hpp"
+#include <algorithm>
 #include <bit>
 #include "log/log.hpp"
 #include "util_string.hpp"
@@ -284,7 +285,7 @@ extern "C" HRESULT __stdcall D3D11On12CreateDevice(
     if (!ppCommandQueues[i] || FAILED(ppCommandQueues[i]->QueryInterface(IID_PPV_ARGS(&candidate))) ||
         candidate->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT ||
         FAILED(candidate->GetDevice(IID_PPV_ARGS(&owner))) || owner != d3d12 ||
-        std::find(queues.begin(), queues.end(), candidate) != queues.end())
+        std::ranges::find(queues, candidate) != queues.end())
       return E_INVALIDARG;
     queues.push_back(std::move(candidate));
   }

@@ -115,7 +115,7 @@ copying(int argc, char **argv, D3D10_FEATURE_LEVEL1 legacy_level = D3D10_FEATURE
     if (dimension == D3D11_RESOURCE_DIMENSION_BUFFER)
       layers = 1;
     UINT mips = 1;
-    for (UINT size = dimension == D3D11_RESOURCE_DIMENSION_BUFFER ? 1 : *std::max_element(extent.begin(), extent.end());
+    for (UINT size = dimension == D3D11_RESOURCE_DIMENSION_BUFFER ? 1 : *std::ranges::max_element(extent);
          size > 1; size >>= 1)
       mips++;
     image.mips = mips;
@@ -268,7 +268,7 @@ copying(int argc, char **argv, D3D10_FEATURE_LEVEL1 legacy_level = D3D10_FEATURE
                       destination.Get(), sub, mode ? &region : nullptr, upload.data(), row_words * word_bytes,
                       slice_words * word_bytes
                   );
-                  std::fill(upload.begin(), upload.end(), 0);
+                  std::ranges::fill(upload, 0);
                 }
                 if (check(dst, dst_readback))
                   return verdict();
@@ -388,7 +388,7 @@ copying(int argc, char **argv, D3D10_FEATURE_LEVEL1 legacy_level = D3D10_FEATURE
               else
                 region.right = region.left;
               device10->UpdateSubresource(destination.Get(), 0, update ? &region : nullptr, upload.data(), 0, 0);
-              std::fill(upload.begin(), upload.end(), 0);
+              std::ranges::fill(upload, 0);
               got = read(device.Get(), immediate.Get(), dst.Get());
               if (!expect(got == expected, "buffer UpdateSubresource changed the wrong bytes"))
                 return verdict();

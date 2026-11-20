@@ -74,6 +74,7 @@ main(int argc, char **argv) {
                                             D3D12_STANDARD_MAXIMUM_ELEMENT_ALIGNMENT_BYTE_MULTIPLE)) {
       step("%s: %s", f.name, input_layout.name);
       std::vector<D3D12_INPUT_ELEMENT_DESC> elements;
+      elements.reserve(input_layout.elements.size());
       for (const auto &e : input_layout.elements)
         elements.push_back({e.name, 0, e.format, e.slot, e.offset, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});
       D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{root.Get(), bytecode(codes[kind])};

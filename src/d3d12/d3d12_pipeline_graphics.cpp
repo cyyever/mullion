@@ -31,6 +31,7 @@
 #include "DXBCParser/d3d12tokenizedprogramformat.hpp"
 #include "DXBCParser/DXBCUtils.h"
 #include "util_env.hpp"
+#include <algorithm>
 #include <bit>
 #include <span>
 #include <fstream>
@@ -1823,7 +1824,7 @@ public:
       data_ps.clip_distances = clips;
       data_ps.cull_distances = culls;
       data_ps.cull_depth = culls && !pDesc->RasterizerState.DepthClipEnable;
-      std::copy(std::begin(blend), std::end(blend), data_ps.blend);
+      std::ranges::copy(blend, data_ps.blend);
       data_ps.centered_samples =
           data_ps.single_raster_sample || pDesc->SampleDesc.Quality == DXGI_CENTER_MULTISAMPLE_QUALITY_PATTERN;
       data_ps.paired_samples = paired_samples;
@@ -1846,7 +1847,7 @@ public:
         formats[i] = mesh ? mesh_info.colors[i].pixel_format : info.colors[i].pixel_format;
       auto outputs = PixelShaderOutputFormats(ref_ps.PixelShader, {formats.data(), pDesc->NumRenderTargets},
                                              dual_source_blending);
-      std::copy(outputs.begin(), outputs.end(), data_ps.pixel_formats);
+      std::ranges::copy(outputs, data_ps.pixel_formats);
 
       SM50_SHADER_ROOT_SIGNATURE_DATA rootsig;
       if (!(ps_func = function(shader_ps, pDesc->PS, root_signature(rootsig, &data_ps), ps_name.c_str())))

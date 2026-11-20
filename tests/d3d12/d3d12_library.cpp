@@ -645,6 +645,7 @@ main(int argc, char **argv) {
   CHECK(device->CreateComputePipelineState(&computes[0], IID_PPV_ARGS(&pipeline)));
   std::array<HRESULT, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> answers;
   std::vector<std::thread> threads;
+  threads.reserve(answers.size());
   for (UINT i = 0; i < answers.size(); i++)
     threads.emplace_back([&, i] { answers[i] = library->StorePipeline(L"concurrent", pipeline.Get()); });
   for (auto &thread : threads)

@@ -118,6 +118,7 @@ main(int argc, char **argv) {
   std::vector<std::atomic<ID3D12PipelineState *>> made(2 * threads * variants);
   std::atomic<UINT> failed = 0, done = 0;
   std::vector<std::thread> pool;
+  pool.reserve(threads);
   for (UINT t = 0; t < threads; t++)
     pool.emplace_back([&, t] {
       // each thread starts at a variant of its own, so the threads meet on every variant at some time

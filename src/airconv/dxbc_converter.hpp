@@ -513,7 +513,7 @@ public:
       register_(parameter.Register),
       system_value_(parameter.SystemValue),
       component_type_(widened((RegisterComponentType)parameter.ComponentType)) {
-    std::transform(semantic_name_.begin(), semantic_name_.end(), semantic_name_.begin(), [](auto c) {
+    std::ranges::transform(semantic_name_, semantic_name_.begin(), [](auto c) {
       return std::tolower(c);
     });
   }

@@ -344,7 +344,7 @@ main(int argc, char **argv) {
                 sequences[op == 3 ? t / group : t % words].push_back(old[t]);
               for (UINT b = 0; b < buckets; b++) {
                 auto &sequence = sequences[b];
-                std::sort(sequence.begin(), sequence.end());
+                std::ranges::sort(sequence);
                 for (UINT i = 0; i < sequence.size(); i++)
                   expect(sequence[i] == i * increment, "word %u returned[%u]: %llx", b, i,
                          (unsigned long long)sequence[i]);

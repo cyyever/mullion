@@ -554,7 +554,7 @@ run(int argc, char **argv) {
         if (!finish())
           return 1;
         for (auto &plane_bytes : expected)
-          std::fill(plane_bytes.begin(), plane_bytes.end(), UINT8_MAX);
+          std::ranges::fill(plane_bytes, UINT8_MAX);
         if (operation == 0) {
           if (!begin())
             return 1;

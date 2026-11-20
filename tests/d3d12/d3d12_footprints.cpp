@@ -52,8 +52,8 @@ int main(int, char **) {
                                   UINT64(std::numeric_limits<UINT>::max()) + 1})
                 for (UINT outputs = 0; outputs < (1u << 4); outputs++)
                   for (bool api1 : {false, true}) {
-                    std::fill(rows.begin(), rows.end(), ~0u);
-                    std::fill(row_sizes.begin(), row_sizes.end(), ~UINT64(0));
+                    std::ranges::fill(rows, ~0u);
+                    std::ranges::fill(row_sizes, ~UINT64(0));
                     memset(layouts.data(), 0xff, layouts.size() * sizeof(layouts[0]));
                     UINT64 total = ~UINT64(0);
                     auto out_layouts = outputs & 1 ? layouts.data() : nullptr;

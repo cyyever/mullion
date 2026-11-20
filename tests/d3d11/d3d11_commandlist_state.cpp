@@ -202,7 +202,7 @@ main() {
   const UINT mask_bits = sizeof(uint64_t) * CHAR_BIT;
   const UINT srv_slots[] = {0, mask_bits - 1, mask_bits, srv_slot};
   auto srv_bound = [&](UINT slot) {
-    return std::find(std::begin(srv_slots), std::end(srv_slots), slot) != std::end(srv_slots);
+    return std::ranges::find(srv_slots, slot) != std::end(srv_slots);
   };
   auto uav_bound = [&](UINT slot) {
     return slot == 0 || slot == D3D11_PS_CS_UAV_REGISTER_COUNT - 1 ||

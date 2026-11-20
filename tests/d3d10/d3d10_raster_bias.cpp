@@ -6,6 +6,7 @@
 #include "../d3d11/d3d11_test.hpp"
 #include <d3d10_1.h>
 #include "../raster_bias.hpp"
+#include <algorithm>
 #include <cstddef>
 
 int main() {
@@ -80,7 +81,7 @@ int main() {
       D3D10_VIEWPORT vp{0, 0, raster::width, raster::height, c.low, c.high};
       device->RSSetViewports(1, &vp);
       std::array<raster::Vertex, raster::Triangle> vertices{};
-      std::copy(geometry.vertices.begin(), geometry.vertices.end(), vertices.begin());
+      std::ranges::copy(geometry.vertices, vertices.begin());
       device->UpdateSubresource(vb.Get(), 0, nullptr, vertices.data(), 0, 0);
       const UINT stride = sizeof(raster::Vertex), offset = 0;
       device->IASetVertexBuffers(0, 1, vb.GetAddressOf(), &stride, &offset);

@@ -78,6 +78,7 @@ struct Compiler {
       return out;
     if (!dxc) {
       std::vector<D3D_SHADER_MACRO> macros;
+      macros.reserve(defines.size() + 1);
       for (size_t i = 0; i < defines.size(); i++)
         macros.push_back({names[i].c_str(), values[i].c_str()});
       macros.push_back({});
@@ -96,6 +97,7 @@ struct Compiler {
     for (auto &d : defines)
       args.insert(args.end(), {L"-D", wide(d)});
     std::vector<const wchar_t *> argv;
+    argv.reserve(args.size());
     for (auto &a : args)
       argv.push_back(a.c_str());
     DxcBuffer src{hlsl, N - 1, DXC_CP_UTF8};

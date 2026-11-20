@@ -346,7 +346,7 @@ expected_points(Domain domain, Partitioning partitioning, const Factors &patch) 
     memcpy(bits.data(), location, sizeof(location));
     out.push_back(bits);
   }
-  std::sort(out.begin(), out.end());
+  std::ranges::sort(out);
   return out;
 }
 

@@ -44,3 +44,23 @@ void moved(Record item) {
 void redundant() {
   return; // EXPECT: readability-redundant-control-flow
 }
+
+#include <algorithm>
+#include <vector>
+void sort_values(std::vector<int> &values) {
+  std::sort(values.begin(), values.end()); // EXPECT: modernize-use-ranges
+  std::ranges::sort(values);
+}
+std::vector<int> append_without_reserve(const std::vector<int> &input) {
+  std::vector<int> output;
+  for (auto value : input)
+    output.push_back(value); // EXPECT: performance-inefficient-vector-operation
+  return output;
+}
+std::vector<int> append_with_reserve(const std::vector<int> &input) {
+  std::vector<int> output;
+  output.reserve(input.size());
+  for (auto value : input)
+    output.push_back(value);
+  return output;
+}

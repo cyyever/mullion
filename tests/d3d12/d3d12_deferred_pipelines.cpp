@@ -97,7 +97,7 @@ main(int argc, char **argv) {
                                    compiler.compile(hlsl, "ps", "ps", value_defines(tessellated_value + 1))};
   std::string mesh_ps[2] = {compiler.compile(hlsl, "ps", "ps", value_defines(mesh_value)),
                             compiler.compile(hlsl, "ps", "ps", value_defines(mesh_value + 1))};
-  if (cover.empty() || std::any_of(pixel_shaders.begin(), pixel_shaders.end(), [](auto &s) { return s.empty(); }) ||
+  if (cover.empty() || std::ranges::any_of(pixel_shaders, [](auto &s) { return s.empty(); }) ||
       corner.empty() || hs.empty() || ds.empty() || tessellated_ps[0].empty() || tessellated_ps[1].empty() ||
       mesh_ps[0].empty() || mesh_ps[1].empty()) {
     printf("failed: HLSL did not compile\n");
@@ -127,6 +127,7 @@ main(int argc, char **argv) {
   std::vector<ComPtr<ID3D12PipelineState>> pipelines(drawn);
   std::vector<HRESULT> results(drawn + released, S_OK);
   std::vector<std::thread> creators;
+  creators.reserve(threads);
   for (UINT t = 0; t < threads; t++)
     creators.emplace_back([&, t] {
       for (UINT i = t; i < drawn + released; i += threads) {

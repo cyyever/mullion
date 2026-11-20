@@ -732,7 +732,7 @@ private:
             {WMTSparseMappingModeMap, buffer->sparse_tile_count, 1, 0}});
       };
     auto &mapped = resource->mapped_tiles;
-    auto bound = std::find(mapped.begin(), mapped.end(), true);
+    auto bound = std::ranges::find(mapped, true);
     auto at = tiling.place(bound == mapped.end() ? 0 : bound - mapped.begin());
     if (bound != mapped.end())
       return [res = Com(resource), at](WMT::MTL4CommandQueue queue) {
@@ -1480,7 +1480,7 @@ public:
     if (src_resource == dst_resource && region_size->NumTiles &&
         destination.index(*dst_region_start_coordinate, *region_size, 0) >
             source.index(*src_region_start_coordinate, *region_size, 0))
-      std::reverse(operations.begin(), operations.end());
+      std::ranges::reverse(operations);
     // nor between textures of which either has all its memory: such a texture keeps its own
     if (src->dense_tiles || dst->dense_tiles)
       return;
@@ -2258,7 +2258,7 @@ public:
       encoder.encodeCommands(&data->cmd_head);
       auto parts = [&](auto &parts, std::array<uint64_t, 3> origin, std::array<uint64_t, 3> size) -> void {
         if (size[0] * size[1] * size[2] > data->at_once) {
-          auto axis = std::max_element(size.begin(), size.end()) - size.begin();
+          auto axis = std::ranges::max_element(size) - size.begin();
           auto half = size;
           half[axis] /= 2;
           parts(parts, origin, half);

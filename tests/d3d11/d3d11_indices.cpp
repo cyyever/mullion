@@ -142,8 +142,8 @@ main() {
   };
   std::vector<UINT> list16(std::begin(indices16) + 1, std::end(indices16)), list32(std::begin(indices32) + 1, std::end(indices32));
   // where each format's indices go on after the cut, and how many there are
-  const UINT after16 = std::find(list16.begin(), list16.end(), cut16) - list16.begin() + 1, rest16 = list16.size() - after16;
-  const UINT after32 = std::find(list32.begin(), list32.end(), cut32) - list32.begin() + 1, rest32 = list32.size() - after32;
+  const UINT after16 = std::ranges::find(list16, cut16) - list16.begin() + 1, rest16 = list16.size() - after16;
+  const UINT after32 = std::ranges::find(list32, cut32) - list32.begin() + 1, rest32 = list32.size() - after32;
   auto rest = [](const std::vector<UINT> &indices, UINT after) { return std::vector<UINT>(indices.begin() + after, indices.end()); };
   const UINT skipped = 2, counted = 5;
   Records counted_records;

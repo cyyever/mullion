@@ -128,11 +128,12 @@ main(int argc, char **argv) {
           UINT id;
         };
         std::vector<Record> records;
+        records.reserve(commands);
         for (UINT i = 0; i < commands; i++)
           records.push_back({offset + UINT64(i) * stride, i});
         for (UINT i = 0; i < commands; i++) {
           UINT64 at = offset + (UINT64(i) * stride) % wrap;
-          if (std::none_of(records.begin(), records.end(), [&](auto &r) { return r.at == at; }))
+          if (std::ranges::none_of(records, [&](auto &r) { return r.at == at; }))
             records.push_back({at, commands + i});
         }
         const UINT record_bytes =

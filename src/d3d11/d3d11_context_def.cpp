@@ -4,6 +4,7 @@
 #include "mullion_buffer.hpp"
 #include "mullion_command_queue.hpp"
 #include "mullion_dynamic.hpp"
+#include <algorithm>
 #include <unordered_set>
 
 namespace mullion {
@@ -96,7 +97,7 @@ DeferredContextBase::MoveToFormatViews() {}
 template <>
 void
 DeferredContextBase::PrepareTextureUse(std::span<const Rc<Texture>> textures) {
-  if (!device->shares_with_d3d12 || std::none_of(textures.begin(), textures.end(), [](const auto &t) { return bool(t); }))
+  if (!device->shares_with_d3d12 || std::ranges::none_of(textures, [](const auto &t) { return bool(t); }))
     return;
   // a replay checks waits returned after this list was recorded, before the operation's pass begins
   InvalidateCurrentPass(true);
