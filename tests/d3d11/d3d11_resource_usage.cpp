@@ -33,8 +33,8 @@ main() {
   for (UINT a : resource_binds)
     for (UINT b : resource_binds)
       binds.push_back(a | b);
-  std::sort(binds.begin(), binds.end());
-  binds.erase(std::unique(binds.begin(), binds.end()), binds.end());
+  std::ranges::sort(binds);
+  binds.erase(std::ranges::unique(binds).begin(), binds.end());
   std::array<UINT, 4 * D3D11_COMMONSHADER_CONSTANT_BUFFER_COMPONENTS> words;
   for (UINT i = 0; i < words.size(); i++)
     words[i] = i * 3 + 1;

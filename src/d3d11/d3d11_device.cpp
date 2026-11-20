@@ -25,6 +25,7 @@
 #include "d3d11_resource.hpp"
 #include "d3d11_enumerable.hpp"
 #include "dxgi_object.hpp"
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <d3d11sdklayers.h>
@@ -57,9 +58,9 @@ class D3D11InfoQueue final : public ID3D11InfoQueue {
 
     bool empty() const { return categories.empty() && severities.empty() && ids.empty(); }
     bool matches(D3D11_MESSAGE_CATEGORY category, D3D11_MESSAGE_SEVERITY severity, D3D11_MESSAGE_ID id) const {
-      return std::find(categories.begin(), categories.end(), category) != categories.end() ||
-             std::find(severities.begin(), severities.end(), severity) != severities.end() ||
-             std::find(ids.begin(), ids.end(), id) != ids.end();
+      return std::ranges::find(categories, category) != categories.end() ||
+             std::ranges::find(severities, severity) != severities.end() ||
+             std::ranges::find(ids, id) != ids.end();
     }
     template <typename T> static void append(std::vector<T> &values, UINT count, const T *entries) {
       for (UINT i = 0; i < count; ++i)

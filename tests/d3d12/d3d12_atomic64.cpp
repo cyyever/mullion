@@ -113,7 +113,7 @@ main(int argc, char **argv) {
   // the words one thread moves alone, and where they end: max 5 to 9, min 9 to 5, signed max -1 to 3, min 3 to -1
   const uint64_t alone_start[4] = {5, 9, uint64_t(-1), 3}, alone_end[4] = {9, 5, 3, uint64_t(-1)};
   std::vector<uint64_t> start(singles + 3 * words + 2 * groups + 4);
-  std::copy(std::begin(alone_start), std::end(alone_start), start.end() - 4);
+  std::ranges::copy(alone_start, start.end() - 4);
   start[2] = ~uint64_t(0);
   start[3] = uint64_t(INT64_MIN);
   start[4] = uint64_t(INT64_MAX);
@@ -203,7 +203,7 @@ main(int argc, char **argv) {
 
   // add: memory at threads steps; returned, sorted, each multiple of the step
   auto added = returns(0);
-  std::sort(added.begin(), added.end());
+  std::ranges::sort(added);
   if (m[0] != threads * step)
     fail("add memory", m[0], threads * step);
   for (UINT k = 0; k < threads; k++)
@@ -217,10 +217,10 @@ main(int argc, char **argv) {
     if (m[op] != want)
       fail(what, m[op], want);
     for (auto got : returns(op))
-      if (got != start[op] && !std::binary_search(values.begin(), values.end(), got))
+      if (got != start[op] && !std::ranges::binary_search(values, got))
         fail(what, got, want);
   };
-  std::sort(values.begin(), values.end());
+  std::ranges::sort(values);
   extreme(1, [](uint64_t a, uint64_t b) { return a > b; }, "unsigned max");
   extreme(2, [](uint64_t a, uint64_t b) { return a < b; }, "unsigned min");
   extreme(3, [](uint64_t a, uint64_t b) { return int64_t(a) > int64_t(b); }, "signed max");
@@ -229,15 +229,15 @@ main(int argc, char **argv) {
   auto swapped = returns(5), in = values;
   swapped.push_back(m[5]);
   in.push_back(start[5]);
-  std::sort(swapped.begin(), swapped.end());
-  std::sort(in.begin(), in.end());
+  std::ranges::sort(swapped);
+  std::ranges::sort(in);
   for (UINT k = 0; k <= threads; k++)
     if (swapped[k] != in[k])
       fail("exchange (sorted)", swapped[k], in[k]);
   // compare exchange from zero: one thread sees zero, and memory and every other thread hold its value
   auto compared = returns(6);
   auto winners = std::count(compared.begin(), compared.end(), 0);
-  auto winner = std::find(compared.begin(), compared.end(), 0) - compared.begin();
+  auto winner = std::ranges::find(compared, 0) - compared.begin();
   if (winners != 1)
     fail("compare exchange winners", winners, 1);
   for (UINT t = 0; t < threads; t++)
@@ -273,7 +273,7 @@ main(int argc, char **argv) {
       if (!r[t * ops + 11])
         winners++, winner = t;
     }
-    std::sort(olds.begin(), olds.end());
+    std::ranges::sort(olds);
     if (word[0] != group * step)
       fail("groupshared add memory", word[0], group * step);
     for (UINT k = 0; k < group; k++)
@@ -291,7 +291,7 @@ main(int argc, char **argv) {
     std::vector<uint64_t> olds;
     for (UINT t = w * 64; t < w * 64 + 64; t++)
       olds.push_back(r[t * ops + 12]);
-    std::sort(olds.begin(), olds.end());
+    std::ranges::sort(olds);
     if (texels[w] != 64 * step)
       fail("texel add memory", texels[w], 64 * step);
     for (UINT k = 0; k < 64; k++)

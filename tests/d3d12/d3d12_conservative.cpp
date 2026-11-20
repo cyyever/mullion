@@ -898,7 +898,7 @@ main(int argc, char **argv) {
       bool mesh = meshed(geometry);
       // without depth clipping, only of triangles before the eye: the rest is still clipped to w above 0 (15.4), which
       // reaches past any window
-      bool unclippable = std::all_of(std::begin(t.w), std::end(t.w), [](float w) { return w > 0; });
+      bool unclippable = std::ranges::all_of(t.w, [](float w) { return w > 0; });
       CHECK(draw(t, pso[geometry][0][0].Get(), 0, false, normal, patch, mesh));
       CHECK(draw(t, pso[geometry][1][0].Get(), 0, false, conservative, patch, mesh));
       CHECK(draw(t, pso[geometry][1][1].Get(), 1, false, multisampled, patch, mesh));

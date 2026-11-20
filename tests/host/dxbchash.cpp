@@ -39,7 +39,7 @@ main(int argc, char **argv) {
         continue;
       dxbc::Hash given;
       memcpy(given.data(), bytes.data() + dxbc::hash_at, given.size());
-      auto all = [&](uint8_t value) { return std::all_of(given.begin(), given.end(), [=](uint8_t byte) { return byte == value; }); };
+      auto all = [&](uint8_t value) { return std::ranges::all_of(given, [=](uint8_t byte) { return byte == value; }); };
       if (all(0) || all(1)) {
         (all(0) ? unsigned_ones : unchecked)++;
         continue;

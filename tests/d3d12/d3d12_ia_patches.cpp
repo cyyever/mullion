@@ -77,8 +77,8 @@ int main(int argc, char **argv) {
   patch_sizes.push_back(patch_sizes.front());
   for (UINT points : patch_sizes) {
     std::vector<UINT> counts{0, points - 1, points, points + 1, 2 * points - 1, 2 * points, 2 * points + 1};
-    std::sort(counts.begin(), counts.end());
-    counts.erase(std::unique(counts.begin(), counts.end()), counts.end());
+    std::ranges::sort(counts);
+    counts.erase(std::ranges::unique(counts).begin(), counts.end());
     for (UINT capacity : {0u, points - 1, points, 2 * points - 1, 2 * points + 1}) {
       struct Case { UINT path, indexed, format, count; };
       std::vector<Case> cases;
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
               const UINT vertex = patch * points + cp;
               const UINT id = test.indexed ? indices[index_offset + first + vertex] : vertex;
               const Vertex value{id, instance, id * 7 + 1, instance * 11 + id};
-              std::copy(value.begin(), value.end(), wanted.begin() + at);
+              std::ranges::copy(value, wanted.begin() + at);
               at += value.size();
             }
             remaining -= points;

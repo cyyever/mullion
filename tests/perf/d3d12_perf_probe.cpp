@@ -274,7 +274,7 @@ static void deferred_release(IUnknown *o) { g_deferred.emplace_back(p.fence_valu
 static void release_completed()
 {
     UINT64 done = p.fence->GetCompletedValue();
-    auto it = std::remove_if(g_deferred.begin(), g_deferred.end(), [done](auto &e) { if (e.first > done) return false; e.second->Release(); return true; });
+    auto it = std::ranges::remove_if(g_deferred, [done](auto &e) { if (e.first > done) return false; e.second->Release(); return true; }).begin();
     g_deferred.erase(it, g_deferred.end());
 }
 
@@ -923,6 +923,7 @@ static std::vector<Scene> base_scenes()
         { "resource_churn", "50 committed buffers and 10 textures created and released per frame", base, [](UINT) {
             double t = qpc_ms();
             std::vector<ID3D12Resource *> rs;
+            rs.reserve(50 + 10);
             for (UINT i = 0; i < 50; i++) rs.push_back(create_buffer(64 << 10, D3D12_HEAP_TYPE_DEFAULT));
             for (UINT i = 0; i < 10; i++) rs.push_back(create_texture(256, 256, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON));
             double t1 = qpc_ms();
@@ -3685,7 +3686,7 @@ static std::vector<Scene> scenes()
 static double percentile(std::vector<double> v, double q)
 {
     if (v.empty()) return 0;
-    std::sort(v.begin(), v.end());
+    std::ranges::sort(v);
     return v[std::min(v.size() - 1, (size_t)(q * (v.size() - 1) + 0.5))];
 }
 

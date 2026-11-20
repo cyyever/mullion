@@ -6,6 +6,7 @@
 #include "d3d12_test.hpp"
 #include "../raster.hpp"
 #include "../raster_conservative.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <bit>
 #include <map>
@@ -135,7 +136,7 @@ int main(int argc, char **argv) {
         all.push_back(std::move(c));
       }
     }
-  const auto capacity = std::max_element(all.begin(), all.end(), [](const auto &a, const auto &b) {
+  const auto capacity = std::ranges::max_element(all, [](const auto &a, const auto &b) {
                           return a.vertices.size() < b.vertices.size();
                         })->vertices.size();
   const UINT vertex_bytes = sizeof(raster::Vertex) * capacity;

@@ -883,7 +883,7 @@ RWBuffer<uint> result : register(u1);
           };
           step("buffer RTV clear bytes=%u first=%u count=%u listed=%u", element_bytes, first, count, listed);
           verify(count, clear[0], initial[0]);
-          std::fill(initial.begin(), initial.end(), 5);
+          std::ranges::fill(initial, 5);
           context->UpdateSubresource(resource.Get(), 0, nullptr, initial.data(), 0, 0);
           const UINT drawn = std::max(1u, count / 2);
           run->ClearState();

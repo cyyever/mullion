@@ -225,7 +225,7 @@ main(int argc, char **argv) {
     const UINT data_bytes = c.values * c.stride, table_at = (data_bytes + view_bytes - 1) / view_bytes * view_bytes;
     std::vector<uint8_t> input(table_at + data_bytes);
     std::mt19937 random(seed);
-    std::generate(input.begin(), input.end(), [&] { return uint8_t(random()); });
+    std::ranges::generate(input, [&] { return uint8_t(random()); });
     auto upload = buffer(device.Get(), D3D12_HEAP_TYPE_UPLOAD, input.size(), D3D12_RESOURCE_STATE_GENERIC_READ);
     const UINT64 output_bytes = 2 * c.values * 4 * sizeof(uint32_t);
     auto output = buffer(device.Get(), D3D12_HEAP_TYPE_DEFAULT, output_bytes, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,

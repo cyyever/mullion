@@ -5,6 +5,7 @@
 #include "d3d11_test.hpp"
 #include <d3d11_3.h>
 #include "../raster_samples.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <map>
 
@@ -236,7 +237,7 @@ int main() {
             step("%s center %u %ux job %zu geometry %zu pass %u mask %#x",
                  context == immediate.Get() ? "immediate" : "deferred", centered, count, n, j.geometry, j.pass, j.mask);
             std::array<Vertex, Triangle> vertices{};
-            std::copy(c.vertices.begin(), c.vertices.end(), vertices.begin());
+            std::ranges::copy(c.vertices, vertices.begin());
             context->UpdateSubresource(vb.Get(), 0, nullptr, vertices.data(), 0, 0);
             const UINT stride = sizeof(Vertex), offset = 0;
             context->IASetVertexBuffers(0, 1, vb.GetAddressOf(), &stride, &offset);

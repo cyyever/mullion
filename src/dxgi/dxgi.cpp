@@ -46,7 +46,7 @@ static bool NvidiaExtensionRequested() {
   if (env == "1" || env == "0")
     return env == "1";
   auto vendor = Config::getInstance().getOption<std::string>("dxgi.customVendorId");
-  std::transform(vendor.begin(), vendor.end(), vendor.begin(), [](unsigned char c) { return std::tolower(c); });
+  std::ranges::transform(vendor, vendor.begin(), [](unsigned char c) { return std::tolower(c); });
   return vendor == "10de" || vendor == "0x10de";
 }
 

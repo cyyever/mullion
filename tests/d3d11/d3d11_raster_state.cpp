@@ -316,8 +316,8 @@ int main() {
   {
     std::array<D3D11_VIEWPORT, capacity + 1> oversized_vps{};
     std::array<D3D11_RECT, capacity + 1> oversized_rects{};
-    std::copy(vps.begin(), vps.end(), oversized_vps.begin());
-    std::copy(rects.begin(), rects.end(), oversized_rects.begin());
+    std::ranges::copy(vps, oversized_vps.begin());
+    std::ranges::copy(rects, oversized_rects.begin());
     for (auto context : {immediate.Get(), deferred.Get()}) {
       context->RSSetViewports(capacity, vps.data());
       context->RSSetScissorRects(capacity, rects.data());

@@ -134,7 +134,7 @@ public:
     auto first = seqId == seq_id_begin ? occlusion_counter_begin : 0;
     auto end = seqId == seq_id_end ? occlusion_counter_end : offsets.back();
     assert(first <= end);
-    auto window = std::upper_bound(offsets.begin(), offsets.end(), first) - offsets.begin() - 1;
+    auto window = std::ranges::upper_bound(offsets, first) - offsets.begin() - 1;
     while (first < end) {
       auto data = (const uint64_t *)buffers[window].memory.get();
       auto stop = std::min(end, offsets[window + 1]);

@@ -102,7 +102,7 @@ main(int argc, char **argv) {
     std::vector<UINT64> want(Queries + 2);
     auto start = [&](const char *name) {
       step("%s: %s", binary ? "binary" : "precise", name);
-      std::fill(want.begin(), want.end(), sentinel);
+      std::ranges::fill(want, sentinel);
       HRESULT hr = allocator->Reset();
       if (SUCCEEDED(hr))
         hr = list->Reset(allocator.Get(), pso.Get());

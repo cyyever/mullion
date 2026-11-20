@@ -175,6 +175,7 @@ main(int argc, char **argv) {
   };
   // the indexed strips' indices: 0xFFFF in the middle, a vertex or a cut
   std::vector<uint16_t> indices;
+  indices.reserve(21);
   for (uint16_t i = 0; i < 21; i++)
     indices.push_back(i == 10 ? 0xffff : i);
   const UINT base_vertex = 2, indexed_start = 0;
@@ -288,7 +289,7 @@ main(int argc, char **argv) {
       auto strides = d.kind == Streams ? two_strides : one_strides;
       for (uint32_t s = 0; s < 2; s++)
         for (uint32_t slot = 0; slot < 2; slot++) {
-          bool used = std::any_of(elements.begin(), elements.end(), [&](auto &e) { return e.stream == s && e.slot == slot; });
+          bool used = std::ranges::any_of(elements, [&](auto &e) { return e.stream == s && e.slot == slot; });
           if (!used)
             continue;
           UINT64 n = 0;
@@ -324,10 +325,10 @@ main(int argc, char **argv) {
         UINT64 per = primitives[0].size(), written = 0;
         std::vector<uint32_t> slots;
         for (uint32_t slot = 0; slot < 2; slot++)
-          if (std::any_of(elements.begin(), elements.end(), [&](auto &e) { return e.stream == s && e.slot == slot; }))
+          if (std::ranges::any_of(elements, [&](auto &e) { return e.stream == s && e.slot == slot; }))
             slots.push_back(slot);
         for (auto &p : primitives) {
-          bool fits = std::all_of(slots.begin(), slots.end(), [&](uint32_t slot) {
+          bool fits = std::ranges::all_of(slots, [&](uint32_t slot) {
             auto &r = regions[d.regions[slot]];
             return r.filled + per * strides[slot] <= r.bytes;
           });

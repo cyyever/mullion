@@ -6,6 +6,8 @@
 // https://learn.microsoft.com/en-us/windows/win32/api/d3d11_1/ne-d3d11_1-d3d11_logic_op
 #include "d3d11_test.hpp"
 #include <d3d11_1.h>
+
+#include <algorithm>
 #include "../depth_formats.hpp"
 #include "../format_logic.hpp"
 
@@ -51,7 +53,7 @@ main() {
     D3D11_FEATURE_DATA_FORMAT_SUPPORT2 support2{candidate.id};
     CHECK(device->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2, &support2, sizeof(support2)));
     const bool renderable = (support & D3D11_FORMAT_SUPPORT_RENDER_TARGET) != 0;
-    auto layout = std::find_if(typed.begin(), typed.end(), [&](const auto &f) { return f.id == candidate.id; });
+    auto layout = std::ranges::find_if(typed, [&](const auto &f) { return f.id == candidate.id; });
     const bool legal = layout != typed.end() && layout->kind == Unsigned && renderable;
     expect(
         bool(support2.OutFormatSupport2 & D3D11_FORMAT_SUPPORT2_OUTPUT_MERGER_LOGIC_OP) ==

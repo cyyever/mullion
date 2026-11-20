@@ -5,6 +5,8 @@
 // native format range (17.7.1 allows truncation or clamping above it). all operations and channel masks must
 // produce the CPU's exact native bits through direct/indirect/bundle draws, on both shader front ends.
 // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_logic_op
+#include <algorithm>
+
 #include "d3d12_test.hpp"
 #include "../depth_formats.hpp"
 #include "../format_logic.hpp"
@@ -80,7 +82,7 @@ main(int argc, char **argv) {
       );
       continue;
     }
-    auto layout = std::find_if(typed.begin(), typed.end(), [&](const auto &f) { return f.id == candidate.id; });
+    auto layout = std::ranges::find_if(typed, [&](const auto &f) { return f.id == candidate.id; });
     const bool legal =
         layout != typed.end() && layout->kind == Unsigned && (support.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET);
     expect(

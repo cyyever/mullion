@@ -8,6 +8,7 @@
  * See <https://github.com/doitsujin/dxvk/blob/master/LICENSE>
  */
 
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <sstream>
@@ -58,7 +59,7 @@ namespace mullion {
   }};
 
   const Config* findProfile(const ProfileList& profiles, const std::string& appName) {
-    auto appConfig = std::find_if(profiles.begin(), profiles.end(),
+    auto appConfig = std::ranges::find_if(profiles,
       [&appName] (const std::pair<const char*, Config>& pair) {
         std::regex expr(pair.first, std::regex::extended | std::regex::icase);
         return std::regex_search(appName, expr);
@@ -401,7 +402,7 @@ namespace mullion {
   }
 
   std::string Config::toLower(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(),
+    std::ranges::transform(str, str.begin(),
       [] (unsigned char c) { return (c >= 'A' && c <= 'Z') ? (c + 'a' - 'A') : c; });
     return str;
   }

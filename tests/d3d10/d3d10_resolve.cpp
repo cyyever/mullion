@@ -71,6 +71,7 @@ main() {
       if (!qualities)
         continue;
       std::vector<UINT> patterns;
+      patterns.reserve(size_t(qualities) + 2);
       for (UINT quality = 0; quality < qualities; quality++)
         patterns.push_back(quality);
       const bool fixed =

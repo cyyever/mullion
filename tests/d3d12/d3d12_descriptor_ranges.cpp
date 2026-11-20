@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
                                    D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER};
         sampler.MaxLOD = D3D12_FLOAT32_MAX;
         auto color = border(i);
-        std::copy(color.begin(), color.end(), sampler.BorderColor);
+        std::ranges::copy(color, sampler.BorderColor);
         device->CreateSampler(&sampler, at);
       } else if (kind == RTV) {
         D3D12_RENDER_TARGET_VIEW_DESC view{td.Format, D3D12_RTV_DIMENSION_TEXTURE2DARRAY};

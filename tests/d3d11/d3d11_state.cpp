@@ -77,7 +77,7 @@ main() {
     of->PSGetConstantBuffers(0, 1, &constant);
     if (!shader && !constant)
       return (UINT)Columns;
-    auto found = std::find(std::begin(constants), std::end(constants), constant);
+    auto found = std::ranges::find(constants, constant);
     return shader == pixel && found != std::end(constants) ? UINT(found - constants) : ~0u;
   };
   unsigned failures = 0;

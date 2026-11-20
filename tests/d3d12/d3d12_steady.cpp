@@ -416,7 +416,7 @@ main(int argc, char **argv) {
         Pixel got;
         memcpy(got.data(), data + footprint.Offset + y * footprint.Footprint.RowPitch + x * sizeof(Pixel),
                sizeof(Pixel));
-        untouched += std::all_of(got.begin(), got.end(), [](UINT8 b) { return b == 0xff; });
+        untouched += std::ranges::all_of(got, [](UINT8 b) { return b == 0xff; });
         auto &reference = first[y * width + x];
         if (!frame) {
           reference = got;

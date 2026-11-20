@@ -233,7 +233,7 @@ bench(Compiler &compiler) {
           times.push_back(double(stamps[1] - stamps[0]) * 1000 / frequency);
         readback->Unmap(0, nullptr);
       }
-      std::sort(times.begin(), times.end());
+      std::ranges::sort(times);
       printf("bench %-40s %-8s gpu median %.3f ms (p10 %.3f)\n", scene.name, cull ? "cull" : "no-cull",
              times[times.size() / 2], times[times.size() / 10]);
     }

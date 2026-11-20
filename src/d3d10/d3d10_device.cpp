@@ -1068,7 +1068,7 @@ MTLD3D10Device::CreateGeometryShaderWithStreamOutput(
   }
 
   Com<ID3D11GeometryShader> d3d11_shader = nullptr;
-  bool one_slot = std::all_of(entries.begin(), entries.end(), [](auto &entry) { return entry.OutputSlot == 0; });
+  bool one_slot = std::ranges::all_of(entries, [](auto &entry) { return entry.OutputSlot == 0; });
 
   HRESULT hr = d3d11_device_->CreateGeometryShaderWithStreamOutput(
       // Direct3D 10 has one stream, which is rasterized while a pixel shader or the depth test takes it

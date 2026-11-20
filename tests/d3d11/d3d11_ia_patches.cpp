@@ -52,8 +52,8 @@ main() {
   for (auto context : {immediate.Get(), deferred.Get()})
     for (UINT points = 1; points <= maximum; points++) {
       std::vector<UINT> counts{0, points - 1, points, points + 1, 2 * points - 1, 2 * points, 2 * points + 1};
-      std::sort(counts.begin(), counts.end());
-      counts.erase(std::unique(counts.begin(), counts.end()), counts.end());
+      std::ranges::sort(counts);
+      counts.erase(std::ranges::unique(counts).begin(), counts.end());
       for (UINT capacity : {points - 1, points, 2 * points - 1, 2 * points + 1}) {
         const UINT bytes = prefix + capacity * stride + word;
         auto output = buffer(device.Get(), bytes, D3D11_BIND_STREAM_OUTPUT, sentinel);
@@ -80,7 +80,7 @@ main() {
                     const UINT vertex = patch * points + cp;
                     const UINT id = indexed ? indices[index_offset + first + vertex] : vertex;
                     const Vertex value{id, instance, id * 7 + 1, instance * 11 + id};
-                    std::copy(value.begin(), value.end(), want.begin() + at);
+                    std::ranges::copy(value, want.begin() + at);
                     at += value.size();
                   }
                   remaining -= points;

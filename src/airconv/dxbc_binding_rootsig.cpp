@@ -667,7 +667,7 @@ setup_binding_rootsig(
   // headers' enumeration stops before
   constexpr uint32_t kResourceHeapDirectlyIndexed = 0x400, kSamplerHeapDirectlyIndexed = 0x800;
   if (root_sig.Flags & kResourceHeapDirectlyIndexed) {
-    auto ordered = std::any_of(shader_info->uavMap.begin(), shader_info->uavMap.end(), [&](auto &entry) {
+    auto ordered = std::ranges::any_of(shader_info->uavMap, [&](auto &entry) {
       return entry.second.range.space == kDescriptorHeapSpace && entry.second.rasterizer_order;
     });
     auto heap_index = builder.DefineBuffer(

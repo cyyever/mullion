@@ -305,7 +305,7 @@ main(int argc, char **argv) {
               memcpy(&old, got + header + UINT64(t) * record + sizeof(ids), sizeof(old));
               returned.push_back(old);
             }
-            std::sort(returned.begin(), returned.end());
+            std::ranges::sort(returned);
             for (UINT t = 0; t < returned.size(); t++)
               expect(returned[t] == (atomic >= max64 ? 0 : (draws - 1) * count) + t, "returned value %u: %llu", t,
                      returned[t]);

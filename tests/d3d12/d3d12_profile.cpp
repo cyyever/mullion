@@ -594,7 +594,7 @@ main(int argc, char **argv) {
     expect(files == UINT(profiling), "got %u records, want %u", files, UINT(profiling));
     if (profiling) {
       if (!expect(calibrations.size() == buffers.size() &&
-                      std::all_of(buffers.begin(), buffers.end(), [&](auto &entry) {
+                      std::ranges::all_of(buffers, [&](auto &entry) {
                         return calibrations.count(entry.first);
                       }),
                   "command buffer calibration missing"))

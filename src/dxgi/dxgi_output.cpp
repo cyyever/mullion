@@ -451,7 +451,7 @@ public:
 
     // Sort display modes by width, height and refresh rate,
     // in that order. Some games rely on correct ordering.
-    std::sort(modeList.begin(), modeList.end(),
+    std::ranges::sort(modeList,
               [](const DXGI_MODE_DESC1 &a, const DXGI_MODE_DESC1 &b) {
                 if (a.Width < b.Width)
                   return true;

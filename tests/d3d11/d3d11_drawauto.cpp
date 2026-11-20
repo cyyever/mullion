@@ -245,7 +245,7 @@ main() {
               if (address + sizeof(value) <= source_words.size() * word)
                 memcpy(value.data(), reinterpret_cast<const char *>(source_words.data()) + address, sizeof(value));
               value[1] += vertex < extra.size() ? extra[vertex] : 0;
-              std::copy(value.begin(), value.end(), want.begin() + at);
+              std::ranges::copy(value, want.begin() + at);
               at += value.size();
             }
           draw_context->UpdateSubresource(recirculated.Get(), 0, nullptr, fill.data(), 0, 0);

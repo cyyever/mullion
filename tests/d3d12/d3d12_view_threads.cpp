@@ -96,6 +96,7 @@ main(int argc, char **argv) {
                                           IID_PPV_ARGS(&texture)));
     // each thread makes the views of one slice, every mip, into its own descriptors, all at once
     std::vector<std::thread> makers;
+    makers.reserve(threads);
     for (UINT t = 0; t < threads; t++)
       makers.emplace_back([&, slice = t] {
         for (UINT mip = 0; mip < mips; mip++) {
@@ -169,6 +170,7 @@ main(int argc, char **argv) {
       filled[at] = byte(at);
     source->Unmap(0, nullptr);
     std::vector<std::thread> makers;
+    makers.reserve(threads);
     for (UINT t = 0; t < threads; t++)
       // every format in turn, its own last, so each thread adds views while the others read theirs
       makers.emplace_back([&, t] {

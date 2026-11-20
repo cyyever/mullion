@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
     for (UINT slot = 0; slot < std::size(desc.RTVFormats); slot++)
       for (auto format : formats) {
         step("geometry %u, slot %u, format %u", geometry, slot, format);
-        std::fill(std::begin(desc.RTVFormats), std::end(desc.RTVFormats), DXGI_FORMAT_UNKNOWN);
+        std::ranges::fill(desc.RTVFormats, DXGI_FORMAT_UNKNOWN);
         desc.NumRenderTargets = slot + 1;
         desc.RTVFormats[slot] = format;
         desc.PS = bytecode(format == DXGI_FORMAT_R32_UINT ? ps_uint : ps);

@@ -56,8 +56,9 @@ created(const char *directory) {
           records.emplace_back(time, length);
         }
     }
-  std::stable_sort(records.begin(), records.end(), [](auto a, auto b) { return a.first < b.first; });
+  std::ranges::stable_sort(records, [](auto a, auto b) { return a.first < b.first; });
   std::vector<UINT64> lengths;
+  lengths.reserve(records.size());
   for (auto [time, length] : records)
     lengths.push_back(length);
   return lengths;
@@ -204,7 +205,7 @@ main(int argc, char **argv) {
         if (calibration) {
           if (!expect(!lengths.empty(), "profile records resource buffer creations"))
             return 1;
-          block = *std::max_element(lengths.begin(), lengths.end());
+          block = *std::ranges::max_element(lengths);
         } else if (many || completed) {
           for (auto size : lengths)
             if (!expect(size == first_length, completed ? "completed-frame allocation never grows"

@@ -134,7 +134,7 @@ main() {
                                                 row_words * word_bytes, plane_words * word_bytes);
                   context->CopySubresourceRegion(staging.Get(), sub, 0, 0, 0, target.Get(), sub, nullptr);
                 }
-                std::fill(source.begin(), source.end(), poison);
+                std::ranges::fill(source, poison);
                 if (route == 1) {
                   ComPtr<ID3D11CommandList> commands;
                   CHECK(deferred->FinishCommandList(FALSE, &commands));

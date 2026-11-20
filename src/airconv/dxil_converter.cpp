@@ -21,6 +21,7 @@
 #include "airconv_context.hpp"
 #include "dxbc_converter.hpp"
 #include <string_view>
+#include <span>
 #include <ranges>
 #include "nt/dxbc_converter_base.hpp"
 #include "airconv_ray.h"
@@ -606,9 +607,10 @@ lower_heap_handles(Module &M) {
       call->eraseFromParent();
   }
 
-  std::vector<Metadata *> classes;
-  for (auto &list : lists)
-    classes.push_back(list.empty() ? nullptr : MDNode::get(ctx, list));
+  std::array<Metadata *, 4> classes;
+  std::ranges::transform(lists, classes.begin(), [&](const auto &list) -> Metadata * {
+    return list.empty() ? nullptr : MDNode::get(ctx, list);
+  });
   auto tuple = MDNode::get(ctx, classes);
   if (resources->getNumOperands())
     resources->setOperand(0, tuple);
@@ -1206,9 +1208,11 @@ read_dxil(
       {DepthGreaterEqual, D3D11_SB_OPERAND_TYPE_OUTPUT_DEPTH_GREATER_EQUAL},
       {StencilRef, D3D11_SB_OPERAND_TYPE_OUTPUT_STENCIL_REF},
   };
+  const std::span<const Element> outputs = mesh_stage ? std::span<const Element>{} : entry.output;
   std::vector<Element> registers;
-  for (auto &e : mesh_stage ? std::vector<Element>{} : entry.output) {
-    auto s = std::find_if(std::begin(special), std::end(special), [&](auto &s) { return s.first == e.semantic; });
+  registers.reserve(outputs.size());
+  for (const auto &e : outputs) {
+    auto s = std::ranges::find_if(special, [&](auto &s) { return s.first == e.semantic; });
     if (s != std::end(special))
       declarations[{D3D10_SB_OPCODE_DCL_OUTPUT, s->second, 0, D3D10_SB_NAME_UNDEFINED, ~0u, 0, ~0u}] = 1;
     registers.push_back(s != std::end(special) ? Element{} : e); // keeps element ids, with no rows for specials
@@ -1918,7 +1922,7 @@ convert_dxil(
   };
 
   // handles first, so every consumer finds its descriptor
-  std::stable_partition(calls.begin(), calls.end(), [](auto call) { return opcode(call) == CreateHandle; });
+  std::ranges::stable_partition(calls, [](auto call) { return opcode(call) == CreateHandle; });
 
   auto arg = [](CallInst *call, unsigned i) { return call->getArgOperand(i); };
   auto constant = [](Value *v) { return (uint32_t)cast<ConstantInt>(v)->getZExtValue(); };
@@ -1952,7 +1956,7 @@ convert_dxil(
       position_of[call] = group->second;
       stored[group->second] |= 1u << constant(arg(call, 3));
     }
-    staged_positions = std::any_of(stored.begin(), stored.end(), [](uint32_t mask) { return mask != 0xf; });
+    staged_positions = std::ranges::any_of(stored, [](uint32_t mask) { return mask != 0xf; });
     for (auto &e : shader->mesh_outputs[0])
       if (e.semantic == SemanticCullDistance)
         cull_distances += e.rows * e.cols;
@@ -2710,7 +2714,7 @@ convert_dxil(
     return ret;
   };
 
-  bool native_extremes = air.HasAtomicMinMax64() && std::all_of(calls.begin(), calls.end(), [&](CallInst *call) {
+  bool native_extremes = air.HasAtomicMinMax64() && std::ranges::all_of(calls, [&](CallInst *call) {
     return !call->getType()->isIntegerTy(64) || (opcode(call) != AtomicBinOp && opcode(call) != AtomicCompareExchange) ||
            native_extreme(call);
   });
@@ -4592,7 +4596,7 @@ convert_dxil(
       break;
     }
     default: {
-      auto getter = std::find_if(std::begin(ray_query_getters), std::end(ray_query_getters), [&](auto &g) {
+      auto getter = std::ranges::find_if(ray_query_getters, [&](auto &g) {
         return g.op == op;
       });
       if (getter == std::end(ray_query_getters))

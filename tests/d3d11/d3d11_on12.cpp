@@ -849,7 +849,7 @@ main(int argc, char **argv) {
           context->Unmap(texture.Get(), 0);
           BYTE full = std::numeric_limits<BYTE>::max();
           const Pixel expected{full, 0, full, full};
-          expect(std::all_of(got.begin(), got.end(), [&](const Pixel &p) { return p == expected; }),
+          expect(std::ranges::all_of(got, [&](const Pixel &p) { return p == expected; }),
                  "opaque texture Map lost the deferred clear");
         }
       }

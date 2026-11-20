@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <ranges>
 #include <string_view>
 #include <array>
@@ -684,7 +685,7 @@ llvm::Error convert_dxbc_pixel_shader(
   // input, once for each covered sample, each run given the pixel's coverage, and under multisampling keeps a run's
   // writes after its discard. the run of the first covered sample is the
   // shader's, unless the shader runs per sample itself, which its own sample index tells
-  bool writes = std::any_of(shader_info->uavMap.begin(), shader_info->uavMap.end(), [](auto &uav) {
+  bool writes = std::ranges::any_of(shader_info->uavMap, [](auto &uav) {
     return uav.second.written || uav.second.with_counter;
   });
   uint32_t sample = ~0u, coverage = ~0u;
@@ -698,6 +699,7 @@ llvm::Error convert_dxbc_pixel_shader(
   // pixel on the cut once for each piece. a pipeline whose runs are seen gives the distances here as varyings
   uint32_t clips = pso_data ? pso_data->clip_distances : 0, input_coverage = ~0u;
   std::vector<uint32_t> distances;
+  distances.reserve(clips);
   for (uint32_t i = 0; i < clips; i++)
     distances.push_back(func_signature.DefineInput(air::InputFragmentStageIn{
         .user = clip_varying_name(i), .type = air::msl_float, .interpolation = air::Interpolation::center_perspective,

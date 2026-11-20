@@ -228,7 +228,7 @@ DxbcHash checkDxbcHash(const void *data, size_t size) {
   // the hash follows the container's four-character name
   std::memcpy(given.data.data(), static_cast<const uint8_t *>(data) + sizeof(uint32_t), sizeof(given.data));
   auto all = [&](uint8_t value) {
-    return std::all_of(given.data.begin(), given.data.end(), [=](uint8_t byte) { return byte == value; });
+    return std::ranges::all_of(given.data, [=](uint8_t byte) { return byte == value; });
   };
   if (all(0) || all(2))
     return DxbcHash::None;

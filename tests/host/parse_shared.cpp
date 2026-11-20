@@ -91,11 +91,13 @@ main() {
     return printf("wrong: a shader that returns was not initialized\n"), 1;
 
   std::vector<std::string> codes;
+  codes.reserve(kShaders);
   for (size_t i = 0; i < kShaders; i++)
     codes.push_back(container(kPrivate, uint8_t(i + 1)));
   auto same = codes[0];
   expect(codes[0].size() == codes[1].size() && codes[0] != codes[1], "two containers are not of one size and other bytes");
   std::vector<sm50_shader_t> shaders;
+  shaders.reserve(codes.size() + 1);
   uint64_t before = in_use();
   for (auto &code : codes)
     shaders.push_back(initialize(code));

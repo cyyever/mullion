@@ -176,6 +176,7 @@ main(int, char **) {
     step("count=%u concurrent same and different buffer references", count);
     std::vector<UINT> failed(count * 2);
     std::vector<std::thread> threads;
+    threads.reserve(failed.size());
     for (UINT t = 0; t < failed.size(); t++)
       threads.emplace_back([&, t] {
         for (UINT n = 0; n < count * count; n++) {

@@ -5,6 +5,7 @@
 #include "../d3d11/d3d11_test.hpp"
 #include <d3d10_1.h>
 #include "../raster_samples.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <map>
 
@@ -160,7 +161,7 @@ int main() {
           step("Direct3D10.1 center %u format %u count %u geometry %zu pass %u mask %#x", centered, format, count,
                j.geometry, j.pass, j.mask);
           std::array<Vertex, Triangle> vertices{};
-          std::copy(c.vertices.begin(), c.vertices.end(), vertices.begin());
+          std::ranges::copy(c.vertices, vertices.begin());
           device->UpdateSubresource(vb.Get(), 0, nullptr, vertices.data(), 0, 0);
           const UINT stride = sizeof(Vertex), offset = 0;
           device->IASetVertexBuffers(0, 1, vb.GetAddressOf(), &stride, &offset);

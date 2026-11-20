@@ -117,7 +117,7 @@ main(int argc, char **argv) {
   INT64 grown = resident() - before;
   // the application's bytecode is gone: what the pipelines need of it from here on is their own
   for (auto code : {&vs, &vs_adjacent, &ps}) {
-    std::fill(code->begin(), code->end(), '\xcd');
+    std::ranges::fill(*code, '\xcd');
     std::string().swap(*code);
   }
   unsigned failures = 0;

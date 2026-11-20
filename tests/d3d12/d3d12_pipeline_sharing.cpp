@@ -124,6 +124,7 @@ main(int argc, char **argv) {
   // more pairs than a file holds (kPipelinesPerArchive), each of a pixel shader of its own
   constexpr size_t pairs = 40;
   std::vector<std::string> own;
+  own.reserve(pairs);
   for (size_t i = 0; i < pairs; i++)
     own.push_back(compiler.compile(own_hlsl, "ps", "ps", {"OWN=" + std::to_string(i)}));
   auto paired = [&](size_t i, bool stencil) {

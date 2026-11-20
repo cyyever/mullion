@@ -146,7 +146,7 @@ main(int argc, char **argv) {
     };
     expect(SUCCEEDED(device->CreateSamplerState(&desc, &samplers[i])), "filter 0x%x was refused", spec.filter);
   }
-  if (!expect(std::all_of(samplers.begin(), samplers.end(), [](auto &s) { return bool(s); }), "a sampler is missing"))
+  if (!expect(std::ranges::all_of(samplers, [](auto &s) { return bool(s); }), "a sampler is missing"))
     return verdict();
 
   std::vector<Case> cases;

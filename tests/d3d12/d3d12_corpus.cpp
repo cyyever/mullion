@@ -98,11 +98,11 @@ struct Shader {
 
   // whether this stage writes what `later` reads
   bool feeds(const Shader &later) const {
-    return std::all_of(later.in.begin(), later.in.end(), [&](const Element &read) {
+    return std::ranges::all_of(later.in, [&](const Element &read) {
       if (later.kind == Pixel && (read.system == IsFrontFace || read.system == SampleIndex || read.system == Coverage ||
                                   read.system == InnerCoverage || read.system == PrimitiveID))
         return true;
-      return std::any_of(out.begin(), out.end(), [&](const Element &written) {
+      return std::ranges::any_of(out, [&](const Element &written) {
         return !_stricmp(written.name, read.name) && written.index == read.index && written.reg == read.reg &&
                written.type == read.type && !(read.mask & ~written.mask);
       });
@@ -186,7 +186,7 @@ main(int argc, char **argv) {
     ComPtr<ID3D12PipelineState> pso;
     HRESULT hr;
     auto stage = [&](Kind kind) {
-      auto at = std::find_if(stages.begin(), stages.end(), [&](auto s) { return s->kind == kind; });
+      auto at = std::ranges::find_if(stages, [&](auto s) { return s->kind == kind; });
       return at == stages.end() ? nullptr : *at;
     };
     if (auto cs = stage(Compute)) {
@@ -262,8 +262,8 @@ main(int argc, char **argv) {
   }
   // a pixel shader that had no pipeline above: with the first vertex shader that has its inputs
   for (auto ps : of[Pixel]) {
-    auto first = std::find_if(of[Vertex].begin(), of[Vertex].end(), [&](auto vs) { return vs->feeds(*ps); });
-    if (first != of[Vertex].end() && std::find(paired.begin(), paired.end(), ps) == paired.end())
+    auto first = std::ranges::find_if(of[Vertex], [&](auto vs) { return vs->feeds(*ps); });
+    if (first != of[Vertex].end() && std::ranges::find(paired, ps) == paired.end())
       pipeline({*first, ps});
   }
   for (auto gs : of[Geometry])

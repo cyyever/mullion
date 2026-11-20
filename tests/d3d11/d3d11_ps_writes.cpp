@@ -52,6 +52,7 @@ main() {
   auto c = base("inner triangle with partly covered edge pixels");
   c.vertices = {vertex(1.3f, 1.1f), vertex(width - 1.3f, 2.2f), vertex(2.1f, height - 1.4f)};
   std::vector<Color> positions;
+  positions.reserve(c.vertices.size());
   for (auto &v : c.vertices)
     positions.push_back(v.position);
   D3D11_BUFFER_DESC bd{UINT(positions.size() * sizeof(Color)), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER};

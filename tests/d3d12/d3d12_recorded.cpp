@@ -364,7 +364,7 @@ child(int argc, char **argv) {
     };
     std::vector<const Structure *> referenced;
     for (auto &instance : scene.instances)
-      if (instance.structure && std::find(referenced.begin(), referenced.end(), instance.structure) == referenced.end())
+      if (instance.structure && std::ranges::find(referenced, instance.structure) == referenced.end())
         referenced.push_back(instance.structure);
     using Information = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION_DESC;
     const UINT submissions = std::size(sources);
@@ -534,7 +534,7 @@ main(int argc, char **argv) {
           reported.push_back(message.substr(at + changed_prefix.size()));
       }
       for (auto &wanted : expected) {
-        auto got = std::find(reported.begin(), reported.end(), wanted);
+        auto got = std::ranges::find(reported, wanted);
         if (expect(got != reported.end(), "incorrect overwrite report: expected %s; got %s", wanted.c_str(),
             reported.empty() ? "no difference line" : reported.front().c_str())) {
           expect(false, "record overwrite detected: expected %s; got %s", wanted.c_str(), got->c_str());

@@ -157,7 +157,7 @@ main(int argc, char **argv) {
     }
     // the first run makes the pipeline's Metal objects
     took.erase(took.begin());
-    std::sort(took.begin(), took.end());
+    std::ranges::sort(took);
     printf("bench: %u lists of a pass of %ux%u, median %.3f ms, fastest %.3f ms\n", passes, side, side,
            took[took.size() / 2], took[0]);
     return verdict();

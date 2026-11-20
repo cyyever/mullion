@@ -44,6 +44,7 @@ main(int argc, char **argv) {
   std::vector<ComPtr<ID3D12PipelineState>> psos(kept);
   std::vector<HRESULT> results(threads, S_OK);
   std::vector<std::thread> makers;
+  makers.reserve(threads);
   for (UINT t = 0; t < threads; t++)
     makers.emplace_back([&, t] {
       for (UINT i = 0; i < made && SUCCEEDED(results[t]); i++) {

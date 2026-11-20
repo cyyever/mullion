@@ -156,8 +156,8 @@ main(int, char **) {
             const UINT physical_width = ((w + f.unit - 1) / f.unit) * f.unit,
                        physical_height = ((h + f.unit - 1) / f.unit) * f.unit;
             std::vector<UINT> xs{0, (physical_width / f.unit / 2) * f.unit, (physical_width / f.unit - 1) * f.unit};
-            std::sort(xs.begin(), xs.end());
-            xs.erase(std::unique(xs.begin(), xs.end()), xs.end());
+            std::ranges::sort(xs);
+            xs.erase(std::ranges::unique(xs).begin(), xs.end());
             for (UINT x : xs)
               for (UINT y : {0u, (physical_height / f.unit - 1) * f.unit})
                 for (UINT z = 0; z < depth; z += std::max(1u, depth - 1)) {

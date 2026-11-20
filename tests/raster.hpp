@@ -456,7 +456,7 @@ inline std::vector<Case> cases(bool exact_precision = true) {
       c.vertices = {vertex(2.25f, 2.25f), vertex(2.25f, height - 2.25f), vertex(width - 2.25f, 2.25f),
                     vertex(width - 2.25f, height - 2.25f)};
       if (reverse)
-        std::reverse(c.vertices.begin(), c.vertices.end());
+        std::ranges::reverse(c.vertices);
       add(c);
     }
   for (bool reverse : {false, true})
@@ -471,7 +471,7 @@ inline std::vector<Case> cases(bool exact_precision = true) {
         for (auto &v : c.vertices)
           std::swap(v.position[0], v.position[1]);
       if (reverse)
-        std::reverse(c.vertices.begin(), c.vertices.end());
+        std::ranges::reverse(c.vertices);
       add(c);
     }
   for (bool wire : {false, true}) {
@@ -706,10 +706,10 @@ inline std::vector<Color> expected(const Case &c, double ox = 0, double oy = 0) 
         for (auto &v : polygon)
           discard |= std::isnan(v.distance[d]);
       } else if (c.mode != None && clips < distances) {
-        discard |= std::all_of(polygon.begin(), polygon.end(), [&](const auto &v) { return !(v.distance[d] >= 0); });
+        discard |= std::ranges::all_of(polygon, [&](const auto &v) { return !(v.distance[d] >= 0); });
       }
     }
-    discard |= std::all_of(polygon.begin(), polygon.end(), [](const auto &v) { return v.position[3] <= 0; });
+    discard |= std::ranges::all_of(polygon, [](const auto &v) { return v.position[3] <= 0; });
     if (discard)
       continue;
     auto original = polygon;
@@ -728,7 +728,7 @@ inline std::vector<Color> expected(const Case &c, double ox = 0, double oy = 0) 
     }
     if (c.shape != Line)
       planes(c, [&](auto plane) { polygon = clip_polygon(polygon, plane); });
-    polygon.erase(std::remove_if(polygon.begin(), polygon.end(), [](const auto &v) { return v.position[3] <= 0; }),
+    polygon.erase(std::ranges::remove_if(polygon, [](const auto &v) { return v.position[3] <= 0; }).begin(),
                   polygon.end());
     if (polygon.empty())
       continue;

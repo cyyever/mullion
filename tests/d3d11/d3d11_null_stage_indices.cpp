@@ -250,8 +250,8 @@ main() {
           return verdict();
         counts.insert(counts.end(), {group - 1, group, group + 1, 2 * group + 1});
       }
-      std::sort(counts.begin(), counts.end());
-      counts.erase(std::unique(counts.begin(), counts.end()), counts.end());
+      std::ranges::sort(counts);
+      counts.erase(std::ranges::unique(counts).begin(), counts.end());
       const UINT start_index = 4, offset_indices = 3;
       std::vector<D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS> draws = {
           {topology.corners, 0, start_index, 0, first_instance}

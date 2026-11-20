@@ -110,7 +110,7 @@ main(int argc, char **argv) {
       options.push_back("NO_STATUS=1");
     ps[way] = compiler.compile(hlsl, entries[way % std::size(entries)], "ps", options);
   }
-  if (vs.empty() || std::any_of(std::begin(ps), std::end(ps), [](auto &p) { return p.empty(); })) {
+  if (vs.empty() || std::ranges::any_of(ps, [](auto &p) { return p.empty(); })) {
     printf("failed: HLSL did not compile\n");
     return 1;
   }

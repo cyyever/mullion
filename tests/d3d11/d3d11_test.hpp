@@ -33,6 +33,7 @@ compile(const char (&hlsl)[N], const char *entry, const char *stage, const std::
     names.push_back(d.substr(0, separator));
     values.push_back(separator == std::string::npos ? "1" : d.substr(separator + 1));
   }
+  macros.reserve(defines.size() + 1);
   for (size_t i = 0; i < defines.size(); i++)
     macros.push_back({names[i].c_str(), values[i].c_str()});
   macros.push_back({});

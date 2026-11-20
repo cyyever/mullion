@@ -86,7 +86,7 @@ main() {
       channels.push_back({UINT(component - components), bits});
       at = end;
     }
-    auto typeless = std::find_if(std::begin(copy_formats), std::end(copy_formats), [&](const auto &candidate) {
+    auto typeless = std::ranges::find_if(copy_formats, [&](const auto &candidate) {
       return !strcmp(candidate.family, format.family) && strstr(candidate.name, "_TYPELESS") && !candidate.depth;
     });
     for (UINT samples = 2; samples <= D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT; samples *= 2) {
@@ -166,7 +166,7 @@ main() {
                   for (UINT x = 0; x < w && ok; x++) {
                     std::vector<unsigned char> want(format.bytes, sentinel);
                     if (sub == dst_sub) {
-                      std::fill(want.begin(), want.end(), 0);
+                      std::ranges::fill(want, 0);
                       const UINT values[] = {(x / (src_layer + 1) + src_layer) % 2,
                                              (y / (src_layer + 1) + src_layer) % 2,
                                              ((x + y + src_layer) / 2) % 2,

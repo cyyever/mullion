@@ -254,7 +254,7 @@ main() {
                 (count == (flip ? 2u : 1u) || count == DXGI_MAX_SWAP_CHAIN_BUFFERS))
               shows(value);
             if (sequential && !flags)
-              std::rotate(contents.begin(), contents.begin() + 1, contents.end());
+              std::ranges::rotate(contents, contents.begin() + 1).begin();
             if (sequential || flags) {
               for (UINT i = 0; i < accessible; i++) {
                 step("effect %u count %u resize %u frame %u flags %#x buffer %u: contents",
@@ -536,7 +536,7 @@ main() {
       device10->ClearRenderTargetView(writable.Get(), colour);
       contents[0] = value;
       CHECK(chain->Present(0, 0));
-      std::rotate(contents.begin(), contents.begin() + 1, contents.end());
+      std::ranges::rotate(contents, contents.begin() + 1);
       for (UINT i = 0; i < desc.BufferCount; i++) {
         if (!contents[i])
           continue;

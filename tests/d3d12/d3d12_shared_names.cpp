@@ -353,7 +353,7 @@ main(int argc, char **argv) {
   fences11.clear();
   created.clear();
   for (size_t i = 0; i < handles.size(); i++)
-    if (std::find(std::begin(late), std::end(late), i) == std::end(late))
+    if (std::ranges::find(late, i) == std::end(late))
       CloseHandle(handles[i]);
   d.context->ClearState();
   d.context->Flush();

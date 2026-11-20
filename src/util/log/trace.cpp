@@ -112,7 +112,7 @@ Directory() {
     auto home = env::getEnvVar("WINEHOMEDIR");
     if (home.rfind("\\??\\Z:", 0) == 0) {
       home = home.substr(6);
-      std::replace(home.begin(), home.end(), '\\', '/');
+      std::ranges::replace(home, '\\', '/');
     } else
       home = env::getEnvVar("HOME");
     return home.empty() ? std::string() : home + "/Library/Logs/Mullion/" + env::getExeName();

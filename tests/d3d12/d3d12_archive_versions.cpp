@@ -124,8 +124,8 @@ main(int argc, char **argv) {
          (unsigned long long)calls.pipeline["MTLDevice_newRenderPipelineState"]);
   auto now = archive_files(directory);
   for (auto &other : others)
-    expect(std::find(now.begin(), now.end(), other) == now.end(), "%s is still there", other.c_str());
+    expect(std::ranges::find(now, other) == now.end(), "%s is still there", other.c_str());
   for (auto &name : own)
-    expect(std::find(now.begin(), now.end(), name) != now.end(), "this version's %s was removed", name.c_str());
+    expect(std::ranges::find(now, name) != now.end(), "this version's %s was removed", name.c_str());
   return verdict();
 }

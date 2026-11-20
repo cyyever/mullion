@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
     if (frame >= 5)
       times.push_back(ms);
   }
-  std::sort(times.begin(), times.end());
+  std::ranges::sort(times);
   printf("gpu_median_ms=%.6f gpu_p95_ms=%.6f pixel_hash=%016llx samples=%zu "
          "draws=64\n",
          times[times.size() / 2], times[times.size() * 95 / 100],

@@ -213,7 +213,7 @@ main(int argc, char **argv) {
   snapshot(list.Get(), DEST);
   CHECK(list->Close());
   for (auto &values : runs) {
-    std::fill(want_pixels.begin(), want_pixels.end(), 0);
+    std::ranges::fill(want_pixels, 0);
     for (UINT execution = 0; execution < std::size(values); execution++) {
       step("replay %llu then %llu, execution %u", values[0], values[1], execution);
       if (!execution || values[execution] != values[execution - 1]) {
@@ -266,7 +266,7 @@ main(int argc, char **argv) {
   CHECK(allocators[0]->Reset());
   CHECK(list->Reset(allocators[0].Get(), pso.Get()));
   bind(list.Get());
-  std::fill(want_pixels.begin(), want_pixels.end(), 0);
+  std::ranges::fill(want_pixels, 0);
   std::vector<UINT64> want_counts(source_queries);
   for (UINT q = 0; q < source_queries; q++) {
     auto type = types[q / std::size(visible)];

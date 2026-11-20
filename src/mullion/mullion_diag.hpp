@@ -202,7 +202,7 @@ EventName(UINT metadata, const void *data, UINT size) {
     auto wide = static_cast<const WCHAR *>(data);
     name = str::fromws(std::basic_string<WCHAR>(wide, std::find(wide, wide + size / sizeof(WCHAR), 0)).c_str());
   }
-  std::replace_if(name.begin(), name.end(), [](unsigned char c) { return c < ' '; }, ' ');
+  std::ranges::replace_if(name, [](unsigned char c) { return c < ' '; }, ' ');
   return name;
 }
 

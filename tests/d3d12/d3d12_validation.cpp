@@ -353,7 +353,7 @@ main() {
           CHECK(allocator->Reset());
           ComPtr<ID3D12GraphicsCommandList1> list;
           CHECK(device->CreateCommandList(0, queue_desc.Type, allocator.Get(), nullptr, IID_PPV_ARGS(&list)));
-          bool valid = std::find(std::begin(colors), std::end(colors), format) != std::end(colors) &&
+          bool valid = std::ranges::find(colors, format) != std::end(colors) &&
                        family(src_format) == family(dst_format) && family(format) == family(src_format);
           if (valid) {
             transition(list.Get(), source.Get(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE,

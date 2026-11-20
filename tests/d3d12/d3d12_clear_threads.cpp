@@ -78,6 +78,7 @@ main(int argc, char **argv) {
   std::atomic<bool> go{false};
   HRESULT closed[threads];
   std::vector<std::thread> recorders;
+  recorders.reserve(threads);
   for (UINT t = 0; t < threads; t++)
     recorders.emplace_back([&, t] {
       auto &w = work[t];

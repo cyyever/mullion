@@ -199,7 +199,7 @@ main() {
             CHECK(bytes(backs[0].Get(), value));
             CHECK(chain->Present(0, 0));
             if (sequential) {
-              std::rotate(expected.begin(), expected.begin() + 1, expected.end());
+              std::ranges::rotate(expected, expected.begin() + 1);
               if (frame + 1 >= count)
                 for (UINT index = 0; index < accessible; index++)
                   CHECK(bytes(backs[index].Get(), expected[index]));

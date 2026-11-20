@@ -6,6 +6,8 @@
 // direct, indirect and bundle draws each feed per-sample loads and a separate fixed-pattern resolve readback.
 #include "d3d12_test.hpp"
 #include <d3d11.h>
+
+#include <algorithm>
 #include "../depth_formats.hpp"
 #include "../format_msaa.hpp"
 
@@ -162,8 +164,8 @@ main(int argc, char **argv) {
         qualities.push_back(D3D11_STANDARD_MULTISAMPLE_PATTERN);
         qualities.push_back(D3D11_CENTER_MULTISAMPLE_PATTERN);
       }
-      std::sort(qualities.begin(), qualities.end());
-      qualities.erase(std::unique(qualities.begin(), qualities.end()), qualities.end());
+      std::ranges::sort(qualities);
+      qualities.erase(std::ranges::unique(qualities).begin(), qualities.end());
       for (UINT q : qualities) {
         const bool center = q == D3D11_CENTER_MULTISAMPLE_PATTERN;
         const bool fixed = center || q == D3D11_STANDARD_MULTISAMPLE_PATTERN;

@@ -221,9 +221,9 @@ main(int argc, char **argv) {
     step("frame %u: %u lists, %u passes each, %u indirect calls per pass", frame, lists_per_frame, passes_per_list,
          calls);
     auto available =
-        std::find_if(pool.begin(), pool.end(), [&](auto &p) { return p.last <= fence->GetCompletedValue(); });
+        std::ranges::find_if(pool, [&](auto &p) { return p.last <= fence->GetCompletedValue(); });
     if (available == pool.end() && pool.size() == pooled_frames) {
-      available = std::min_element(pool.begin(), pool.end(), [](auto &a, auto &b) { return a.last < b.last; });
+      available = std::ranges::min_element(pool, [](auto &a, auto &b) { return a.last < b.last; });
       if (!wait(available->last))
         ExitProcess(verdict());
     }

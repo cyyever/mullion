@@ -387,7 +387,7 @@ run(int argc, char **argv) {
     if (round)
       queue->UpdateTileMappings(sparse.Get(), 1, nullptr, nullptr, nullptr, 1, &null, nullptr, nullptr,
           D3D12_TILE_MAPPING_FLAG_NONE);
-    std::fill(mapping.begin(), mapping.end(), ~0u);
+    std::ranges::fill(mapping, ~0u);
     for (UINT change = 0; round >= 2 && change < tiles; change++) {
       UINT start = random() % tiles, count = 1 + random() % (tiles - start);
       UINT physical = random() % (tiles - count + 1);

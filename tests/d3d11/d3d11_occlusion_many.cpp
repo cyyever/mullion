@@ -219,7 +219,7 @@ main(int argc, char **argv) {
     }
     step("%s: pixels before the frame", name);
     context->ClearRenderTargetView(rtv.Get(), clear);
-    std::fill(want.begin(), want.end(), 0);
+    std::ranges::fill(want, 0);
     draw(marker);
     if (!picture())
       return verdict();
@@ -227,7 +227,7 @@ main(int argc, char **argv) {
     step("%s: %u query segments", name, count);
     record = frame == Deferred ? deferred.Get() : context.Get();
     record->ClearRenderTargetView(rtv.Get(), clear);
-    std::fill(want.begin(), want.end(), 0);
+    std::ranges::fill(want, 0);
     UINT64 sum = 0, buffer_sum = 0, across_sum[boundaries] = {};
     BOOL across_visible[boundaries] = {};
     if (frame != Deferred && frame != Isolated)
@@ -350,7 +350,7 @@ main(int argc, char **argv) {
   }
   step("one counting segment and a query-free pass, each with draws past two segment boundaries");
   context->ClearRenderTargetView(rtv.Get(), clear);
-  std::fill(want.begin(), want.end(), 0);
+  std::ranges::fill(want, 0);
   ComPtr<ID3D11Query> long_query, empty_query;
   CHECK(device->CreateQuery(&counter_desc, &long_query));
   CHECK(device->CreateQuery(&counter_desc, &empty_query));
@@ -536,7 +536,7 @@ main(int argc, char **argv) {
     context->ClearRenderTargetView(views[i].Get(), clear);
   }
   context->ClearRenderTargetView(rtv.Get(), clear);
-  std::fill(want.begin(), want.end(), 0);
+  std::ranges::fill(want, 0);
   if (!picture())
     return verdict();
   ComPtr<ID3D11Query> sparse_total;

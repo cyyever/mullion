@@ -415,7 +415,7 @@ int main(int argc, char **argv) {
     expect(files == UINT(profiling), "got %u profile files", files);
     if (profiling) {
       if (!expect(calibrations.size() == buffers.size() &&
-                      std::all_of(buffers.begin(), buffers.end(), [&](auto &entry) {
+                      std::ranges::all_of(buffers, [&](auto &entry) {
                         return calibrations.count(entry.first);
                       }),
                   "command buffer calibration missing"))
@@ -531,7 +531,7 @@ int main(int argc, char **argv) {
       UINT empty_buffers = 0;
       for (auto &[key, buffer] : buffers) {
         expect(number(buffer[8]) == pass_counts[key] && number(buffer[10]) == 0, "wrong command buffer work counts");
-        const bool presents = std::any_of(presented.begin(), presented.end(), [&](auto &row) {
+        const bool presents = std::ranges::any_of(presented, [&](auto &row) {
           return row[1] == key.first && number(row[2]) == key.second;
         });
         expect(number(buffer[9]) == UINT(presents), "command buffer present count wrong");

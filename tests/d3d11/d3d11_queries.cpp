@@ -184,7 +184,7 @@ float4 vs_strip(uint id : SV_VertexID) : SV_Position {
   alignas(D3D11_QUERY_DATA_PIPELINE_STATISTICS)
       std::array<unsigned char, sizeof(D3D11_QUERY_DATA_PIPELINE_STATISTICS) + sizeof(UINT64)> bytes;
   const unsigned char sentinel = 0xa5;
-  auto intact = [&] { return std::all_of(bytes.begin(), bytes.end(), [&](auto byte) { return byte == sentinel; }); };
+  auto intact = [&] { return std::ranges::all_of(bytes, [&](auto byte) { return byte == sentinel; }); };
   auto ready = [&](ID3D11Query *query) {
     HRESULT hr = S_FALSE;
     do {
@@ -853,6 +853,7 @@ float4 vs_strip(uint id : SV_VertexID) : SV_Position {
     const UINT streams = stream_counts[mode], gs_instances = geometry_instances[mode];
     std::vector<D3D11_SO_DECLARATION_ENTRY> entries;
     std::vector<UINT> strides(streams, stream_stride);
+    entries.reserve(streams);
     for (UINT stream = 0; stream < streams; stream++)
       entries.push_back({stream, "VALUE", 0, 0, 4, BYTE(stream)});
     ComPtr<ID3D11GeometryShader> geometry;
