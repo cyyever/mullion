@@ -59,6 +59,8 @@ public:
       ConstantInt::get(context, APInt{32, static_cast<uint32_t>(value)})));
   }
 
+  void Reset() { operands.clear(); }
+
   auto BuildTuple() const {
     return MDTuple::get(context, operands);
   }
@@ -344,9 +346,12 @@ auto ArgumentBufferBuilder::Build(
 ) const -> std::tuple<llvm::StructType *, llvm::MDNode *> {
   std::vector<llvm::Type *> fields;
   std::vector<llvm::Metadata *> indirect_argument;
+  fields.reserve(fieldsType.size());
+  indirect_argument.reserve(fieldsType.size());
   uint32_t offset = 0;
-  for (auto argument : fieldsType) {
-    StreamMDHelper metadata_field(context);
+  StreamMDHelper metadata_field(context);
+  for (const auto &argument : fieldsType) {
+    metadata_field.Reset();
     metadata_field.integer(offset);
     auto field_type = std::visit(
       patterns{
@@ -532,6 +537,12 @@ auto FunctionSignatureBuilder::CreateFunction(
   std::vector<llvm::Type *> type_output;
   std::vector<Metadata *> metadata_mesh_vertex_output;
   std::vector<Metadata *> metadata_mesh_primitive_output;
+  metadata_input.reserve(inputs.size());
+  type_input.reserve(inputs.size());
+  metadata_output.reserve(skip_output ? 0 : outputs.size());
+  type_output.reserve(skip_output ? 0 : outputs.size());
+  metadata_mesh_vertex_output.reserve(mesh_vertex_outputs.size());
+  metadata_mesh_primitive_output.reserve(mesh_primitive_outputs.size());
 
   auto get_input_attribute_type = [](
                                     InputAttributeComponentType type,
@@ -558,9 +569,11 @@ auto FunctionSignatureBuilder::CreateFunction(
     }
   };
 
+  // LLVM copies the operands into each tuple, so the next field can reuse their storage.
+  StreamMDHelper md(context);
   for (auto item : enumerate(mesh_vertex_outputs)) {
-    auto output = item.value();
-    StreamMDHelper md(context);
+    const auto &output = item.value();
+    md.Reset();
     std::visit(
         patterns{
             [&](const OutputMeshData &vertex_out) {
@@ -603,8 +616,8 @@ auto FunctionSignatureBuilder::CreateFunction(
   }
 
   for (auto item : enumerate(mesh_primitive_outputs)) {
-    auto output = item.value();
-    StreamMDHelper md(context);
+    const auto &output = item.value();
+    md.Reset();
     std::visit(
         patterns{
             [&](const OutputMeshData &primitive_out) {
@@ -652,16 +665,16 @@ auto FunctionSignatureBuilder::CreateFunction(
 
   for (auto item : enumerate(inputs)) {
     auto i = item.index();
-    auto input = item.value();
-    StreamMDHelper metadata_field(context);
-    metadata_field.integer(i);
+    const auto &input = item.value();
+    md.Reset();
+    md.integer(i);
     llvm::Type *field_type = std::visit(
       patterns{
         [&](const InputVertexStageIn &vertex_in) {
           auto type = get_input_attribute_type(
             vertex_in.type, vertex_in.attribute, sign_mask
           );
-          metadata_field.string("air.vertex_input")
+          md.string("air.vertex_input")
             ->string("air.location_index")
             ->integer(vertex_in.attribute)
             ->integer(1)
@@ -672,13 +685,13 @@ auto FunctionSignatureBuilder::CreateFunction(
           return get_llvm_type(type, context);
         },
         [&](const InputFragmentStageIn &frag_in) -> llvm::Type * {
-          metadata_field.string("air.fragment_input")
+          md.string("air.fragment_input")
             ->string(std::string("user(") + frag_in.user + ")");
           if (frag_in.vertex_value)
-            metadata_field.string("air.vertex_value");
+            md.string("air.vertex_value");
           else
-            insert_inteterpolation(metadata_field, frag_in.interpolation, frag_in.pull_mode);
-          metadata_field.string("air.arg_type_name")
+            insert_inteterpolation(md, frag_in.interpolation, frag_in.pull_mode);
+          md.string("air.arg_type_name")
             ->string(get_name(frag_in.type))
             ->string("air.arg_name")
             ->string(frag_in.user);
@@ -689,12 +702,12 @@ auto FunctionSignatureBuilder::CreateFunction(
           return get_llvm_type(frag_in.type, context);
         },
         [&](const InputBarycentricCoord &barycentric) -> llvm::Type * {
-          metadata_field.string("air.barycentric_coord");
+          md.string("air.barycentric_coord");
           insert_inteterpolation(
-              metadata_field,
+              md,
               barycentric.perspective ? Interpolation::center_perspective : Interpolation::center_no_perspective, false
           );
-          metadata_field.string("air.arg_type_name")
+          md.string("air.arg_type_name")
             ->string("float3")
             ->string("air.arg_name")
             ->string(barycentric.perspective ? "barycentric_coord" : "barycentric_coord_no_perspective");
@@ -702,28 +715,28 @@ auto FunctionSignatureBuilder::CreateFunction(
         },
         [&](const ArgumentBindingBuffer &buffer) {
           return build_argument_binding_buffer(
-            metadata_field, buffer, context, module.getDataLayout()
+            md, buffer, context, module.getDataLayout()
           );
         },
         [&](const ArgumentBindingIndirectBuffer &indirect_buffer) {
           return build_argument_binding_indirect_buffer(
-            metadata_field, indirect_buffer, context, module.getDataLayout()
+            md, indirect_buffer, context, module.getDataLayout()
           );
         },
         [&](const ArgumentBindingTexture &texture) {
           return build_argument_binding_texture(
-            metadata_field, texture, context
+            md, texture, context
           );
         },
         [&](const ArgumentBindingSampler &sampler) {
           return build_argument_binding_sampler(
-            metadata_field, sampler, context
+            md, sampler, context
           );
         },
         [&](const InputPosition &position) {
-          metadata_field.string("air.position");
-          insert_inteterpolation(metadata_field, position.interpolation, false);
-          metadata_field.string("air.arg_type_name")
+          md.string("air.position");
+          insert_inteterpolation(md, position.interpolation, false);
+          md.string("air.arg_type_name")
             ->string("float4") // HARDCODED
             ->string("air.arg_name")
             ->string("mtl_position");
@@ -731,7 +744,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_float4.get_llvm_type(context);
         },
         [&](const InputFrontFacing &) {
-          metadata_field.string("air.front_facing")
+          md.string("air.front_facing")
             ->string("air.arg_type_name")
             ->string("bool") // HARDCODED
             ->string("air.arg_name")
@@ -739,7 +752,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_bool.get_llvm_type(context);
         },
         [&](const InputSampleIndex &) {
-          metadata_field.string("air.sample_id")
+          md.string("air.sample_id")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -747,7 +760,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputRenderTargetArrayIndex &) {
-          metadata_field.string("air.render_target_array_index")
+          md.string("air.render_target_array_index")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -755,7 +768,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputViewportArrayIndex &) {
-          metadata_field.string("air.viewport_array_index")
+          md.string("air.viewport_array_index")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -763,7 +776,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputThreadgroupPositionInGrid &) {
-          metadata_field.string("air.threadgroup_position_in_grid")
+          md.string("air.threadgroup_position_in_grid")
             ->string("air.arg_type_name")
             ->string("uint3") // HARDCODED
             ->string("air.arg_name")
@@ -771,7 +784,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint3.get_llvm_type(context);
         },
         [&](const InputThreadPositionInGrid &) {
-          metadata_field.string("air.thread_position_in_grid")
+          md.string("air.thread_position_in_grid")
             ->string("air.arg_type_name")
             ->string("uint3") // HARDCODED
             ->string("air.arg_name")
@@ -779,7 +792,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint3.get_llvm_type(context);
         },
         [&](const InputThreadPositionInThreadgroup &) {
-          metadata_field.string("air.thread_position_in_threadgroup")
+          md.string("air.thread_position_in_threadgroup")
             ->string("air.arg_type_name")
             ->string("uint3") // HARDCODED
             ->string("air.arg_name")
@@ -787,7 +800,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint3.get_llvm_type(context);
         },
         [&](const InputThreadIndexInThreadgroup &) {
-          metadata_field.string("air.thread_index_in_threadgroup")
+          md.string("air.thread_index_in_threadgroup")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -795,7 +808,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputThreadIndexInSIMDGroup &) {
-          metadata_field.string("air.thread_index_in_simdgroup")
+          md.string("air.thread_index_in_simdgroup")
             ->string("air.arg_type_name")
             ->string("uint")
             ->string("air.arg_name")
@@ -803,7 +816,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputThreadsPerSIMDGroup &) {
-          metadata_field.string("air.threads_per_simdgroup")
+          md.string("air.threads_per_simdgroup")
             ->string("air.arg_type_name")
             ->string("uint")
             ->string("air.arg_name")
@@ -811,7 +824,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputThreadsPerThreadgroup &) {
-          metadata_field.string("air.threads_per_threadgroup")
+          md.string("air.threads_per_threadgroup")
             ->string("air.arg_type_name")
             ->string("uint3")
             ->string("air.arg_name")
@@ -819,7 +832,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint3.get_llvm_type(context);
         },
         [&](const InputThreadgroupsPerGrid &) {
-          metadata_field.string("air.threadgroups_per_grid")
+          md.string("air.threadgroups_per_grid")
             ->string("air.arg_type_name")
             ->string("uint3") // HARDCODED
             ->string("air.arg_name")
@@ -827,7 +840,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint3.get_llvm_type(context);
         },
         [&](const InputStageInGridOrigin &) {
-          metadata_field.string("air.stage_in_grid_origin")
+          md.string("air.stage_in_grid_origin")
             ->string("air.arg_type_name")
             ->string("uint3")
             ->string("air.arg_name")
@@ -835,7 +848,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint3.get_llvm_type(context);
         },
         [&](const InputVertexID &) {
-          metadata_field.string("air.vertex_id")
+          md.string("air.vertex_id")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -843,7 +856,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputPatchID &) {
-          metadata_field.string("air.patch_id")
+          md.string("air.patch_id")
             ->string("air.arg_type_name")
             ->string("uint")
             ->string("air.arg_name")
@@ -851,7 +864,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputPositionInPatch &position) -> llvm::Type * {
-          metadata_field.string("air.position_in_patch")
+          md.string("air.position_in_patch")
             ->string("air.arg_type_name")
             ->string(position.components == 3 ? "float3" : "float2")
             ->string("air.arg_name")
@@ -859,7 +872,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return llvm::FixedVectorType::get(Type::getFloatTy(context), position.components);
         },
         [&](const InputBaseVertex &) {
-          metadata_field.string("air.base_vertex")
+          md.string("air.base_vertex")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -867,7 +880,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputInstanceID &) {
-          metadata_field.string("air.instance_id")
+          md.string("air.instance_id")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -875,7 +888,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputBaseInstance &) {
-          metadata_field.string("air.base_instance")
+          md.string("air.base_instance")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -883,7 +896,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputPrimitiveID &) {
-          metadata_field.string("air.primitive_id")
+          md.string("air.primitive_id")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -891,7 +904,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputRenderTarget &target) {
-          metadata_field.string("air.render_target")
+          md.string("air.render_target")
             ->integer(target.index)
             ->string("air.arg_type_name")
             ->string(get_name(target.type))
@@ -900,7 +913,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return get_llvm_type(target.type, context);
         },
         [&](const InputInputCoverage &) {
-          metadata_field.string("air.sample_mask_in")
+          md.string("air.sample_mask_in")
             ->string("air.arg_type_name")
             ->string("uint") // HARDCODED
             ->string("air.arg_name")
@@ -908,7 +921,7 @@ auto FunctionSignatureBuilder::CreateFunction(
           return msl_uint.get_llvm_type(context);
         },
         [&](const InputPayload &payload) -> llvm::Type * {
-          metadata_field.string("air.payload")
+          md.string("air.payload")
             ->string("air.arg_type_size")
             ->integer(payload.size)
             ->string("air.arg_type_align_size")
@@ -921,7 +934,7 @@ auto FunctionSignatureBuilder::CreateFunction(
             (uint32_t)AddressSpace::object_data);
         },
         [&](const InputMeshGridProperties &) -> llvm::Type * {
-          metadata_field.string("air.mesh_grid_properties")
+          md.string("air.mesh_grid_properties")
             ->string("air.arg_type_name")
             ->string("mesh_grid_properties") // HARDCODED
             ->string("air.arg_name")
@@ -948,7 +961,7 @@ auto FunctionSignatureBuilder::CreateFunction(
             break;
           }
 
-          metadata_field.string("air.mesh")
+          md.string("air.mesh")
             ->metadata(mesh_info.BuildTuple())
             ->string("air.arg_type_name")
             ->string("mesh<>") // HARDCODED
@@ -964,14 +977,14 @@ auto FunctionSignatureBuilder::CreateFunction(
       input
     );
 
-    metadata_input.push_back(metadata_field.BuildTuple());
+    metadata_input.push_back(md.BuildTuple());
     type_input.push_back(field_type);
   };
   for (auto item : enumerate(outputs)) {
     if (skip_output)
       continue;
-    auto output = item.value();
-    StreamMDHelper md(context);
+    const auto &output = item.value();
+    md.Reset();
     llvm::Type *field_type = std::visit(
       patterns{
         [&](const OutputVertex &vertex_out) {

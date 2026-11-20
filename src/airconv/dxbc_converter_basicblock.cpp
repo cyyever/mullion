@@ -25,7 +25,7 @@
 #include "llvm/Support/Error.h"
 #include <string_view>
 #include "llvm/Support/raw_ostream.h"
-#include <stack>
+#include <vector>
 
 char mullion::UnsupportedFeature::ID;
 
@@ -511,14 +511,14 @@ llvm::Expected<llvm::BasicBlock *> convert_basicblocks(
   std::unordered_map<BasicBlock *, llvm::BasicBlock *> visited;
   std::vector<std::pair<BasicBlock *, llvm::BasicBlock *>> visit_order;
 
-  std::stack<BasicBlock *> block_to_visit;
-  block_to_visit.push(entry);
+  std::vector<BasicBlock *> block_to_visit;
+  block_to_visit.push_back(entry);
 
   dxbc::Converter dxbc(ctx.air, ctx, ctx.resource);
 
   while (!block_to_visit.empty()) {
-    auto current = block_to_visit.top();
-    block_to_visit.pop();
+    auto current = block_to_visit.back();
+    block_to_visit.pop_back();
     if (visited.contains(current)) continue;
     auto inserted = visited.insert({current, llvm::BasicBlock::Create(context, current->debug_name, function)});
     visit_order.push_back(*inserted.first);
@@ -531,30 +531,30 @@ llvm::Expected<llvm::BasicBlock *> convert_basicblocks(
           return;
         },
         [&](BasicBlockUnconditionalBranch uncond) {
-          block_to_visit.push(uncond.target);
+          block_to_visit.push_back(uncond.target);
         },
         [&](BasicBlockConditionalBranch cond) {
-          block_to_visit.push(cond.true_branch);
-          block_to_visit.push(cond.false_branch);
+          block_to_visit.push_back(cond.true_branch);
+          block_to_visit.push_back(cond.false_branch);
         },
         [&](const BasicBlockSwitch &swc) {
-          block_to_visit.push(swc.case_default);
+          block_to_visit.push_back(swc.case_default);
           for (auto &[val, case_bb] : swc.cases) {
-            block_to_visit.push(case_bb);
+            block_to_visit.push_back(case_bb);
           }
         },
         [&](BasicBlockInstanceBarrier instance)  {
-          block_to_visit.push(instance.active);
-          block_to_visit.push(instance.sync);
+          block_to_visit.push_back(instance.active);
+          block_to_visit.push_back(instance.sync);
         },
         [&](BasicBlockHullShaderWriteOutput hull_end)  {
-          block_to_visit.push(hull_end.epilogue);
+          block_to_visit.push_back(hull_end.epilogue);
         },
         [&](BasicBlockCall call) {
-          block_to_visit.push(call.return_point);
+          block_to_visit.push_back(call.return_point);
         },
         [&](BasicBlockDXIL dxil) {
-          block_to_visit.push(dxil.next);
+          block_to_visit.push_back(dxil.next);
         },
       },
       current->target

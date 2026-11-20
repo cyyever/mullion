@@ -1,4 +1,5 @@
 #include <ranges>
+#include <span>
 #include "air_signature.hpp"
 #include "airconv_error.hpp"
 #include "dxbc_converter.hpp"
@@ -922,16 +923,19 @@ convert_dxbc_vertex_hull_shader(
 
     // the factors are in the order of their system values: a quad's and a triangle's edges, then their inside; a
     // line's detail, then the lines' density
-    std::pair<const char *, std::vector<unsigned>> domain;
+    static constexpr std::array isoline_factors{1u, 0u};
+    static constexpr std::array quad_factors{4u, 5u, 0u, 1u, 2u, 3u};
+    static constexpr std::array triangle_factors{3u, 0u, 1u, 2u};
+    std::pair<const char *, std::span<const unsigned>> domain;
     switch (pHullStage->tessellation_domain) {
     case microsoft::D3D11_SB_TESSELLATOR_DOMAIN_ISOLINE:
-      domain = {"isoline", {1, 0}};
+      domain = {"isoline", isoline_factors};
       break;
     case microsoft::D3D11_SB_TESSELLATOR_DOMAIN_QUAD:
-      domain = {"quad", {4, 5, 0, 1, 2, 3}};
+      domain = {"quad", quad_factors};
       break;
     default:
-      domain = {"triangle", {3, 0, 1, 2}};
+      domain = {"triangle", triangle_factors};
     }
     for (size_t i = 0; i < domain.second.size(); i++)
       builder.CreateStore(
@@ -941,18 +945,19 @@ convert_dxbc_vertex_hull_shader(
     // the patch's workloads from `first` on, of which those before `capacity` are written at `workloads`, and with
     // groups the groups' places at `groups`; returns where the workloads end
     auto generate = [&](llvm::Value *first, uint32_t capacity, llvm::Value *workloads, llvm::Value *groups) {
-      std::vector<llvm::Value *> factors;
+      std::array<llvm::Value *, quad_factors.size()> factors;
       for (size_t i = 0; i < domain.second.size(); i++)
-        factors.push_back(builder.CreateLoad(
+        factors[i] = builder.CreateLoad(
             types._float, builder.CreateGEP(factors_type, kept_factors, {builder.getInt32(0), builder.getInt32(i)})
-        ));
+        );
       builder.CreateStore(first, next_workload);
       for (uint32_t i = 1; group_limit && i < 5; i++)
         builder.CreateStore(builder.getInt32(0), next_at(i));
       // with templates, a patch a template draws is its meshlets (air_tessellation.metal's emit_template)
       dxbc.HullGenerateWorkload(
           domain.first, patch_offset_in_group, next_workload, workloads, capacity, groups,
-          templates && groups ? group_limit | 0x80000000u : group_limit, get_partitioning(pHullStage), factors,
+          templates && groups ? group_limit | 0x80000000u : group_limit, get_partitioning(pHullStage),
+          llvm::ArrayRef(factors).take_front(domain.second.size()),
           templates ? function->getArg(templates_idx) : nullptr
       );
       return builder.CreateLoad(types._int, next_workload);

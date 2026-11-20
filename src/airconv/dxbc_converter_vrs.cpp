@@ -33,7 +33,7 @@ CoarseShading::CoarseShading(air::FunctionSignatureBuilder &signature, uint32_t 
     : elide_discard_(elide_discard) {
   // the inputs are where the coarse pixel's center is, whatever the shader's interpolation: a centroid is a center
   signature.CenterCentroids();
-  auto &all = signature.Inputs();
+  auto all = signature.Inputs();
   for (uint32_t index = 0; index < all.size(); index++) {
     auto &input = all[index];
     if (auto stage_in = std::get_if<air::InputFragmentStageIn>(&input);
@@ -232,6 +232,7 @@ CoarseShading::Enter(Function *function, IRBuilder<> &ir, llvm::air::AIRBuilder 
   centered = ir.CreateInsertElement(centered, ir.CreateFAdd(py, dy), uint64_t(1));
   centered = ir.CreateInsertElement(centered, moved(ir.CreateExtractElement(position, uint64_t(2))), uint64_t(2));
   centered = ir.CreateInsertElement(centered, moved_rcp_w, uint64_t(3));
+  centered_.reserve(inputs_.size() + 2);
   centered_.push_back({function->getArg(position_), ir.CreateSelect(coarse, centered, position)});
   for (auto input : inputs_) {
     auto value = function->getArg(input.index);

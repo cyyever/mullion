@@ -27,6 +27,7 @@
 #include "llvm/IR/Module.h"
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -660,8 +661,8 @@ public:
   uint32_t DefineMeshPrimitiveOutput(const MeshPrimitiveOutput &output);
   void UseEarlyFragmentTests() { early_fragment_tests = true; }
   // the inputs defined so far, by argument index, and the outputs
-  const std::vector<FunctionInput> &Inputs() const { return inputs; }
-  const std::vector<FunctionOutput> &Outputs() const { return outputs; }
+  std::span<const FunctionInput> Inputs() const { return inputs; }
+  std::span<const FunctionOutput> Outputs() const { return outputs; }
   bool EarlyFragmentTests() const { return early_fragment_tests; }
   void UseLateFragmentTests() { early_fragment_tests = false; }
   // a fragment function's inputs at the centroid at the center instead
