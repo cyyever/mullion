@@ -767,7 +767,7 @@ llvm::Error convert_dxbc_pixel_shader(
   bool conservative_hull = pso_data && pso_data->conservative && pso_data->conservative_hull;
   bool conservative_test = pso_data && pso_data->conservative && (!conservative_hull || shader_info->use_inner_coverage);
   if (pso_data && pso_data->conservative) {
-    auto &inputs = func_signature.Inputs();
+    auto inputs = func_signature.Inputs();
     for (uint32_t i = 0; i < inputs.size(); i++) {
       if (auto in = std::get_if<air::InputFragmentStageIn>(&inputs[i])) {
         using air::Interpolation;
