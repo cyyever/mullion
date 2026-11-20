@@ -10,6 +10,8 @@
 #pragma once
 
 #include "thread.hpp"
+#include <cstdlib>
+#include <memory>
 #include <vector>
 #include <unknwn.h>
 
@@ -68,7 +70,8 @@ private:
   GUID m_guid = __uuidof(IUnknown);
   ComPrivateDataType m_type = ComPrivateDataType::None;
   UINT m_size = 0;
-  void *m_data = nullptr;
+  using Data = std::unique_ptr<void, decltype([](void *ptr) noexcept { std::free(ptr); })>;
+  Data m_data;
   IUnknown *m_iface = nullptr;
 
   void destroy();
