@@ -470,6 +470,7 @@ def arguments(parser):
     # a flag, not an option with a value: the test names may follow it (CONTRIBUTING.md, faults.py, mutate.py)
     parser.add_argument("--validate", action="store_true", help="run under Metal's API and shader validation")
     parser.add_argument("--validate-shaders", action="store_true", help="run under Metal's shader validation alone")
+    parser.add_argument("--no-zombies", action="store_true", help="allow Objective-C objects to be freed for memory measurements")
     parser.add_argument("--no-install", action="store_true", help="leave the Wine's libraries as they are")
     parser.add_argument("--clone", nargs="?", const=True, type=Path,
                         help="run in a copy of the Wine, made in this directory (default: tests-wine in the first build) "
@@ -604,7 +605,7 @@ def environment(args):
     base = dict(os.environ, WINEPREFIX=str(prefix), WINEDEBUG=os.environ.get("WINEDEBUG", "-all"), MULLION_SHADER_CACHE="0")
     # the tests are of the complete implementation: the work mullion.conf leaves out by default is done
     base.setdefault("MULLION_CONFIG", COMPLETE)
-    if getattr(args, "benchmark", False):
+    if getattr(args, "benchmark", False) or args.no_zombies:
         base.pop("NSZombieEnabled", None)
     else:
         base.update(ZOMBIES)
