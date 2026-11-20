@@ -2119,7 +2119,7 @@ public:
       bool geometry = bool(pDesc->GS.pShaderBytecode);
       // the tessellation templates its draws read, made now rather than at the first draw
       device_->GetTessellationTemplates();
-      tessellation_parts = dxbc::tessellation_grids(
+      auto tess_grids = dxbc::tessellation_grids(
                                dxbc::get_max_potential_workload_count(factor, domain, partitioning) * (32 / threads_per_patch),
                                geometry ? dxbc::get_max_workload_vertices(factor, domain)
                                         : dxbc::tessellation_pieces(
@@ -2128,7 +2128,13 @@ public:
                                               pso_tess.mesh_vertex_size, pso_tess.conservative
                                           ).count,
                                geometry ? ref_gs.GeometryShader.InstanceCount : 1, pso_tess.max_mesh_threadgroups
-      ).parts;
+      );
+      tessellation_parts = tess_grids.parts;
+      tessellation_meshes_per_object = tess_grids.workloads * tess_grids.instances *
+          (geometry ? dxbc::get_max_workload_vertices(factor, domain)
+                    : dxbc::tessellation_pieces(factor, domain,
+                        microsoft::D3D11_SB_TESSELLATOR_OUTPUT_PRIMITIVE(ref_hs.Tessellator.OutputPrimitive),
+                        pso_tess.mesh_vertex_size, pso_tess.conservative).count);
       SM50_SHADER_ROOT_SIGNATURE_DATA rootsig_ds, rootsig_gs;
       root_signature(rootsig_gs, &pso_tess);
       rootsig_gs.type = SM50_SHADER_ROOT_SIGNATURE2;

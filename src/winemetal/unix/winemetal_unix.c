@@ -1205,25 +1205,24 @@ _MTLComputeCommandEncoder_encodeCommands(void *obj) {
  * each told its first object threadgroup and instance (SM50_BINDING_INDEX_DRAW_ORIGIN); or mesh threadgroups of a mesh
  * function alone (`mesh_only`, WMTRenderCommandMullionMeshDraw), told theirs in the mesh stage */
 static void
-draw_geometry_parts(id<MTLRenderCommandEncoder> encoder, uint32_t warps, uint32_t instances, uint32_t threads, uint32_t max,
-                    bool mesh_only, uint32_t mesh_threads) {
-  uint32_t origin[2] = {0, 0};
-  MTLSize object = MTLSizeMake(mesh_only ? 1 : threads, 1, 1),
-          mesh = MTLSizeMake(mesh_only ? threads : mesh_threads ? mesh_threads : 1, 1, 1);
-  if (!max || (uint64_t)warps * instances <= max) {
+draw_mesh_parts(id<MTLRenderCommandEncoder> encoder, uint32_t warps, uint32_t instances, uint32_t max, bool mesh_only, MTLSize object, MTLSize mesh, uint32_t parts) {
+  uint32_t origin[3] = {0, 0, 0};
+  if (!max || (uint64_t)warps * instances * parts <= max) {
     if (mesh_only)
       [encoder setMeshBytes:origin length:sizeof(origin) atIndex:SM50_BINDING_INDEX_DRAW_ORIGIN];
     else
       [encoder setObjectBytes:origin length:sizeof(origin) atIndex:SM50_BINDING_INDEX_DRAW_ORIGIN];
-    [encoder drawMeshThreadgroups:MTLSizeMake(warps, instances, 1)
+    [encoder drawMeshThreadgroups:MTLSizeMake(warps, instances, parts)
         threadsPerObjectThreadgroup:object
           threadsPerMeshThreadgroup:mesh];
     return;
   }
   /* whole instances at a time where one fits, otherwise parts of one instance */
   uint32_t width = warps <= max ? warps : max, height = warps <= max ? max / warps : 1;
+  for (uint32_t part = 0; part < parts; ++part)
   for (uint64_t instance = 0; instance < instances; instance += height)
     for (uint64_t warp = 0; warp < warps; warp += width) {
+      origin[2] = part;
       origin[0] = warp;
       origin[1] = instance;
       if (mesh_only)
@@ -1234,6 +1233,14 @@ draw_geometry_parts(id<MTLRenderCommandEncoder> encoder, uint32_t warps, uint32_
           threadsPerObjectThreadgroup:object
             threadsPerMeshThreadgroup:mesh];
     }
+}
+
+static void
+draw_geometry_parts(id<MTLRenderCommandEncoder> encoder, uint32_t warps,
+    uint32_t instances, uint32_t threads, uint32_t max, bool mesh_only, uint32_t mesh_threads) {
+  draw_mesh_parts(encoder, warps, instances, max, mesh_only,
+      MTLSizeMake(mesh_only ? 1 : threads, 1, 1),
+      MTLSizeMake(mesh_only ? threads : mesh_threads ? mesh_threads : 1, 1, 1), 1);
 }
 
 /* an indirect geometry draw's `parts` Metal draws, whose grids and origins the GS dispatch marshal wrote in `args`:
@@ -1552,9 +1559,9 @@ _MTLRenderCommandEncoder_encodeCommands(void *obj) {
     case WMTRenderCommandMullionTessellationMeshDraw: {
       struct wmtcmd_render_mullion_tessellation_mesh_draw *body = (struct wmtcmd_render_mullion_tessellation_mesh_draw *)next;
       [encoder setObjectBufferOffset:body->draw_arguments_offset atIndex:SM50_BINDING_INDEX_DRAW_ARGUMENTS];
-      [encoder drawMeshThreadgroups:MTLSizeMake(body->patch_per_mesh_instance, body->instance_count, body->parts)
-          threadsPerObjectThreadgroup:MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1)
-            threadsPerMeshThreadgroup:MTLSizeMake(32, 1, 1)];
+      draw_mesh_parts(encoder, body->patch_per_mesh_instance, body->instance_count,
+          body->max_object_threadgroups, false, MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1),
+          MTLSizeMake(32, 1, 1), body->parts);
       break;
     }
     case WMTRenderCommandMullionTessellationMeshDrawIndexed: {
@@ -1564,13 +1571,15 @@ _MTLRenderCommandEncoder_encodeCommands(void *obj) {
                         offset:body->index_buffer_offset
                        atIndex:SM50_BINDING_INDEX_INDEX_BUFFER];
       [encoder setObjectBufferOffset:body->draw_arguments_offset atIndex:SM50_BINDING_INDEX_DRAW_ARGUMENTS];
-      [encoder drawMeshThreadgroups:MTLSizeMake(body->patch_per_mesh_instance, body->instance_count, body->parts)
-          threadsPerObjectThreadgroup:MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1)
-            threadsPerMeshThreadgroup:MTLSizeMake(32, 1, 1)];
+      draw_mesh_parts(encoder, body->patch_per_mesh_instance, body->instance_count,
+          body->max_object_threadgroups, false, MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1),
+          MTLSizeMake(32, 1, 1), body->parts);
       break;
     }
 
     case WMTRenderCommandMullionTessellationMeshDrawIndirect: {
+      uint32_t origin[3] = {0, 0, 0};
+      [encoder setObjectBytes:origin length:sizeof(origin) atIndex:SM50_BINDING_INDEX_DRAW_ORIGIN];
       struct wmtcmd_render_mullion_tessellation_mesh_draw_indirect *body = (struct wmtcmd_render_mullion_tessellation_mesh_draw_indirect *)next;
       [encoder setObjectBuffer:(id<MTLBuffer>)body->indirect_args_buffer
                         offset:body->indirect_args_offset
@@ -1585,6 +1594,8 @@ _MTLRenderCommandEncoder_encodeCommands(void *obj) {
       break;
     }
     case WMTRenderCommandMullionTessellationMeshDrawIndexedIndirect: {
+      uint32_t origin[3] = {0, 0, 0};
+      [encoder setObjectBytes:origin length:sizeof(origin) atIndex:SM50_BINDING_INDEX_DRAW_ORIGIN];
       struct wmtcmd_render_mullion_tessellation_mesh_draw_indexed_indirect *body =
           (struct wmtcmd_render_mullion_tessellation_mesh_draw_indexed_indirect *)next;
       [encoder setObjectBuffer:(id<MTLBuffer>)body->index_buffer
@@ -6591,26 +6602,23 @@ _MTLCommandBuffer_encodeDenoisedScale(void *obj) {
 }
 
 static void
-API_AVAILABLE(macos(26.0)) metal4_draw_geometry_parts(
-    MullionMetal4Encoder *state, uint32_t warps, uint32_t instances, uint32_t threads, uint32_t max, bool mesh_only,
-    uint32_t mesh_threads
-) {
+API_AVAILABLE(macos(26.0)) metal4_draw_mesh_parts(MullionMetal4Encoder *state, uint32_t warps, uint32_t instances, uint32_t max, bool mesh_only, MTLSize object, MTLSize mesh, uint32_t parts) {
   id<MTL4RenderCommandEncoder> encoder = (id<MTL4RenderCommandEncoder>)state->encoder;
-  uint32_t origin[2] = {0, 0};
-  MTLSize object = MTLSizeMake(mesh_only ? 1 : threads, 1, 1),
-          mesh = MTLSizeMake(mesh_only ? threads : mesh_threads ? mesh_threads : 1, 1, 1);
-  if (!max || (uint64_t)warps * instances <= max) {
+  uint32_t origin[3] = {0, 0, 0};
+  if (!max || (uint64_t)warps * instances * parts <= max) {
     metal4_bytes(state, mesh_only ? Metal4MeshBinding : Metal4ObjectBinding, origin, sizeof(origin),
                  SM50_BINDING_INDEX_DRAW_ORIGIN);
-    [encoder drawMeshThreadgroups:MTLSizeMake(warps, instances, 1)
+    [encoder drawMeshThreadgroups:MTLSizeMake(warps, instances, parts)
         threadsPerObjectThreadgroup:object
           threadsPerMeshThreadgroup:mesh];
     return;
   }
   /* whole instances at a time where one fits, otherwise parts of one instance */
   uint32_t width = warps <= max ? warps : max, height = warps <= max ? max / warps : 1;
+  for (uint32_t part = 0; part < parts; ++part)
   for (uint64_t instance = 0; instance < instances; instance += height)
     for (uint64_t warp = 0; warp < warps; warp += width) {
+      origin[2] = part;
       origin[0] = warp;
       origin[1] = instance;
       metal4_bytes(state, mesh_only ? Metal4MeshBinding : Metal4ObjectBinding, origin, sizeof(origin),
@@ -6619,6 +6627,14 @@ API_AVAILABLE(macos(26.0)) metal4_draw_geometry_parts(
           threadsPerObjectThreadgroup:object
             threadsPerMeshThreadgroup:mesh];
     }
+}
+
+static void
+API_AVAILABLE(macos(26.0)) metal4_draw_geometry_parts(MullionMetal4Encoder *state, uint32_t warps,
+    uint32_t instances, uint32_t threads, uint32_t max, bool mesh_only, uint32_t mesh_threads) {
+  metal4_draw_mesh_parts(state, warps, instances, max, mesh_only,
+      MTLSizeMake(mesh_only ? 1 : threads, 1, 1),
+      MTLSizeMake(mesh_only ? threads : mesh_threads ? mesh_threads : 1, 1, 1), 1);
 }
 
 /* an indirect geometry draw's `parts` Metal draws, whose grids and origins the GS dispatch marshal wrote in `args`:
@@ -6919,9 +6935,9 @@ API_AVAILABLE(macos(26.0)) metal4_render(MullionMetal4Encoder *state, const stru
       struct wmtcmd_render_mullion_tessellation_mesh_draw *body =
           (struct wmtcmd_render_mullion_tessellation_mesh_draw *)next;
       metal4_offset(state, Metal4ObjectBinding, body->draw_arguments_offset, SM50_BINDING_INDEX_DRAW_ARGUMENTS);
-      [encoder drawMeshThreadgroups:MTLSizeMake(body->patch_per_mesh_instance, body->instance_count, body->parts)
-          threadsPerObjectThreadgroup:MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1)
-            threadsPerMeshThreadgroup:MTLSizeMake(32, 1, 1)];
+      metal4_draw_mesh_parts(state, body->patch_per_mesh_instance, body->instance_count,
+          body->max_object_threadgroups, false, MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1),
+          MTLSizeMake(32, 1, 1), body->parts);
       break;
     }
     case WMTRenderCommandMullionTessellationMeshDrawIndexed: {
@@ -6931,13 +6947,15 @@ API_AVAILABLE(macos(26.0)) metal4_render(MullionMetal4Encoder *state, const stru
           state, Metal4ObjectBinding, body->index_buffer, body->index_buffer_offset, SM50_BINDING_INDEX_INDEX_BUFFER
       );
       metal4_offset(state, Metal4ObjectBinding, body->draw_arguments_offset, SM50_BINDING_INDEX_DRAW_ARGUMENTS);
-      [encoder drawMeshThreadgroups:MTLSizeMake(body->patch_per_mesh_instance, body->instance_count, body->parts)
-          threadsPerObjectThreadgroup:MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1)
-            threadsPerMeshThreadgroup:MTLSizeMake(32, 1, 1)];
+      metal4_draw_mesh_parts(state, body->patch_per_mesh_instance, body->instance_count,
+          body->max_object_threadgroups, false, MTLSizeMake(body->threads_per_patch, body->patch_per_group, 1),
+          MTLSizeMake(32, 1, 1), body->parts);
       break;
     }
 
     case WMTRenderCommandMullionTessellationMeshDrawIndirect: {
+      uint32_t origin[3] = {0, 0, 0};
+      metal4_bytes(state, Metal4ObjectBinding, origin, sizeof(origin), SM50_BINDING_INDEX_DRAW_ORIGIN);
       struct wmtcmd_render_mullion_tessellation_mesh_draw_indirect *body =
           (struct wmtcmd_render_mullion_tessellation_mesh_draw_indirect *)next;
       metal4_buffer(
@@ -6952,6 +6970,8 @@ API_AVAILABLE(macos(26.0)) metal4_render(MullionMetal4Encoder *state, const stru
       break;
     }
     case WMTRenderCommandMullionTessellationMeshDrawIndexedIndirect: {
+      uint32_t origin[3] = {0, 0, 0};
+      metal4_bytes(state, Metal4ObjectBinding, origin, sizeof(origin), SM50_BINDING_INDEX_DRAW_ORIGIN);
       struct wmtcmd_render_mullion_tessellation_mesh_draw_indexed_indirect *body =
           (struct wmtcmd_render_mullion_tessellation_mesh_draw_indexed_indirect *)next;
       metal4_buffer(

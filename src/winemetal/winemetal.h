@@ -1707,6 +1707,7 @@ struct wmtcmd_render_mullion_tessellation_mesh_draw {
   uint32_t patch_per_group;
   uint32_t patch_per_mesh_instance;
   uint32_t parts; /* the object threadgroups that share a patch group's mesh threadgroups */
+  uint32_t max_object_threadgroups; /* budget for each physical draw; 0 means no split */
 };
 
 struct wmtcmd_render_mullion_tessellation_mesh_draw_indexed {
@@ -1721,6 +1722,7 @@ struct wmtcmd_render_mullion_tessellation_mesh_draw_indexed {
   uint32_t patch_per_group;
   uint32_t patch_per_mesh_instance;
   uint32_t parts; /* the object threadgroups that share a patch group's mesh threadgroups */
+  uint32_t max_object_threadgroups; /* budget for each physical draw; 0 means no split */
 };
 
 struct wmtcmd_render_mullion_tessellation_mesh_draw_indirect {

@@ -1656,6 +1656,13 @@ public:
   ) {
     auto draw_arguments_offset = PreAllocateArgumentBuffer(sizeof(MULLION_DRAW_ARGUMENTS), 32);
     auto max_object_threadgroups = max_object_threadgroups_;
+    auto mesh_groups = m_parent->GetMullionDevice().maxMeshThreadgroups();
+    auto tess_budget = get_mesh_max_object_threadgroups(mesh_groups ? mesh_groups : 1024,
+                                                       max_object_threadgroups, mesh_bytes_per_draw_);
+    if (!tess_budget) {
+      WARN("Omitted mesh draw (TS): one object threadgroup exceeds the draw memory budget");
+      return;
+    }
     EmitOP([=](ArgumentEncodingContext &enc) {
       MULLION_DRAW_ARGUMENTS *draw_argument = enc.getMappedArgumentBuffer<MULLION_DRAW_ARGUMENTS>(draw_arguments_offset);
       draw_argument->StartVertex = StartVertexLocation;
@@ -1689,6 +1696,7 @@ public:
       cmd.patch_per_group = PatchPerGroup;
       cmd.patch_per_mesh_instance = PatchPerObjectInstance;
       cmd.parts = enc.tess_parts;
+      cmd.max_object_threadgroups = uint32_t(std::min<uint64_t>(UINT32_MAX, tess_budget));
     });
   }
 
@@ -1719,6 +1727,13 @@ public:
     auto IndexBuffer = MeshIndexBuffer();
     auto draw_arguments_offset = PreAllocateArgumentBuffer(sizeof(MULLION_DRAW_INDEXED_ARGUMENTS), 32);
     auto max_object_threadgroups = max_object_threadgroups_;
+    auto mesh_groups = m_parent->GetMullionDevice().maxMeshThreadgroups();
+    auto tess_budget = get_mesh_max_object_threadgroups(mesh_groups ? mesh_groups : 1024,
+                                                       max_object_threadgroups, mesh_bytes_per_draw_);
+    if (!tess_budget) {
+      WARN("Omitted mesh draw (TS): one object threadgroup exceeds the draw memory budget");
+      return;
+    }
     EmitOP([=](ArgumentEncodingContext &enc) {
       MULLION_DRAW_INDEXED_ARGUMENTS *draw_argument = enc.getMappedArgumentBuffer<MULLION_DRAW_INDEXED_ARGUMENTS>(draw_arguments_offset);
       draw_argument->BaseVertex = BaseVertexLocation;
@@ -1757,6 +1772,7 @@ public:
       cmd.patch_per_group = PatchPerGroup;
       cmd.patch_per_mesh_instance = PatchPerObjectInstance;
       cmd.parts = enc.tess_parts;
+      cmd.max_object_threadgroups = uint32_t(std::min<uint64_t>(UINT32_MAX, tess_budget));
       cmd.index_buffer = index_buffer;
       cmd.index_buffer_offset = index_buffer_offset;
     });

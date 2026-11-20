@@ -570,6 +570,7 @@ public:
   uint32_t threads_per_patch = 0;
   // the object threadgroups that share a patch group's mesh threadgroups (tessellation_parts)
   uint32_t tessellation_parts = 1;
+  uint32_t tessellation_meshes_per_object = 1;
   // a geometry-shader pipeline runs its vertex shader in the object stage and its geometry shader in the mesh stage,
   // in `pso` for list topologies and in a variant of its own for strips (GeometryPipeline; none for points)
   bool geometry_shader = false;

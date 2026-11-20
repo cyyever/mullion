@@ -6,7 +6,7 @@
 #ifndef __AIRCONV_H
 #define __AIRCONV_H
 
-#define AIRCONV_VERSION 130
+#define AIRCONV_VERSION 131
 
 #ifdef __cplusplus
 #include <string>
@@ -34,7 +34,8 @@ enum SM50_BINDING_INDEX: uint32_t {
   SM50_BINDING_INDEX_ARGUMENT_TABLE2 = 7,
   /* the draw's control points per patch, for a hull shader that declares none (SM50_INDEX_BUFFER_FORMAT_VIEW only) */
   SM50_BINDING_INDEX_PATCH_SIZE = 8,
-  /* a geometry draw's first object threadgroup and instance (uint2): not zero where a draw runs in parts */
+  /* a geometry draw's first object threadgroup and instance (two uint32_t fields); tessellation adds a third
+     uint32_t for its workload part. Nonzero when a physical draw starts inside the original grid. */
   SM50_BINDING_INDEX_DRAW_ORIGIN = 9,
   SM50_BINDING_INDEX_PIPELINE_STATISTICS = SM50_BINDING_INDEX_DRAW_ORIGIN + 1,
   /* each of the SM50_VIEWPORTS viewports' MinDepth and MaxDepth (float2), for a pixel shader that writes depth, then

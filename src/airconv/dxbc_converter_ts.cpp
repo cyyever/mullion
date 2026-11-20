@@ -5,6 +5,7 @@
 #include "nt/air_builder.hpp"
 #include "nt/dxbc_converter_base.hpp"
 #include "tessellation_limits.hpp"
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdlib>
@@ -79,26 +80,50 @@ tessellation_groups() {
   return groups;
 }
 
-size_t
-estimate_payload_size(SM50ShaderInternal *pHullStage, float factor, uint32_t patch_per_group, bool groups) {
-  auto max_hs_output_register = pHullStage->max_output_register;
-  auto cp_size_per_point = sizeof(uint32_t) * 4 * max_hs_output_register;
-  auto cp_size_per_patch = cp_size_per_point * pHullStage->output_control_point_count;
-  auto cp_size_per_group = cp_size_per_patch * patch_per_group;
-  auto pc_size_per_patch = sizeof(uint32_t) * pHullStage->patch_constant_scalars.size();
-  auto pc_size_per_group = pc_size_per_patch * patch_per_group;
+// One layout description for size selection and the LLVM type emitted below. All
+// control-point arrays contain int4s, so the complete structure is 16-byte aligned.
+enum class TessellationPayloadKind { Mesh, Native };
 
-  auto factor_int = get_integer_factor(factor, pHullStage->tessellation_partition);
-  uint32_t max_workload_count = get_max_potential_workload_count(factor_int, pHullStage->tessellation_domain, pHullStage->tessellation_partition);
-  constexpr uint32_t size_workload_info = sizeof(TessMeshWorkload);
+struct TessellationPayloadLayout {
+  uint32_t patches, registers, control_points, constants, workloads;
+  bool groups;
+  TessellationPayloadKind kind;
 
-  // the patches' control points and constants, the first patch's number, the workloads, the grid's first
-  // workload and instance, and the groups of workloads (tessellation_payload_type)
-  return cp_size_per_group + pc_size_per_group + sizeof(uint32_t) +
-         max_workload_count * patch_per_group * size_workload_info + 2 * sizeof(uint32_t) +
-         (groups ? (max_workload_count + 1) * patch_per_group * sizeof(uint32_t) : 0);
+  [[nodiscard]] constexpr size_t bytes() const {
+    size_t words = size_t(patches) * (4 * size_t(registers) * control_points + constants);
+    if (kind == TessellationPayloadKind::Mesh)
+      words += 3 + size_t(workloads) * (sizeof(TessMeshWorkload) / sizeof(uint32_t)) +
+               (groups ? workloads + patches : 0);
+    return (words * sizeof(uint32_t) + 15) & ~size_t(15);
+  }
+
+  llvm::StructType *type(air::AirType &types, llvm::LLVMContext &context) const {
+    auto points = llvm::ArrayType::get(llvm::ArrayType::get(types._int4, registers), control_points);
+    std::array<llvm::Type *, 8> fields{
+        llvm::ArrayType::get(points, patches),
+        llvm::ArrayType::get(llvm::ArrayType::get(types._int, constants), patches),
+        types._int,
+        llvm::ArrayType::get(types._int, size_t(workloads) * sizeof(TessMeshWorkload) / sizeof(uint32_t)),
+        types._int, types._int,
+        llvm::ArrayType::get(types._int, workloads), llvm::ArrayType::get(types._int, patches)};
+    bool native = kind == TessellationPayloadKind::Native;
+    return llvm::StructType::create(context, {fields.data(), native ? 2u : groups ? 8u : 6u},
+                                    native ? "patches" : "payload");
+  }
 };
 
+static TessellationPayloadLayout
+payload_layout(SM50ShaderInternal *hull, uint32_t patches, uint32_t factor, bool groups) {
+  return {patches, hull->max_output_register, hull->output_control_point_count,
+          uint32_t(hull->patch_constant_scalars.size()),
+          get_max_potential_workload_count(factor, hull->tessellation_domain, hull->tessellation_partition) * patches,
+          groups, TessellationPayloadKind::Mesh};
+}
+
+size_t
+estimate_payload_size(SM50ShaderInternal *hull, float factor, uint32_t patches, bool groups) {
+  return payload_layout(hull, patches, get_integer_factor(factor, hull->tessellation_partition), groups).bytes();
+}
 std::pair<uint32_t, uint32_t>
 mesh_threadgroups_per_workload(
     SM50ShaderInternal *pHullStage, SM50_SHADER_COMPILATION_ARGUMENT_DATA *pArgs, uint32_t factor_int
@@ -191,29 +216,8 @@ tessellation_payload_type(
     SM50ShaderInternal *pHullStage, uint32_t factor_int, air::AirType &types, llvm::LLVMContext &context,
     uint32_t group_limit
 ) {
-  uint32_t patch_per_group = next_pow2(32 / next_pow2(pHullStage->hull_maximum_threads_per_patch));
-  auto per_patch = llvm::ArrayType::get(
-      llvm::ArrayType::get(types._int4, pHullStage->max_output_register), pHullStage->output_control_point_count
-  );
-  std::vector<llvm::Type *> fields{
-      llvm::ArrayType::get(per_patch, patch_per_group),
-      llvm::ArrayType::get(llvm::ArrayType::get(types._int, pHullStage->patch_constant_scalars.size()), patch_per_group)
-  };
-  uint32_t workloads =
-      get_max_potential_workload_count(factor_int, pHullStage->tessellation_domain, pHullStage->tessellation_partition) *
-      patch_per_group;
-  fields.insert(fields.end(), {
-      types._int, llvm::ArrayType::get(types._int, workloads * sizeof(TessMeshWorkload) / 4),
-      // the grid's first workload (or group) and first geometry instance
-      types._int, types._int
-  });
-  // with groups, each patch's groups (tess_output), in a room as large as its workloads', and the groups of the
-  // patches before each
-  if (group_limit) {
-    fields.push_back(llvm::ArrayType::get(types._int, workloads));
-    fields.push_back(llvm::ArrayType::get(types._int, patch_per_group));
-  }
-  return llvm::StructType::create(context, fields, "payload");
+  uint32_t patches = next_pow2(32 / next_pow2(pHullStage->hull_maximum_threads_per_patch));
+  return payload_layout(pHullStage, patches, factor_int, bool(group_limit)).type(types, context);
 }
 
 // a domain shader's inputs from its patch, the patch_index'th of the group of patches at `payload` (the payload's
@@ -434,6 +438,7 @@ convert_dxbc_vertex_hull_shader(
   uint32_t group_limit = tessellation_group_limit(pHullStage, pArgs, factor_int);
   auto payload_struct_type = tessellation_payload_type(pHullStage, factor_int, types, context, group_limit);
   uint32_t payload_struct_size = module.getDataLayout().getTypeAllocSize(payload_struct_type);
+  assert(payload_struct_size == payload_layout(pHullStage, patch_per_group, factor_int, bool(group_limit)).bytes());
 
   uint32_t payload_idx = func_signature.DefineInput(air::InputPayload{.size = payload_struct_size});
   uint32_t thread_id_idx = func_signature.DefineInput(air::InputThreadPositionInThreadgroup{});
@@ -497,11 +502,27 @@ convert_dxbc_vertex_hull_shader(
         .raster_order_group = {}
     });
 
+  uint32_t origin_idx = 0;
+  auto origin_type = llvm::StructType::get(context, {types._int, types._int, types._int});
+  if (!native)
+    origin_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
+        .buffer_size = {}, .location_index = SM50_BINDING_INDEX_DRAW_ORIGIN, .array_size = 0,
+        .memory_access = air::MemoryAccess::read, .address_space = air::AddressSpace::constant,
+        .type = air::MSLWhateverStruct{"draw_origin", origin_type}, .arg_name = "draw_origin", .raster_order_group = {}});
+
   auto [function, function_metadata] = func_signature.CreateFunction(name, context, module, 0, true);
 
   auto entry_bb_global = llvm::BasicBlock::Create(context, "entry", function);
   auto vertex_stage_end = llvm::BasicBlock::Create(context, "vertex_end", function);
   llvm::IRBuilder<> builder(entry_bb_global);
+  llvm::Value *group_position = function->getArg(tg_id_idx);
+  if (!native) {
+    auto origin = builder.CreateLoad(origin_type, function->getArg(origin_idx));
+    for (unsigned axis = 0; axis < 3; ++axis)
+      group_position = builder.CreateInsertElement(group_position,
+          builder.CreateAdd(builder.CreateExtractElement(group_position, axis), builder.CreateExtractValue(origin, axis)), axis);
+  }
+
   llvm::raw_null_ostream nulldbg{};
   llvm::air::AIRBuilder air(
       {
@@ -594,7 +615,7 @@ convert_dxbc_vertex_hull_shader(
 
     auto active = llvm::BasicBlock::Create(context, "active_vertex", function);
 
-    auto threadgroup_position_in_grid = function->getArg(tg_id_idx);
+    auto threadgroup_position_in_grid = group_position;
     batched_patch_start = builder.CreateMul(
         builder.CreateExtractElement(threadgroup_position_in_grid, (uint32_t)0),
         builder.getInt32(32 / threads_per_patch)
@@ -1016,7 +1037,7 @@ convert_dxbc_vertex_hull_shader(
     // grid's third axis share them (tessellation_grids): each takes the workloads and instances after those of the
     // ones before it
     auto grids = tessellation_grids(max_workload_count * patch_per_group, workload_primitives, geometry_instances, grid_limit);
-    auto part = builder.CreateExtractElement(function->getArg(tg_id_idx), 2);
+    auto part = builder.CreateExtractElement(group_position, 2);
     auto first_workload = builder.CreateMul(
         builder.CreateUDiv(part, builder.getInt32(grids.instance_parts)), builder.getInt32(grids.workloads)
     );

@@ -2,15 +2,16 @@
 // draws. one draw of 4096 patches in 80 instances, each patch 32 control points of 8 registers, has 1.25 GB of hull
 // outputs, past the 1 GB a device records its lists' GPU data into: where a draw kept them there, its list would not
 // close. each patch covers the whole target at factor 1 and the pixel shader adds 1 (blend one + one) from values the
-// last control point carries, so every pixel reads the number of patches: drawn directly and indexed
+// last control point carries, so every pixel reads the number of patches: drawn directly and indexed.
+// A second channel weights patch and instance IDs to detect lost origins when the mesh draw is split.
 #include "d3d12_test.hpp"
 
 static const char hlsl[] = R"hlsl(
 struct Point { float4 at : PIXEL; float4 extra[7] : EXTRA; };
-Point vs(uint id : SV_VertexID) {
+Point vs(uint id : SV_VertexID, uint instance : SV_InstanceID) {
   uint corner = id % 4;
   Point p;
-  p.at = float4(corner % 2, corner / 2, 0, 0);
+  p.at = float4(corner % 2, corner / 2, instance % 3, (id / 32) % 7);
   [unroll] for (uint k = 0; k < 7; k++)
     p.extra[k] = k + 1;
   return p;
@@ -25,7 +26,7 @@ Factors factors() {
 [patchconstantfunc("factors")] Point hs(InputPatch<Point, 32> patch, uint i : SV_OutputControlPointID) {
   return patch[i];
 }
-struct Vertex { float4 position : SV_Position; float value : VALUE; };
+struct Vertex { float4 position : SV_Position; float value : VALUE; float identity : IDENTITY; };
 [domain("quad")] Vertex ds(Factors f, float2 uv : SV_DomainLocation, const OutputPatch<Point, 32> patch) {
   float2 at = lerp(lerp(patch[0].at.xy, patch[1].at.xy, uv.x), lerp(patch[2].at.xy, patch[3].at.xy, uv.x), uv.y);
   Vertex v;
@@ -34,9 +35,10 @@ struct Vertex { float4 position : SV_Position; float value : VALUE; };
   [unroll] for (uint k = 0; k < 7; k++)
     sum += patch[31].extra[k].x + patch[31].extra[k].w;
   v.value = sum / 56;
+  v.identity = v.value + patch[31].at.z + patch[31].at.w;
   return v;
 }
-float ps(Vertex v) : SV_Target { return v.value; }
+float2 ps(Vertex v) : SV_Target { return float2(v.value, v.identity); }
 )hlsl";
 
 int
@@ -79,7 +81,7 @@ main(int argc, char **argv) {
   desc.RasterizerState.DepthClipEnable = TRUE;
   desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
   desc.NumRenderTargets = 1;
-  desc.RTVFormats[0] = DXGI_FORMAT_R32_FLOAT;
+  desc.RTVFormats[0] = DXGI_FORMAT_R32G32_FLOAT;
   desc.SampleDesc = {1, 0};
   ComPtr<ID3D12PipelineState> pso;
   CHECK(device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&pso)));
@@ -89,7 +91,7 @@ main(int argc, char **argv) {
   CHECK(device->CreateDescriptorHeap(&rtv_desc, IID_PPV_ARGS(&rtvs)));
   D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_DEFAULT};
   D3D12_RESOURCE_DESC target_desc{
-      D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, size, size, 1, 1, DXGI_FORMAT_R32_FLOAT, {1, 0},
+      D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, size, size, 1, 1, DXGI_FORMAT_R32G32_FLOAT, {1, 0},
       D3D12_TEXTURE_LAYOUT_UNKNOWN, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
   };
   ComPtr<ID3D12Resource> target;
@@ -122,6 +124,9 @@ main(int argc, char **argv) {
   CHECK(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr, IID_PPV_ARGS(&list)));
   CHECK(list->Close());
 
+  UINT identity = patches * instances;
+  for (UINT patch = 0; patch < patches; ++patch) identity += instances * (patch % 7);
+  for (UINT instance = 0; instance < instances; ++instance) identity += patches * (instance % 3);
   for (int indexed = 0; indexed < 2; indexed++) {
     step("drawn %s", indexed ? "indexed" : "directly");
     CHECK(forget(readback.Get()));
@@ -155,18 +160,18 @@ main(int argc, char **argv) {
     BYTE *got;
     CHECK(readback->Map(0, nullptr, (void **)&got));
     UINT right = 0, first = UINT_MAX;
-    float seen = 0;
+    float seen = 0, seen_identity = 0;
     for (UINT y = 0; y < size; y++)
       for (UINT x = 0; x < size; x++) {
-        float value = ((const float *)(got + y * footprint.Footprint.RowPitch))[x];
-        if (value == float(patches * instances))
+        const float *value = (const float *)(got + y * footprint.Footprint.RowPitch) + 2 * x;
+        if (value[0] == float(patches * instances) && value[1] == float(identity))
           right++;
         else if (first == UINT_MAX)
-          first = y * size + x, seen = value;
+          first = y * size + x, seen = value[0], seen_identity = value[1];
       }
     readback->Unmap(0, nullptr);
-    expect(right == size * size, "%u of %u pixels read %u; pixel (%u, %u) reads %g", right, size * size,
-           patches * instances, first % size, first / size, seen);
+    expect(right == size * size, "%u of %u pixels read (%u, %u); pixel (%u, %u) reads (%g, %g)", right, size * size,
+           patches * instances, identity, first % size, first / size, seen, seen_identity);
   }
   return verdict();
 }
