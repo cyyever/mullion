@@ -40,10 +40,10 @@ HRESULT
 SerializeVersionedRootSignatureImpl(
     const ROOT_SIGNATURE_DESC *pDesc, D3D_ROOT_SIGNATURE_VERSION Version, ID3DBlob **ppBlob, ID3DBlob **ppErrorBlob
 ) {
-  using ROOT_PARAMETER = GetType<ROOT_SIGNATURE_DESC>::ROOT_PARAMETER;
-  using ROOT_DESCRIPTOR = GetType<ROOT_SIGNATURE_DESC>::ROOT_DESCRIPTOR;
-  using DESCRIPTOR_RANGE = GetType<ROOT_SIGNATURE_DESC>::DESCRIPTOR_RANGE;
-  using STATIC_SAMPLER = GetType<ROOT_SIGNATURE_DESC>::STATIC_SAMPLER;
+  using ROOT_PARAMETER = std::remove_cvref_t<decltype(*pDesc->pParameters)>;
+  using ROOT_DESCRIPTOR = std::remove_cvref_t<decltype(pDesc->pParameters[0].Descriptor)>;
+  using DESCRIPTOR_RANGE = std::remove_cvref_t<decltype(*pDesc->pParameters[0].DescriptorTable.pDescriptorRanges)>;
+  using STATIC_SAMPLER = std::remove_cvref_t<decltype(*pDesc->pStaticSamplers)>;
 
   struct segment {
     size_t offset;
