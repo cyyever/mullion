@@ -20,6 +20,9 @@
 #include "d3d12.h"
 
 #include <cstring>
+#include <cstdlib>
+#include <memory>
+#include <utility>
 #include <vector>
 #include <cstdint>
 #include <type_traits>
@@ -96,36 +99,33 @@ SetFlag(D3D12_DESCRIPTOR_RANGE1 *A, const D3D12_DESCRIPTOR_RANGE1 *B) {
   A->Flags = B->Flags;
 };
 
-template <typename T> struct GetType {
-  using ROOT_PARAMETER = std::decay_t<decltype(std::declval<T>().pParameters[0])>;
-  using ROOT_DESCRIPTOR = decltype(std::declval<T>().pParameters[0].Descriptor);
-  using DESCRIPTOR_RANGE =
-      std::decay_t<decltype(std::declval<T>().pParameters[0].DescriptorTable.pDescriptorRanges[0])>;
-  using STATIC_SAMPLER = std::decay_t<decltype(std::declval<T>().pStaticSamplers[0])>;
-};
-
 class RootSignatureDeserializer {
 public:
-  RootSignatureDeserializer() {}
+  RootSignatureDeserializer() = default;
+  RootSignatureDeserializer(const RootSignatureDeserializer &) = delete;
+  RootSignatureDeserializer &operator=(const RootSignatureDeserializer &) = delete;
+  RootSignatureDeserializer(RootSignatureDeserializer &&) noexcept = default;
+  RootSignatureDeserializer &operator=(RootSignatureDeserializer &&) noexcept = default;
 
   template <typename T>
   T *
   AllocateBuffer(size_t Count, size_t Size = sizeof(T)) {
-    if (Count == 0 || Count > SIZE_MAX / Size)
+    if (Count == 0 || Size == 0 || Count > SIZE_MAX / Size)
       return nullptr;
-    T *ptr = (T *)malloc(Size * Count);
-    if (ptr)
-      malloc_ptrs_.push_back(ptr);
+    Allocation allocation(std::malloc(Size * Count));
+    auto *ptr = static_cast<T *>(allocation.get());
+    if (allocation)
+      allocations_.push_back(std::move(allocation));
     return ptr;
   }
 
   template <typename ROOT_SIGNATURE_DESC>
   HRESULT
   DeserializeVersionedRootSignatureImpl(ROOT_SIGNATURE_DESC &Output, SIZE_T DataSize) {
-    using ROOT_PARAMETER = GetType<ROOT_SIGNATURE_DESC>::ROOT_PARAMETER;
-    using ROOT_DESCRIPTOR = GetType<ROOT_SIGNATURE_DESC>::ROOT_DESCRIPTOR;
-    using DESCRIPTOR_RANGE = GetType<ROOT_SIGNATURE_DESC>::DESCRIPTOR_RANGE;
-    using STATIC_SAMPLER = GetType<ROOT_SIGNATURE_DESC>::STATIC_SAMPLER;
+    using ROOT_PARAMETER = std::remove_cvref_t<decltype(*Output.pParameters)>;
+    using ROOT_DESCRIPTOR = decltype(Output.pParameters[0].Descriptor);
+    using DESCRIPTOR_RANGE = std::remove_cvref_t<decltype(*Output.pParameters[0].DescriptorTable.pDescriptorRanges)>;
+    using STATIC_SAMPLER = std::remove_cvref_t<decltype(*Output.pStaticSamplers)>;
 
     // offsets are DWORD-aligned; division checks counts without overflowing (DXC, DxilRootSignatureSerializer.cpp)
     auto contains = [DataSize](uint32_t Offset, size_t Count, size_t Stride) {
@@ -195,10 +195,10 @@ public:
   template <typename ROOT_SIGNATURE_DESC_FROM, typename ROOT_SIGNATURE_DESC_TO>
   HRESULT
   ConvertVersionedRootSignature(ROOT_SIGNATURE_DESC_FROM &From, ROOT_SIGNATURE_DESC_TO &To) {
-    using ROOT_PARAMETER_TO = GetType<ROOT_SIGNATURE_DESC_TO>::ROOT_PARAMETER;
-    using DESCRIPTOR_RANGE_TO = GetType<ROOT_SIGNATURE_DESC_TO>::DESCRIPTOR_RANGE;
-    using STATIC_SAMPLER_FROM = GetType<ROOT_SIGNATURE_DESC_FROM>::STATIC_SAMPLER;
-    using STATIC_SAMPLER_TO = GetType<ROOT_SIGNATURE_DESC_TO>::STATIC_SAMPLER;
+    using ROOT_PARAMETER_TO = std::remove_cvref_t<decltype(*To.pParameters)>;
+    using DESCRIPTOR_RANGE_TO = std::remove_cvref_t<decltype(*To.pParameters[0].DescriptorTable.pDescriptorRanges)>;
+    using STATIC_SAMPLER_FROM = std::remove_cvref_t<decltype(*From.pStaticSamplers)>;
+    using STATIC_SAMPLER_TO = std::remove_cvref_t<decltype(*To.pStaticSamplers)>;
 
     auto pParametersTo = AllocateBuffer<ROOT_PARAMETER_TO>(From.NumParameters);
     if (From.NumParameters && !pParametersTo)
@@ -314,21 +314,19 @@ public:
     return hr;
   }
 
-  ~RootSignatureDeserializer() {
-    for (auto ptr : malloc_ptrs_) {
-      free(ptr);
-    }
-    malloc_ptrs_.clear();
-    raw_root_sig_ = nullptr;
-  }
-
-  D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc_1_0_;
-  D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc_1_1_;
+  D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc_1_0_{};
+  D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc_1_1_{};
   VersionedRootSignatureDesc2 desc_1_2_{};
-  RawRootSignatureDesc *raw_root_sig_;
+  RawRootSignatureDesc *raw_root_sig_ = nullptr;
 
 private:
-  std::vector<void *> malloc_ptrs_;
+  using Allocation = std::unique_ptr<void, decltype([](void *ptr) noexcept { std::free(ptr); })>;
+  std::vector<Allocation> allocations_;
 };
+
+static_assert(!std::is_copy_constructible_v<RootSignatureDeserializer>);
+static_assert(!std::is_copy_assignable_v<RootSignatureDeserializer>);
+static_assert(std::is_nothrow_move_constructible_v<RootSignatureDeserializer>);
+static_assert(std::is_nothrow_move_assignable_v<RootSignatureDeserializer>);
 
 } // namespace mullion
