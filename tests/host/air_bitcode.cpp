@@ -79,8 +79,7 @@ static int testPipeline(llvm::Attribute::AttrKind promise) {
             call->addFnAttr(promise);
     llvm::SmallVector<char, 0> bytes;
     llvm::raw_svector_ostream output(bytes);
-    mullion::metallib::MetallibWriter writer;
-    if (auto error = writer.Write(*module, output)) {
+    if (auto error = mullion::metallib::write(*module, output)) {
       llvm::errs() << llvm::toString(std::move(error)) << "\n";
       return 1;
     }

@@ -476,8 +476,7 @@ int main(int argc, char **argv) {
   if (EmitLLVM) {
     M.print(Out->os(), nullptr, PreserveAssemblyUseListOrder);
   } else if (EmitMetallib) {
-    mullion::metallib::MetallibWriter writer;
-    if (auto error = writer.Write(M, Out->os())) {
+    if (auto error = mullion::metallib::write(M, Out->os())) {
       errs() << toString(std::move(error)) << '\n';
       return 1;
     }

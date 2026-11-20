@@ -2411,8 +2411,7 @@ AIRCONV_API int SM50CompileRayDispatcher(
     return failed();
   auto compiled = new SM50CompiledBitcodeInternal();
   raw_svector_ostream OS(compiled->vec);
-  metallib::MetallibWriter writer;
-  if (auto error = writer.Write(*pModule, OS)) {
+  if (auto error = metallib::write(*pModule, OS)) {
     errorOut << llvm::toString(std::move(error));
     delete compiled;
     return failed();
@@ -2570,9 +2569,8 @@ AIRCONV_API int SM50Compile(
 
   raw_svector_ostream OS(compiled->vec);
 
-  metallib::MetallibWriter writer;
 
-  if (auto error = writer.Write(*pModule, OS)) {
+  if (auto error = metallib::write(*pModule, OS)) {
     errorOut << llvm::toString(std::move(error));
     delete compiled;
     if (ppError)
@@ -2642,9 +2640,8 @@ AIRCONV_API int SM50CompileTessellationPipelineHull(
 
   raw_svector_ostream OS(compiled->vec);
 
-  metallib::MetallibWriter writer;
 
-  if (auto error = writer.Write(*pModule, OS)) {
+  if (auto error = metallib::write(*pModule, OS)) {
     errorOut << llvm::toString(std::move(error));
     delete compiled;
     if (ppError)
@@ -2722,9 +2719,8 @@ AIRCONV_API int SM50CompileTessellationPipelineDomain(
 
   raw_svector_ostream OS(compiled->vec);
 
-  metallib::MetallibWriter writer;
 
-  if (auto error = writer.Write(*pModule, OS)) {
+  if (auto error = metallib::write(*pModule, OS)) {
     errorOut << llvm::toString(std::move(error));
     delete compiled;
     if (ppError)
@@ -2794,9 +2790,8 @@ AIRCONV_API int SM50CompileGeometryPipelineVertex(
 
   raw_svector_ostream OS(compiled->vec);
 
-  metallib::MetallibWriter writer;
 
-  if (auto error = writer.Write(*pModule, OS)) {
+  if (auto error = metallib::write(*pModule, OS)) {
     errorOut << llvm::toString(std::move(error));
     delete compiled;
     if (ppError)
@@ -2878,9 +2873,8 @@ AIRCONV_API int SM50CompileGeometryPipelineGeometry(
 
   raw_svector_ostream OS(compiled->vec);
 
-  metallib::MetallibWriter writer;
 
-  if (auto error = writer.Write(*pModule, OS)) {
+  if (auto error = metallib::write(*pModule, OS)) {
     errorOut << llvm::toString(std::move(error));
     delete compiled;
     if (ppError)
