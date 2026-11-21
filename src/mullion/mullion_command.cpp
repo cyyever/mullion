@@ -85,7 +85,7 @@ WMT::RenderPipelineState InternalCommandLibrary::StreamOutputSnapshot() {
 
 WMT::RenderPipelineState
 InternalCommandLibrary::VertexPipeline(WMT::Reference<WMT::RenderPipelineState> &pipeline, const char *name) {
-  std::lock_guard lock(pipelines_mutex_);
+  std::scoped_lock lock(pipelines_mutex_);
   if (!pipeline) {
     WMTRenderPipelineInfo info;
     WMT::InitializeRenderPipelineInfo(info);
@@ -104,7 +104,7 @@ InternalCommandLibrary::VertexPipeline(WMT::Reference<WMT::RenderPipelineState> 
 
 WMT::Reference<WMT::ComputePipelineState>
 InternalCommandLibrary::ComputePipeline(const std::string &name) {
-  std::lock_guard lock(pipelines_mutex_);
+  std::scoped_lock lock(pipelines_mutex_);
   auto &pipeline = compute_pipelines_[name];
   if (!pipeline) {
     auto function = library_.newFunction(name.c_str());
@@ -121,7 +121,7 @@ InternalCommandLibrary::ComputePipeline(const std::string &name) {
 WMT::RenderPipelineState
 InternalCommandLibrary::ClearPipeline(WMTPixelFormat format, uint32_t sample_count, uint32_t dsv_flag, bool resolve) {
   uint64_t key = uint64_t(format) << 32 | uint64_t(sample_count) << 3 | uint64_t(resolve) << 2 | dsv_flag;
-  std::lock_guard lock(clear_mutex_);
+  std::scoped_lock lock(clear_mutex_);
   auto [at, fresh] = clear_pipelines_.try_emplace(key);
   if (!fresh)
     return at->second;
@@ -164,7 +164,7 @@ InternalCommandLibrary::ClearPipeline(WMTPixelFormat format, uint32_t sample_cou
 
 WMT::DepthStencilState
 InternalCommandLibrary::ClearDepthStencilState(uint32_t dsv_flag) {
-  std::lock_guard lock(clear_mutex_);
+  std::scoped_lock lock(clear_mutex_);
   auto &state = clear_depth_stencil_states_[dsv_flag & 3];
   if (!state) {
     WMTDepthStencilInfo info{};
@@ -186,7 +186,7 @@ InternalCommandLibrary::ClearDepthStencilState(uint32_t dsv_flag) {
 
 InternalCommandLibrary::StandIn
 InternalCommandLibrary::UnboundTexture(WMTTextureType type, SM50_SAMPLE_TYPE sample, bool write) {
-  std::lock_guard lock(pipelines_mutex_);
+  std::scoped_lock lock(pipelines_mutex_);
   auto [at, fresh] = unbound_textures_.try_emplace(type | sample << 4 | write << 6);
   auto &unbound = at->second;
   if (fresh) {

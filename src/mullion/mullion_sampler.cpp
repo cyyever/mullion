@@ -19,7 +19,7 @@ static WMT::Reference<WMT::SamplerState>
 NewState(WMT::Device device, WMTSamplerInfo &info) {
   static mullion::mutex mutex;
   static std::unordered_map<uint64_t, WMTSamplerInfo> held;
-  std::lock_guard<mullion::mutex> lock(mutex);
+  std::scoped_lock lock(mutex);
   if (held.size() < device.maxArgumentBufferSamplerCount()) {
     auto state = device.newSamplerState(info);
     if (state)

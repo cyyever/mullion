@@ -61,7 +61,7 @@ StagingResource::unmap() {
 
 uint64_t
 StagingResource::allocate(uint64_t coherent_seq_id) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   uint64_t ret = ~0ull;
   for (;;) {
     if (fifo.empty()) {
@@ -88,7 +88,7 @@ StagingResource::allocate(uint64_t coherent_seq_id) {
 
 void
 StagingResource::updateImmediateName(uint64_t current_seq_id, uint64_t allocation) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   fifo.push(QueueEntry{.id = immediate_name_, .will_free_at = current_seq_id});
   immediate_name_ = allocation;
   cpu_coherent_after_finished_seq_id = 0;

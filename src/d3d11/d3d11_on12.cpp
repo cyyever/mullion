@@ -82,7 +82,7 @@ DefaultBindFlags(const D3D12_RESOURCE_DESC &desc) {
 
 HRESULT
 D3D11On12Device::ShareResourceState(D3D11ResourceCommon *resource, const D3D12_RESOURCE_DESC &desc, bool cpu_visible) {
-  std::lock_guard lock(device_->mutex);
+  std::scoped_lock lock(device_->mutex);
   try {
     auto found = resources_.find(resource->wrapped_resource.ptr());
     auto state = found == resources_.end() ? nullptr : found->second.lock();

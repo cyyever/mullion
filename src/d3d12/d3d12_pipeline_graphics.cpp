@@ -309,7 +309,7 @@ MTLD3D12PipelineState::DumpShaders(std::initializer_list<D3D12_SHADER_BYTECODE> 
       continue;
     auto hash = ShaderDigest(Shader.pShaderBytecode, Shader.BytecodeLength).string();
     {
-      std::lock_guard lock(mutex);
+      std::scoped_lock lock(mutex);
       if (!written.insert(hash).second)
         continue;
     }
@@ -548,7 +548,7 @@ CompileFunction(
   auto &shared = device->functions;
   // the pipeline keeps the function and what it was loaded from, for a pipeline library that stores it
   auto keep = [&](std::shared_ptr<const MTLD3D12Device::SharedFunction> kept) {
-    std::lock_guard lock(pipeline->shader_mutex);
+    std::scoped_lock lock(pipeline->shader_mutex);
     pipeline->cached_shaders.emplace(key, kept->data);
     pipeline->functions.push_back(kept);
     return kept->function;
@@ -556,7 +556,7 @@ CompileFunction(
   auto share = [&](WMT::Reference<WMT::Function> function, WMT::Reference<WMT::DispatchData> data) {
     auto kept = std::make_shared<const MTLD3D12Device::SharedFunction>(std::move(function), std::move(data));
     if (enabled) {
-      std::lock_guard lock(shared.mutex);
+      std::scoped_lock lock(shared.mutex);
       auto &made = shared.made[key];
       if (auto other = made.lock())
         kept = other;
@@ -586,7 +586,7 @@ CompileFunction(
   };
   WMT::Reference<WMT::DispatchData> stored;
   {
-    std::lock_guard lock(pipeline->shader_mutex);
+    std::scoped_lock lock(pipeline->shader_mutex);
     if (auto found = pipeline->cached_shaders.find(key); found != pipeline->cached_shaders.end())
       stored = found->second;
   }
@@ -620,7 +620,7 @@ CompileFunction(
     Conversion(Sha1Digest key) : key(key) {}
     ~Conversion() {
       {
-        std::lock_guard lock(pending_mutex);
+        std::scoped_lock lock(pending_mutex);
         pending.erase(key);
       }
       completed.notify_all();
@@ -734,7 +734,7 @@ protected:
     auto key = fixed.final(), colors_key = colors.final();
     std::shared_ptr<MTLD3D12Device::Flexible> held;
     {
-      std::lock_guard lock(flexible.mutex);
+      std::scoped_lock lock(flexible.mutex);
       held = flexible.made[key].lock();
     }
     if (!held) {
@@ -745,24 +745,24 @@ protected:
           device_->GetMTLDevice().newRenderPipelineState(unspecialized, error));
       if (!made->unspecialized)
         return {};
-      std::lock_guard lock(flexible.mutex);
+      std::scoped_lock lock(flexible.mutex);
       auto &kept = flexible.made[key];
       if (!(held = kept.lock()))
         kept = held = made;
     }
     {
-      std::lock_guard lock(shader_mutex);
+      std::scoped_lock lock(shader_mutex);
       functions.push_back(held);
     }
     {
-      std::lock_guard lock(flexible.mutex);
+      std::scoped_lock lock(flexible.mutex);
       if (auto found = held->specialized.find(colors_key); found != held->specialized.end())
         return found->second;
     }
     auto specialized = device_->GetMTLDevice().newSpecializedRenderPipelineState(held->unspecialized, info, error);
     if (!specialized)
       return {};
-    std::lock_guard lock(flexible.mutex);
+    std::scoped_lock lock(flexible.mutex);
     return held->specialized.emplace(colors_key, std::move(specialized)).first->second;
   }
 
@@ -773,7 +773,7 @@ protected:
     auto pipeline = MetalPipeline(info, error);
     if (!pipeline || (!rtv_mask && !dsv_mask && !pixel_shader && !statistics_geometry_shader))
       return pipeline;
-    std::lock_guard<mullion::mutex> lock(render_targets_mutex_);
+    std::scoped_lock lock(render_targets_mutex_);
     auto &descriptor = pipeline_descriptors_[pipeline.handle];
     descriptor.info = info;
     descriptor.statistics_geometry_shader = std::move(statistics_geometry_shader);
@@ -1032,7 +1032,7 @@ struct Group {
   // writing the depth where the pipeline clamps it (`cull_depth`, as cull_depth does). the device keeps one of each
   WMT::Reference<WMT::Function>
   TestFragment(bool conservative, bool depth, bool bounds, uint32_t sample_mask, uint32_t culls, bool cull_depth, bool fragment_bias) {
-    std::lock_guard<mullion::mutex> lock(device_->test_fragments_mutex);
+    std::scoped_lock lock(device_->test_fragments_mutex);
     auto &function = device_->test_fragments[{conservative, depth, bounds, sample_mask, culls, cull_depth, fragment_bias}];
     if (!function)
       function = CompileTestFragment(conservative, depth, bounds, sample_mask, culls, cull_depth, fragment_bias);
@@ -1143,7 +1143,7 @@ public:
                  topology <= D3D_PRIMITIVE_TOPOLOGY_32_CONTROL_POINT_PATCHLIST;
     if (patch != patches)
       return {};
-    std::lock_guard<mullion::mutex> lock(topology_mutex_);
+    std::scoped_lock lock(topology_mutex_);
     auto &variant = topology_variants_[topology * 2 + counting];
     if (!variant && topology_inputs_) {
       auto start = device_->NamesPasses() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
@@ -1166,7 +1166,7 @@ public:
   GeometryPipeline(bool strip, bool counting) final {
     if (strip && !geometry_strips_)
       return {};
-    std::lock_guard<mullion::mutex> lock(topology_mutex_);
+    std::scoped_lock lock(topology_mutex_);
     auto &variant = geometry_variants_[strip][counting];
     if (!variant && !geometry_attempted_[strip][counting] && topology_inputs_) {
       geometry_attempted_[strip][counting] = true;
@@ -2273,7 +2273,7 @@ public:
           return true;
         }
         if (patch_varying) {
-          std::lock_guard<mullion::mutex> lock(self->render_targets_mutex_);
+          std::scoped_lock lock(self->render_targets_mutex_);
           if (auto described = self->pipeline_descriptors_.find(patches.handle);
               described != self->pipeline_descriptors_.end())
             described->second.patch_varying = true;
@@ -2364,7 +2364,7 @@ public:
     if (!Pipeline || (!Statistics && !late && !Coarse && Mask == rtv_mask && !other_encoding && !other_dsv &&
                       (dsv_any_format ? !DSVPlanar : DSVPlanar == dsv_mask)))
       return Pipeline;
-    std::lock_guard<mullion::mutex> lock(render_targets_mutex_);
+    std::scoped_lock lock(render_targets_mutex_);
     auto described = pipeline_descriptors_.find(Pipeline.handle);
     // a pipeline with nothing to vary has no descriptor
     if (described == pipeline_descriptors_.end())
@@ -2568,7 +2568,7 @@ Lean(MTLD3D12PipelineState &pso, MTLD3D12Device *device, const PipelineStateStre
 std::shared_ptr<const std::string>
 MTLD3D12Device::KeepShader(D3D12_SHADER_BYTECODE code) {
   auto key = ShaderDigest(code.pShaderBytecode, code.BytecodeLength);
-  std::lock_guard<mullion::mutex> lock(kept_shaders.mutex);
+  std::scoped_lock lock(kept_shaders.mutex);
   auto &kept = kept_shaders.bytes[key];
   auto shader = kept.lock();
   if (!shader)
@@ -2578,7 +2578,7 @@ MTLD3D12Device::KeepShader(D3D12_SHADER_BYTECODE code) {
 
 ID3D12PipelineState *
 MTLD3D12PipelineState::Fuller(MTLD3D12Device *Device) {
-  std::lock_guard<mullion::mutex> lock(shader_mutex);
+  std::scoped_lock lock(shader_mutex);
   if (!fuller && FAILED(lean->Create(Device, __uuidof(ID3D12PipelineState), (void **)&fuller)))
     ERR("pipeline ", name, ": the variant that emulates its samplers failed");
   return fuller.ptr();

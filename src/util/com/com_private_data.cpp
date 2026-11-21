@@ -153,7 +153,7 @@ void ComPrivateData::insertEntry(ComPrivateDataEntry &&entry) {
 }
 
 HRESULT ConcurrentComPrivateData::setData(REFGUID guid, UINT size, const void *data) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (!data) {
     for (auto it = m_entries.begin(); it != m_entries.end(); ++it) {
       if (it->hasGuid(guid)) {
@@ -172,13 +172,13 @@ HRESULT ConcurrentComPrivateData::setData(REFGUID guid, UINT size, const void *d
 }
 
 HRESULT ConcurrentComPrivateData::setInterface(REFGUID guid, const IUnknown *iface) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   this->insertEntry(ComPrivateDataEntry(guid, iface));
   return S_OK;
 }
 
 HRESULT ConcurrentComPrivateData::getData(REFGUID guid, UINT *size, void *data) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (!size)
     return E_INVALIDARG;
 

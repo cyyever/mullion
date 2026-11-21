@@ -26,13 +26,13 @@ class FlipWindow final : public ComObjectWithInitialRef<IUnknown> {
 
 public:
   FlipWindow(HWND window) : window_(window) {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     acquired_ = windows_.insert(window).second;
   }
 
   ~FlipWindow() override {
     if (acquired_) {
-      std::lock_guard lock(mutex_);
+      std::scoped_lock lock(mutex_);
       windows_.erase(window_);
     }
   }
@@ -68,7 +68,7 @@ class StatusNotifications {
   changed(HWINEVENTHOOK, DWORD, HWND, LONG object, LONG, DWORD, DWORD) {
     if (object != OBJID_WINDOW)
       return;
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     for (auto &[cookie, target] : occlusion_)
       target.event ? SetEvent(target.event) : PostMessageW(target.window, target.message, 0, 0);
   }
@@ -94,7 +94,7 @@ public:
   add(bool occlusion, Target target, DWORD *cookie) {
     if (!cookie || (occlusion && !valid(target)))
       return DXGI_ERROR_INVALID_CALL;
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     auto &targets = occlusion ? occlusion_ : stereo_;
     // RegisterOcclusionStatusEvent, Remarks: the same event twice fails with INVALID_CALL
     for (auto &[_, registered] : targets)
@@ -116,7 +116,7 @@ public:
 
   static void
   remove(bool occlusion, DWORD cookie) {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     (occlusion ? occlusion_ : stereo_).erase(cookie);
     if (occlusion && occlusion_.empty() && hook_) {
       UnhookWinEvent(hook_);

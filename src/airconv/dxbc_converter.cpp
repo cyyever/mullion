@@ -2457,7 +2457,7 @@ AIRCONV_API int SM50Initialize(
     return SM50InitializeUncached(pBytecode, BytecodeSize, ppShader, pRefl, ppError);
   BytecodeKey key(std::string_view(static_cast<const char *>(pBytecode), BytecodeSize));
   auto cached = [&] {
-    std::lock_guard lock(initialized_mutex);
+    std::scoped_lock lock(initialized_mutex);
     if (auto found = initialized_by_bytecode.find(key); found != initialized_by_bytecode.end()) {
       auto &entry = *initialized.at(found->second);
       entry.references++;
@@ -2474,7 +2474,7 @@ AIRCONV_API int SM50Initialize(
     return 0;
   // The existing bytecode hash chooses the lock for concurrent cache misses.
   // Never hold initialized_mutex while waiting or parsing; recheck after another caller publishes.
-  std::lock_guard parsing(initialization_locks[key.xx % initialization_locks.size()]);
+  std::scoped_lock parsing(initialization_locks[key.xx % initialization_locks.size()]);
   if (cached())
     return 0;
   MTL_SHADER_REFLECTION reflection{};
@@ -2485,7 +2485,7 @@ AIRCONV_API int SM50Initialize(
     *pRefl = reflection;
   if (shader->shader_type == mullion::dxbc::kShaderLibrary)
     return 0;
-  std::lock_guard lock(initialized_mutex);
+  std::scoped_lock lock(initialized_mutex);
   if (auto found = initialized_by_bytecode.find(key); found != initialized_by_bytecode.end()) {
     // another thread made the same meanwhile
     delete shader;
@@ -2502,7 +2502,7 @@ AIRCONV_API int SM50Initialize(
 AIRCONV_API void SM50Destroy(sm50_shader_t pShader) {
   auto shader = (mullion::dxbc::SM50ShaderInternal *)pShader;
   {
-    std::lock_guard lock(initialized_mutex);
+    std::scoped_lock lock(initialized_mutex);
     if (auto found = initialized.find(shader); found != initialized.end()) {
       if (--found->second->references)
         return;

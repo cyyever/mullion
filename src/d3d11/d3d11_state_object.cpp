@@ -552,7 +552,7 @@ template <>
 HRESULT StateObjectCache<D3D11_DEPTH_STENCIL_DESC, IMTLD3D11DepthStencilState>::
     CreateStateObject(const D3D11_DEPTH_STENCIL_DESC *pDesc,
                       IMTLD3D11DepthStencilState **ppDepthStencilState) {
-  std::lock_guard<mullion::mutex> lock(mutex_cache);
+  std::scoped_lock lock(mutex_cache);
   InitReturnPtr(ppDepthStencilState);
 
   // TODO: validation
@@ -628,7 +628,7 @@ template <>
 HRESULT StateObjectCache<D3D11_RASTERIZER_DESC2, IMTLD3D11RasterizerState>::
     CreateStateObject(const D3D11_RASTERIZER_DESC2 *pRasterizerDesc,
                       IMTLD3D11RasterizerState **ppRasterizerState) {
-  std::lock_guard<mullion::mutex> lock(mutex_cache);
+  std::scoped_lock lock(mutex_cache);
   InitReturnPtr(ppRasterizerState);
 
   if (!pRasterizerDesc || pRasterizerDesc->FillMode < D3D11_FILL_WIREFRAME ||
@@ -671,7 +671,7 @@ HRESULT
 StateObjectCache<D3D11_SAMPLER_DESC, D3D11SamplerState>::CreateStateObject(
     const D3D11_SAMPLER_DESC *pSamplerDesc,
     D3D11SamplerState **ppSamplerState) {
-  std::lock_guard<mullion::mutex> lock(mutex_cache);
+  std::scoped_lock lock(mutex_cache);
 
   InitReturnPtr(ppSamplerState);
 
@@ -804,7 +804,7 @@ HRESULT
 StateObjectCache<D3D11_BLEND_DESC1, IMTLD3D11BlendState>::CreateStateObject(
     const D3D11_BLEND_DESC1 *pBlendStateDesc,
     IMTLD3D11BlendState **ppBlendState) {
-  std::lock_guard<mullion::mutex> lock(mutex_cache);
+  std::scoped_lock lock(mutex_cache);
   InitReturnPtr(ppBlendState);
 
   if (!pBlendStateDesc)

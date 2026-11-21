@@ -63,7 +63,7 @@ static DeviceIdentity
 IdentityOf(WMT::Device device) {
   static mullion::mutex mutex;
   static std::map<uint64_t, DeviceIdentity> identities;
-  std::lock_guard lock(mutex);
+  std::scoped_lock lock(mutex);
   auto [known, added] = identities.try_emplace(device.registryID());
   if (added) {
     auto &identity = known->second;

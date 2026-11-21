@@ -160,7 +160,7 @@ CaptureState::CaptureState() {
   auto &capture = mullion::capture();
   if (!capture.enabled)
     return;
-  std::lock_guard lock(capture.mutex);
+  std::scoped_lock lock(capture.mutex);
   capture.holds++;
 }
 
@@ -168,7 +168,7 @@ CaptureState::~CaptureState() {
   auto &capture = mullion::capture();
   if (!capture.enabled)
     return;
-  std::lock_guard lock(capture.mutex);
+  std::scoped_lock lock(capture.mutex);
   if (--capture.holds)
     return;
   if (capture.state == State::Capturing) {
@@ -185,7 +185,7 @@ CaptureState::frame(WMT::Device device, uint64_t frame) {
   auto &capture = mullion::capture();
   if (!capture.enabled)
     return;
-  std::lock_guard lock(capture.mutex);
+  std::scoped_lock lock(capture.mutex);
   switch (capture.getNextAction(frame)) {
   case NextAction::StartCapture: {
     // Metal takes one capture at a time, and the stop of the last one may wait for what this thread commits next

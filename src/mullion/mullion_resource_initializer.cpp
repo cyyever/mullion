@@ -79,7 +79,7 @@ ResourceInitializer::~ResourceInitializer() {
 
 uint64_t
 ResourceInitializer::initWithZero(BufferAllocation *buffer, uint64_t offset, uint64_t length) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
 
   do {
     RETAIN(buffer);
@@ -102,7 +102,7 @@ ResourceInitializer::initDepthStencilWithZero(
   auto width_sub = std::max(1u, texture->width() >> level);
   auto height_sub = std::max(1u, texture->height() >> level);
 
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   do {
     RETAIN(allocation);
     ALLOC_CLEAR(info);
@@ -139,7 +139,7 @@ ResourceInitializer::initRenderTargetWithZero(
   auto width_sub = std::max(1u, texture->width() >> level);
   auto height_sub = std::max(1u, texture->height() >> level);
 
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   do {
     RETAIN(allocation);
     ALLOC_CLEAR(info);
@@ -204,7 +204,7 @@ ResourceInitializer::initWithZero(
   size_t bytes_per_image_needed = bytes_per_row_needed * align(height_sub, block_size) / block_size;
   size_t total_bytes_needed = bytes_per_image_needed * depth_sub;
 
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
 
   do {
     ALLOC_ZERO(zero, total_bytes_needed);
@@ -274,7 +274,7 @@ ResourceInitializer::initWithData(
   size_t bytes_per_image_valid = is_3d_tex ? std::min(depth_pitch, bytes_per_image_needed) : bytes_per_image_needed;
   size_t total_bytes_needed = bytes_per_image_needed * depth_sub;
 
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   do {
     RETAIN(allocation);
     ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture, copy);
@@ -336,7 +336,7 @@ ResourceInitializer::initDepthStencilWithData(
   size_t depth_bytes_per_image = depth_bytes_per_row * height_sub;
   size_t stencil_bytes_per_image = stencil_bytes_per_row * height_sub;
 
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   do {
     RETAIN(allocation);
     ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture_withblitoption, depth_copy);
@@ -409,7 +409,7 @@ ResourceInitializer::flushInternal() {
 
 uint64_t
 ResourceInitializer::flushToWait() {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
 
   if (idle()) {
     gpu_command_heap_allocator.free_blocks(cached_coherent_seq_id);

@@ -77,7 +77,7 @@ CounterPool::allocateCounterSet() {
 
 Rc<CounterAllocation>
 CounterPool::allocate(uint32_t initial_value) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
 
   size_t count = counter_sets_.size();
   for (size_t i = 0; i < count; i++) {

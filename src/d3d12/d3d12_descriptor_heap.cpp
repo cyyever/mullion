@@ -41,7 +41,7 @@ TraceSampler(const D3D12_SAMPLER_DESC &d, bool custom) {
       uint32_t(d.ComparisonFunc), ", border ", custom ? "custom " : "", d.BorderColor[0], " ", d.BorderColor[1], " ",
       d.BorderColor[2], " ", d.BorderColor[3], ", lod ", d.MinLOD, " to ", d.MaxLOD
   );
-  std::lock_guard<mullion::mutex> guard(lock);
+  std::scoped_lock guard(lock);
   if (seen.insert(line).second)
     TRACE_IN(Shader, line);
 }

@@ -327,7 +327,7 @@ public:
   void
   STDMETHODCALLTYPE
   Unmap(ID3D11Resource *pResource, UINT Subresource) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
 
     if (unlikely(!pResource))
       return;
@@ -353,7 +353,7 @@ public:
     if (unlikely(!pAsync))
       return;
 
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
 
     // in theory pAsync could be any of them: { Query, Predicate, Counter }.
     // However `Predicate` and `Counter` are not supported at all
@@ -408,7 +408,7 @@ public:
     if (unlikely(!pAsync))
       return;
 
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
 
     D3D11_QUERY_DESC desc;
     ((ID3D11Query *)pAsync)->GetDesc(&desc);
@@ -489,7 +489,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetData(ID3D11Asynchronous *pAsync, void *pData, UINT DataSize, UINT GetDataFlags) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
     if (!pAsync || (DataSize && !pData))
       return E_INVALIDARG;
 
@@ -606,7 +606,7 @@ public:
   void
   STDMETHODCALLTYPE
   Flush1(D3D11_CONTEXT_TYPE Type, HANDLE hEvent) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
 
     if (ctx_state.has_dirty_op_since_last_event || promote_flush) {
       InvalidateCurrentPass(true);
@@ -742,7 +742,7 @@ public:
   void
   STDMETHODCALLTYPE
   ExecuteCommandList(ID3D11CommandList *pCommandList, BOOL RestoreContextState) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
 
     ResetEncodingContextState();
     promote_flush = false;
@@ -757,7 +757,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   FinishCommandList(BOOL RestoreDeferredContextState, ID3D11CommandList **ppCommandList) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
 
     return DXGI_ERROR_INVALID_CALL;
   }
@@ -799,7 +799,7 @@ public:
   }
 
   HRESULT SignalFence(ID3D12Fence *Fence, UINT64 Value) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
     PrepareFlush();
     auto &chunk = *cmd_queue.CurrentChunk();
     chunk.completed = [completed = std::move(chunk.completed), fence = Com<ID3D12Fence>(Fence), Value] {
@@ -822,7 +822,7 @@ public:
   }
 
   HRESULT ReturnResource(ID3D11Resource *Resource, std::function<void(ArgumentEncodingContext &)> &&Before) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
     InvalidateCurrentPass();
     auto texture = GetTexture(Resource);
     ctx_state.returned.insert_or_assign(
@@ -849,7 +849,7 @@ public:
 
   HRESULT
   AcquireSync(ID3D11Resource *pResource, UINT64 Key, DWORD dwMilliseconds) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
     auto resource = GetResourceCommon(pResource);
     if (!resource->keyedMutex())
       return DXGI_ERROR_INVALID_CALL;
@@ -866,7 +866,7 @@ public:
   }
   HRESULT
   ReleaseSync(ID3D11Resource *pResource, UINT64 Key) override {
-    std::lock_guard<d3d11_device_mutex> lock(mutex);
+    std::scoped_lock lock(mutex);
     auto resource = GetResourceCommon(pResource);
     if (!resource->keyedMutex())
       return DXGI_ERROR_INVALID_CALL;

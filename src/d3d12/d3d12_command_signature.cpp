@@ -147,7 +147,7 @@ public:
   MTLD3D12CommandSignatureImpl(MTLD3D12Device *pDevice) : MTLD3D12Pageable<MTLD3D12CommandSignature>(pDevice) {}
 
   WMT::ComputePipelineState StatisticsResolver() override {
-    std::lock_guard lock(statistics_mutex_);
+    std::scoped_lock lock(statistics_mutex_);
     if (!statistics_resolver_) {
       WMT::Reference<WMT::Error> error;
       auto function = statistics_library_.newFunction("count_indirect_strips");

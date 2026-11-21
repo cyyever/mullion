@@ -350,13 +350,13 @@ public:
       archive_opener_->Cancel();
     if (archive_writer_.joinable()) {
       {
-        std::lock_guard lock(archive_mutex_);
+        std::scoped_lock lock(archive_mutex_);
         archive_closing_ = true;
       }
       archive_changed_.notify_one();
       archive_writer_.join();
     }
-    std::lock_guard lock(device_singletons_lock);
+    std::scoped_lock lock(device_singletons_lock);
     std::erase_if(device_singletons, [this](auto &entry) { return entry.second == this; });
   }
 
@@ -595,7 +595,7 @@ public:
   void
   ArchivePipeline(WMT::Object pipeline, const Sha1Digest &key) override {
     {
-      std::lock_guard lock(archive_mutex_);
+      std::scoped_lock lock(archive_mutex_);
       archive_adds_.emplace_back(pipeline, key);
     }
     archive_changed_.notify_one();
@@ -659,7 +659,7 @@ public:
       std::string path;
       if (!archives_.empty()) {
         path = ShardPath(archives_.size() - 1);
-        std::lock_guard whole(archive_lock);
+        std::scoped_lock whole(archive_lock);
         if (!archives_.back().serialize(path.c_str(), error)) {
           // Metal faulted writing the shard and holds its queue from then on, so a pipeline looked up in it, and its
           // release, would wait for good: the shard is left as it is, with the pipelines it held, and is no longer
@@ -704,7 +704,7 @@ public:
         std::ranges::copy(std::array<uint32_t, 7>{enabled, pass, fail, depth_fail, function, write_mask, read_mask},
                           key.begin() + i);
     }
-    std::lock_guard lock(depth_stencil_lock_);
+    std::scoped_lock lock(depth_stencil_lock_);
     auto &state = depth_stencil_states_[key];
     if (!state)
       state = GetMTLDevice().newDepthStencilState(info);
@@ -1858,7 +1858,7 @@ public:
   LoseDevice(HRESULT Reason) {
     decltype(fences.values) pending;
     {
-      std::lock_guard lock(fences.mutex);
+      std::scoped_lock lock(fences.mutex);
       HRESULT present = S_OK;
       if (!removed_.compare_exchange_strong(present, Reason))
         return;
@@ -2617,7 +2617,7 @@ public:
 
   void
   NamePass(const EncoderData *pass, const std::string &pipeline, obj_handle_t metal) {
-    std::lock_guard<mullion::mutex> lock(pass_names_lock_);
+    std::scoped_lock lock(pass_names_lock_);
     auto &name = pass_names_[pass];
     if (diag::profile && !name.empty())
       name += '|';
@@ -2628,7 +2628,7 @@ public:
 
   std::string
   PassName(const EncoderData *pass, bool consume, obj_handle_t metal) {
-    std::lock_guard<mullion::mutex> lock(pass_names_lock_);
+    std::scoped_lock lock(pass_names_lock_);
     if (metal) {
       auto pass_name = pass_pipelines_.find(pass);
       if (pass_name == pass_pipelines_.end())
@@ -2661,7 +2661,7 @@ public:
       TRACE_IN(Shader, kind, " pipeline ", name, ": ", ms, " ms", late ? ", after the first present" : "");
     if (!late)
       return;
-    std::lock_guard<mullion::mutex> lock(pass_names_lock_);
+    std::scoped_lock lock(pass_names_lock_);
     late_pipelines_++;
     pipeline_ms_ += ms;
     longest_pipeline_ms_ = std::max(longest_pipeline_ms_, ms);
@@ -2671,7 +2671,7 @@ public:
 
   void
   ReportPipelineTotals() {
-    std::lock_guard<mullion::mutex> lock(pass_names_lock_);
+    std::scoped_lock lock(pass_names_lock_);
     Logger::info(str::format("D3D12 pipeline totals: ", late_pipelines_, " after first Present; ",
         std::setprecision(std::numeric_limits<double>::max_digits10), pipeline_ms_, " ms total; ",
         longest_pipeline_ms_, " ms longest"));
@@ -3194,7 +3194,7 @@ CreateD3D12Device(IMTLDXGIAdapter *adapter, D3D_FEATURE_LEVEL MinimumFeatureLeve
   // released after the lock, which a device takes as it is destroyed
   Com<MTLD3D12DeviceImpl> device;
   // under the lock, so that two calls at once make one device
-  std::lock_guard lock(device_singletons_lock);
+  std::scoped_lock lock(device_singletons_lock);
   for (auto &[luid, existing] : device_singletons)
     if (luid.LowPart == desc.AdapterLuid.LowPart && luid.HighPart == desc.AdapterLuid.HighPart &&
         existing->AddRefIfReferenced())

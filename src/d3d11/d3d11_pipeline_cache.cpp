@@ -105,7 +105,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     CachedSM50Shader(const CachedSM50Shader &copy) = delete;
 
     virtual sm50_shader_t handle() {
-      std::lock_guard<mullion::mutex> lock(shader_mutex);
+      std::scoped_lock lock(shader_mutex);
       if (!shader && !bytecode_.empty()) {
         sm50_error_t err = nullptr;
         MTL_SHADER_REFLECTION reflection;
@@ -126,7 +126,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
       return info_.arguments.data() + info_.reflection.NumConstantBuffers;
     };
     virtual CompiledShader *get_shader(ShaderVariant variant) {
-      std::lock_guard<mullion::mutex> lock(variants_mutex);
+      std::scoped_lock lock(variants_mutex);
       auto c = variants.insert({variant, nullptr});
       if (c.second) {
         c.first->second = std::visit(
@@ -415,7 +415,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
                          const D3D11_INPUT_ELEMENT_DESC *pInputElementDesc,
                          UINT NumElements,
                          IMTLD3D11InputLayout **ppInputLayout) override {
-    std::lock_guard<mullion::mutex> lock(mutex_ia_);
+    std::scoped_lock lock(mutex_ia_);
     std::vector<MTL_SHADER_INPUT_LAYOUT_ELEMENT_DESC> buffer(NumElements);
     uint32_t num_metal_ia_elements;
     HRESULT hr;
@@ -467,7 +467,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
         desc.Strides[element.output_slot] =
             std::max<uint32_t>(desc.Strides[element.output_slot], element.offset + sizeof(uint32_t));
     desc.RasterizedStream = RasterizedStream;
-    std::lock_guard<mullion::mutex> lock(mutex_so_);
+    std::scoped_lock lock(mutex_so_);
     return so_layouts.CreateStateObject(&desc, ppSOLayout);
   };
 
@@ -478,7 +478,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
 
   void GetGraphicsPipeline(MTL_GRAPHICS_PIPELINE_DESC *pDesc,
                            MTLCompiledGraphicsPipeline **ppPipeline) override {
-    std::lock_guard<mullion::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
 
     if (auto iter = pipelines_.find(*pDesc); iter != pipelines_.end()) {
       *ppPipeline = iter->second.get();
@@ -497,7 +497,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
   void GetGeometryPipeline(
       MTL_GRAPHICS_PIPELINE_DESC *pDesc,
       MTLCompiledGeometryPipeline **ppPipeline) override {
-    std::lock_guard<mullion::mutex> lock(mutex_gs_);
+    std::scoped_lock lock(mutex_gs_);
 
     if (auto iter = pipelines_gs_.find(*pDesc); iter != pipelines_gs_.end()) {
       *ppPipeline = iter->second.get();
@@ -516,7 +516,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
   void GetTessellationPipeline(MTL_GRAPHICS_PIPELINE_DESC * pDesc,
                                    MTLCompiledTessellationMeshPipeline *
                                        *ppPipeline) override {
-    std::lock_guard<mullion::mutex> lock(mutex_ts_);
+    std::scoped_lock lock(mutex_ts_);
 
     if (auto iter = pipelines_ts_.find(*pDesc); iter != pipelines_ts_.end()) {
       *ppPipeline = iter->second.get();
@@ -534,7 +534,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
 
   void GetComputePipeline(MTL_COMPUTE_PIPELINE_DESC *pDesc,
                                   MTLCompiledComputePipeline **ppPipeline) override {
-   std::lock_guard<mullion::mutex> lock(mutex_cs_);
+   std::scoped_lock lock(mutex_cs_);
 
     if (auto iter = pipelines_cs_.find(pDesc->ComputeShader); iter != pipelines_cs_.end()) {
       *ppPipeline = iter->second.get();

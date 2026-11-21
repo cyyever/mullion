@@ -149,7 +149,7 @@ static DXGIMonitorState &
 MonitorState(HMONITOR monitor) {
   static mullion::mutex mutex;
   static std::map<HMONITOR, DXGIMonitorState> ramps;
-  std::lock_guard<mullion::mutex> lock(mutex);
+  std::scoped_lock lock(mutex);
   auto [ramp, added] = ramps.try_emplace(monitor);
   if (added)
     for (uint32_t i = 0; i < MULLION_GAMMA_CP_COUNT; i++)

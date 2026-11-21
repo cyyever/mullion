@@ -9,7 +9,7 @@ ShaderCache::getInstance(WMTMetalVersion version) {
   static mullion::mutex mutex;
   static std::unordered_map<WMTMetalVersion, std::unique_ptr<ShaderCache>> caches;
 
-  std::lock_guard<mullion::mutex> lock(mutex);
+  std::scoped_lock lock(mutex);
   auto iter = caches.find(version);
   if (iter == caches.end()) {
     auto inserted = caches.insert({version, std::make_unique<ShaderCache>(version)});
