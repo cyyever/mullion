@@ -771,7 +771,7 @@ public:
         : frame_id_(frame_id), frame_latency_fence_(frame_latency_fence) {}
 
     SyncFrameState(const SyncFrameState &) = delete;
-    SyncFrameState(SyncFrameState &&move) {
+    SyncFrameState(SyncFrameState &&move) noexcept {
       frame_id_ = move.frame_id_;
       frame_latency_fence_ = move.frame_latency_fence_;
       move.frame_latency_fence_ = nullptr;

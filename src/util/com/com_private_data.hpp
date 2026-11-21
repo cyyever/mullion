@@ -37,8 +37,8 @@ public:
   ComPrivateDataEntry(REFGUID guid, const IUnknown *iface);
   ~ComPrivateDataEntry();
 
-  ComPrivateDataEntry(ComPrivateDataEntry &&other);
-  ComPrivateDataEntry &operator=(ComPrivateDataEntry &&other);
+  ComPrivateDataEntry(ComPrivateDataEntry &&other) noexcept;
+  ComPrivateDataEntry &operator=(ComPrivateDataEntry &&other) noexcept;
 
   /**
    * \brief The entry's GUID
