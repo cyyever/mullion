@@ -36,7 +36,7 @@ ComPrivateDataEntry::ComPrivateDataEntry(REFGUID guid, const IUnknown *iface)
 
 ComPrivateDataEntry::~ComPrivateDataEntry() { this->destroy(); }
 
-ComPrivateDataEntry::ComPrivateDataEntry(ComPrivateDataEntry &&other)
+ComPrivateDataEntry::ComPrivateDataEntry(ComPrivateDataEntry &&other) noexcept
     : m_guid(other.m_guid), m_type(other.m_type), m_size(other.m_size),
       m_data(std::move(other.m_data)), m_iface(other.m_iface) {
   other.m_guid = __uuidof(IUnknown);
@@ -46,7 +46,7 @@ ComPrivateDataEntry::ComPrivateDataEntry(ComPrivateDataEntry &&other)
 }
 
 ComPrivateDataEntry &
-ComPrivateDataEntry::operator=(ComPrivateDataEntry &&other) {
+ComPrivateDataEntry::operator=(ComPrivateDataEntry &&other) noexcept {
   this->destroy();
   this->m_guid = other.m_guid;
   this->m_type = other.m_type;

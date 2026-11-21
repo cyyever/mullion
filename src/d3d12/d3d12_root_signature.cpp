@@ -59,7 +59,7 @@ SerializeVersionedRootSignatureImpl(
       free(ptr);
     };
     segment(const segment &copy) = delete;
-    segment(segment &&move) {
+    segment(segment &&move) noexcept {
       ptr = move.ptr;
       size_aligned = move.size_aligned;
       offset = move.offset;
