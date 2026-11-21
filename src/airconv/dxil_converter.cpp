@@ -54,7 +54,7 @@ using llvm::air::Texture;
 namespace {
 
 // DxilConstants.h OpCode, the ones lowered here
-enum Op : uint32_t {
+enum Op : uint16_t {
   LoadInput = 4,
   StoreOutput = 5,
   FAbs = 6,
@@ -247,7 +247,7 @@ enum Op : uint32_t {
 };
 
 // DxilConstants.h SemanticKind values that have their own storage in the DXBC path, or in a Metal mesh
-enum Semantic : uint32_t {
+enum Semantic : uint8_t {
   SemanticPosition = 3,
   SemanticRenderTargetArrayIndex = 4,
   SemanticViewportArrayIndex = 5,
@@ -277,10 +277,10 @@ LayerWithoutViewport(const auto &outputs) {
 }
 
 // DxilConstants.h ResourceClass (createHandle's first operand, and the dx.resources list order)
-enum ResourceClass : uint32_t { SRV, UAV, CBV, SamplerClass };
+enum ResourceClass : uint8_t { SRV, UAV, CBV, SamplerClass };
 
 // DxilConstants.h ResourceKind, the ones that are not a texture or typed buffer
-enum ResourceKind : uint32_t {
+enum ResourceKind : uint8_t {
   ResourceKind_RawBuffer = 11,
   ResourceKind_StructuredBuffer,
   ResourceKind_CBuffer,
@@ -758,7 +758,7 @@ parse(const std::string &bitcode, LLVMContext &context) {
 
 // a ray tracing shader's context, which its visible function takes: MullionRayContext in mullion_command.metal, field for
 // field
-enum RayContextField : unsigned {
+enum RayContextField : uint8_t {
   RayShaders,
   RayDispatch,
   RayRootArguments,

@@ -620,7 +620,6 @@ public:
     auto instance = std::make_unique<MTLD3D11CommandList>(device, this, 0);
     *ppCommandList = ref(instance.get());
     instances.push_back(std::move(instance));
-    return;
   };
 
 private:

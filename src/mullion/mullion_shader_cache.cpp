@@ -22,7 +22,7 @@ std::string
 ShaderCacheDirectory() {
   if (env::getEnvVar("MULLION_SHADER_CACHE") == "0")
     return {};
-  if (auto path = env::getEnvVar("MULLION_SHADER_CACHE_PATH"); !path.empty() && path.starts_with("/"))
+  if (auto path = env::getEnvVar("MULLION_SHADER_CACHE_PATH"); !path.empty() && path.starts_with('/'))
     return path.ends_with('/') ? path : path + "/";
   // Mullion's shaders differ from stock DXMT's at the same AIRCONV_VERSION, so the caches never share a directory
   return str::format("mullion/", env::getExeName(), "/");
