@@ -1258,7 +1258,7 @@ public:
 
   ULONG STDMETHODCALLTYPE
   AddRef() override {
-    std::lock_guard<mullion::mutex> lock(buffers_.mutex);
+    std::scoped_lock lock(buffers_.mutex);
     auto count = MTLD3D12Texture::AddRef();
     if (count == 1 && !buffers_.referenced_buffers++)
       buffers_.swapchain->AddRef();

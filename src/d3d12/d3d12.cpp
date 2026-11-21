@@ -182,7 +182,7 @@ ShaderContainerHolds(const void *container, size_t size) {
         return true;
     }
     auto digest = Sha1HashState::compute(container, size);
-    std::lock_guard lock(known_lock);
+    std::scoped_lock lock(known_lock);
     known.emplace(*own, digest);
   }
   return hash == md5::DxbcHash::Holds || (hash == md5::DxbcHash::None && experimental_shader_models);

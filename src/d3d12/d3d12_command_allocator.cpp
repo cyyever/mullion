@@ -87,7 +87,7 @@ void
 CompareGPURecords(const std::shared_ptr<GPURecordChecks> &Checks, const std::shared_ptr<GPURecordTotals> &Totals) {
   if (!Checks)
     return;
-  std::lock_guard<mullion::mutex> lock(Totals->mutex);
+  std::scoped_lock lock(Totals->mutex);
   if (std::exchange(Checks->checked, true))
     return;
   size_t changed = 0, first = 0, word = 0;
@@ -305,7 +305,7 @@ MTLD3D12CommandAllocatorImpl::NewArgumentsBuffer(size_t Length) {
 bool
 MTLD3D12CommandAllocatorImpl::GrowArguments(size_t Seen) {
   auto &recording = device_->recording;
-  std::lock_guard<mullion::mutex> lock(recording.mutex);
+  std::scoped_lock lock(recording.mutex);
   // another allocator made it grow since
   if (recording.arguments.Usable() > Seen)
     return true;
@@ -322,7 +322,7 @@ MTLD3D12CommandAllocatorImpl::GrowArguments(size_t Seen) {
 
 unsigned
 MTLD3D12CommandAllocatorImpl::ArgumentsViews(ArgumentsView (&views)[kArgumentsViews]) {
-  std::lock_guard<mullion::mutex> lock(device_->recording.mutex);
+  std::scoped_lock lock(device_->recording.mutex);
   unsigned count = 0;
   for (auto &buffer : device_->recording.buffers)
     views[count++] = {buffer.address, buffer.length};
@@ -331,7 +331,7 @@ MTLD3D12CommandAllocatorImpl::ArgumentsViews(ArgumentsView (&views)[kArgumentsVi
 
 std::pair<obj_handle_t, uint64_t>
 MTLD3D12CommandAllocatorImpl::ArgumentsAt(uint64_t Address) {
-  std::lock_guard<mullion::mutex> lock(device_->recording.mutex);
+  std::scoped_lock lock(device_->recording.mutex);
   for (auto &buffer : device_->recording.buffers)
     if (Address - buffer.address < buffer.length)
       return {buffer.buffer, Address - buffer.address};
@@ -340,7 +340,7 @@ MTLD3D12CommandAllocatorImpl::ArgumentsAt(uint64_t Address) {
 
 void
 MTLD3D12CommandAllocatorImpl::TakeLastArgumentsBuffer() {
-  std::lock_guard<mullion::mutex> lock(device_->recording.mutex);
+  std::scoped_lock lock(device_->recording.mutex);
   auto &last = device_->recording.buffers.back();
   gpu_heap_buffer_ = last.buffer, gpu_heap_buffer_address_ = last.address, gpu_heap_buffer_length_ = last.length;
 }
@@ -399,7 +399,7 @@ MTLD3D12CommandAllocatorImpl::Initialize() {
   // the device's arenas, and the first Metal buffer over what the GPU reads: there from the first allocator on
   auto &recording = device_->recording;
   {
-    std::lock_guard<mullion::mutex> lock(recording.mutex);
+    std::scoped_lock lock(recording.mutex);
     if (!recording.commands.Initialize() || !recording.arguments.Initialize(kFirstArguments))
       return FAIL(E_OUTOFMEMORY);
     if (recording.buffers.empty() && !NewArgumentsBuffer(recording.arguments.Usable()))

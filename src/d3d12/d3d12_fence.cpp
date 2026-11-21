@@ -42,7 +42,7 @@ public:
 
   void
   Watch(std::weak_ptr<Completion> completion) {
-    std::lock_guard<mullion::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     // a fence that is gone leaves the list here too, as no notification may ever come for it, and its entry keeps the
     // storage of its completion. a sweep each time the list has doubled since the last one costs O(1) a fence
     if (watched_.size() >= 2 * swept_) {
@@ -117,7 +117,7 @@ Watcher::Look(PTP_WAIT wait) {
   SetThreadpoolWait(wait, reached, nullptr);
   std::vector<std::shared_ptr<Completion>> live;
   {
-    std::lock_guard<mullion::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     // a fence that is gone leaves the list
     std::erase_if(watched_, [&](auto &watched) {
       if (auto completion = watched.lock()) {
@@ -151,7 +151,7 @@ public:
   }
 
   ~MTLD3D12FenceImpl() {
-    std::lock_guard lock(device_->fences.mutex);
+    std::scoped_lock lock(device_->fences.mutex);
     device_->fences.values.erase(completion);
   }
 
@@ -168,7 +168,7 @@ public:
     }
     // an opened fence has the value of the fence it opens, a created one its initial value
     completion_->value = event ? event.signaledValue() : InitialValue;
-    std::lock_guard lock(device_->fences.mutex);
+    std::scoped_lock lock(device_->fences.mutex);
     if (FAILED(device_->RemovedReason()))
       return DXGI_ERROR_DEVICE_REMOVED;
     device_->fences.values.insert(completion);
@@ -257,7 +257,7 @@ public:
       TRACE("fence ", this, " signaled to ", Value, " by thread ", GetCurrentThreadId());
     {
       // the value may be lower than a queue's signal gave: the GPU no longer says when it is there
-      std::lock_guard<mullion::mutex> lock(following_mutex);
+      std::scoped_lock lock(following_mutex);
       following.clear();
     }
     Signaled(Value);

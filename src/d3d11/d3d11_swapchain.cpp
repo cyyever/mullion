@@ -251,7 +251,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetBuffer(UINT buffer_idx, REFIID riid, void **surface) final {
-    std::lock_guard<d3d11_device_mutex> lock(device_->mutex);
+    std::scoped_lock lock(device_->mutex);
     if (buffer_idx >= backbuffers_.size())
       return DXGI_ERROR_INVALID_CALL;
     return backbuffers_[buffer_idx]->QueryInterface(riid, surface);
@@ -333,7 +333,7 @@ public:
       ERR("DXGI: EnterFullscreenMode: Failed to enter fullscreen mode");
       return DXGI_ERROR_NOT_CURRENTLY_AVAILABLE;
     }
-    std::lock_guard<mullion::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     fullscreen_desc_.Windowed = FALSE;
     static_cast<MTLDXGIOutput *>(output.ptr())->SetFullscreen(true);
     monitor_ = desc.Monitor;
@@ -353,7 +353,7 @@ public:
       return DXGI_ERROR_NOT_CURRENTLY_AVAILABLE;
     }
     auto monitor = wsi::getWindowMonitor(hWnd);
-    std::lock_guard<mullion::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     fullscreen_desc_.Windowed = TRUE;
     static_cast<MTLDXGIOutput *>(target_.ptr())->SetFullscreen(false);
     target_ = nullptr;
@@ -624,7 +624,7 @@ public:
         return DXGI_ERROR_NOT_CURRENTLY_AVAILABLE;
       window_state_ = state;
     }
-    std::lock_guard<mullion::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     if (pDesc->RefreshRate.Numerator != 0)
       fullscreen_desc_.RefreshRate = pDesc->RefreshRate;
     fullscreen_desc_.ScanlineOrdering = pDesc->ScanlineOrdering;

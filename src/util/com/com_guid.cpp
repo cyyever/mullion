@@ -49,7 +49,7 @@ bool logQueryInterfaceError(REFIID objectGuid, REFIID requestedGuid) {
   if (Logger::logLevel() > LogLevel::Warn)
     return false;
 
-  std::lock_guard lock(g_loggedQueryInterfaceErrorMutex);
+  std::scoped_lock lock(g_loggedQueryInterfaceErrorMutex);
   return g_loggedQueryInterfaceErrors.emplace(objectGuid, requestedGuid).second;
 }
 

@@ -261,7 +261,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
 
     void
     Commit(MetalCommandBuffer buffer, uint64_t *committed) {
-      std::lock_guard<mullion::mutex> lock(mutex);
+      std::scoped_lock lock(mutex);
       closed ? (void)buffers.emplace_back(buffer, committed) : Run(buffer, committed);
     }
 
@@ -300,7 +300,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
     void
     After(Follow &&follow) {
       {
-        std::lock_guard<mullion::mutex> lock(mutex);
+        std::scoped_lock lock(mutex);
         if (cancelled)
           return;
         if (closed) {
@@ -313,14 +313,14 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
 
     bool
     Waits() {
-      std::lock_guard<mullion::mutex> lock(mutex);
+      std::scoped_lock lock(mutex);
       return closed || event;
     }
 
     template <typename Wait>
     void
     Install(Wait &&wait) {
-      std::lock_guard<mullion::mutex> lock(mutex);
+      std::scoped_lock lock(mutex);
       installed = true;
       if (!closed && event)
         wait(event, seq);
@@ -602,7 +602,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
   // reads what feedback has come, all of it when `wait`
   void
   SettleFeedback(bool wait) {
-    std::lock_guard lock(feedback_mutex_);
+    std::scoped_lock lock(feedback_mutex_);
     std::erase_if(unsettled_, [&](auto &unsettled) {
       auto &[cmdbuf, seq] = unsettled;
       if (wait)
@@ -627,7 +627,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
 public:
   static void
   SettleAll(MTLD3D12Device *device) {
-    std::lock_guard<mullion::mutex> lock(queues_mutex_);
+    std::scoped_lock lock(queues_mutex_);
     for (auto queue : queues_)
       if (queue->device_ == device)
         queue->SettleFeedback(true);
@@ -635,7 +635,7 @@ public:
 
   static void
   OutlastAll(MTLD3D12Device *device, const std::shared_ptr<void> &kept) {
-    std::lock_guard<mullion::mutex> lock(queues_mutex_);
+    std::scoped_lock lock(queues_mutex_);
     for (auto queue : queues_)
       if (queue->device_ == device)
         queue->Outlast(kept);
@@ -654,7 +654,7 @@ public:
     Hold([this, kept]() mutable {
       // ends after the lock, where the work has completed already
       std::function<void()> keeps = [kept = std::move(kept)] {};
-      std::lock_guard<mullion::mutex> lock(mutex_commit_);
+      std::scoped_lock lock(mutex_commit_);
       retired_.Expect(inflight_cmdbuf_seq_ - 1, std::move(keeps));
     }, true);
   }
@@ -663,7 +663,7 @@ private:
 
   std::string
   QueuesInFlight() {
-    std::lock_guard<mullion::mutex> lock(queues_mutex_);
+    std::scoped_lock lock(queues_mutex_);
     std::string text;
     for (auto queue : queues_)
       if (queue->device_ == device_)
@@ -862,7 +862,7 @@ private:
   // the command buffer the completion thread waits on, 0 for none
   void
   Watched(uint64_t seq) {
-    std::lock_guard<mullion::mutex> lock(watch_mutex_);
+    std::scoped_lock lock(watch_mutex_);
     watched_seq_ = seq;
     watch_changed_.notify_all();
   }
@@ -1046,7 +1046,7 @@ private:
             "command was not run, and lists recorded from now on have that much");
       }
       if (status <= WMTCommandBufferStatusScheduled) {
-        std::lock_guard lock(feedback_mutex_);
+        std::scoped_lock lock(feedback_mutex_);
         unsettled_.emplace_back(inflight.cmdbuf, internal_seq);
       }
       for (auto &allocator : inflight.allocators)
@@ -1223,13 +1223,13 @@ public:
       MTLD3D12Pageable<MTLD3D12CommandQueue, IMTLSwapChainFactory>(pDevice),
       inflight_cmdbuf_wait_thread_([this]() { this->CommandBufferWaitingThread(); }),
       watch_thread_([this] { Watch(); }) {
-    std::lock_guard<mullion::mutex> lock(queues_mutex_);
+    std::scoped_lock lock(queues_mutex_);
     queues_.push_back(this);
   }
 
   ~MTLD3D12CommandQueueImpl() {
     {
-      std::lock_guard<mullion::mutex> lock(queues_mutex_);
+      std::scoped_lock lock(queues_mutex_);
       std::erase(queues_, this);
     }
     if (held_thread_.joinable()) {
@@ -1246,20 +1246,20 @@ public:
     }
     // the held work's encoding has ended with it
     {
-      std::lock_guard<mullion::mutex> lock(encode_mutex_);
+      std::scoped_lock lock(encode_mutex_);
       encode_stop_ = true;
       encode_changed_.notify_all();
     }
     for (auto &thread : encode_threads_)
       thread.join();
-    std::lock_guard<mullion::mutex> lock(mutex_commit_);
+    std::scoped_lock lock(mutex_commit_);
     // the marker first: the completion thread reads it as soon as the sequence moves
     inflight_cmdbuf_stop_.store(inflight_cmdbuf_seq_.load());
     inflight_cmdbuf_seq_.fetch_add(1);
     inflight_cmdbuf_seq_.notify_one();
     inflight_cmdbuf_wait_thread_.join();
     {
-      std::lock_guard<mullion::mutex> watch(watch_mutex_);
+      std::scoped_lock watch(watch_mutex_);
       watch_stop_ = true;
       watch_changed_.notify_all();
     }
@@ -2326,7 +2326,7 @@ public:
   ) {
     auto parts = unsigned(std::min<uint64_t>({EncodeThreads(), commands / std::max<uint64_t>(kChunkCommands, 1), passes.size()}));
     if (encode_threads_.size() + 1 < parts) {
-      std::lock_guard<mullion::mutex> lock(encode_mutex_);
+      std::scoped_lock lock(encode_mutex_);
       while (encode_threads_.size() + 1 < parts)
         encode_threads_.emplace_back([this] { EncodeWorker(); });
     }
@@ -2411,7 +2411,7 @@ public:
       }
     };
     {
-      std::lock_guard<mullion::mutex> lock(encode_mutex_);
+      std::scoped_lock lock(encode_mutex_);
       for (unsigned k = 1; k < parts; k++)
         encode_jobs_.emplace_back([&, k] {
           {
@@ -2419,7 +2419,7 @@ public:
             auto pool = WMT::MakeAutoreleasePool();
             part(k);
           }
-          std::lock_guard<mullion::mutex> lock(encode_mutex_);
+          std::scoped_lock lock(encode_mutex_);
           if (!--left)
             encoded_.notify_all();
         });
@@ -2532,7 +2532,7 @@ public:
   ) {
     std::vector<MTLD3D12Fence::Opener> due;
     {
-      std::lock_guard<mullion::mutex> lock(fence->following_mutex);
+      std::scoped_lock lock(fence->following_mutex);
       // gates open on other threads, so a later Signal of this queue's may be followed first: the Signals stay in the
       // order of their values. those the CPU has seen reached need no GPU wait, and the oldest go past kFollowed
       auto &followed = fence->following;
@@ -2563,7 +2563,7 @@ public:
     // from the CPU, once the work before has completed and what it left for the CPU is done
     auto work = [this, fence = Com<MTLD3D12Fence, false>(static_cast<MTLD3D12Fence *>(pFence)), Value] {
       // after a submission another thread is in the middle of
-      std::lock_guard<mullion::mutex> lock(mutex_commit_);
+      std::scoped_lock lock(mutex_commit_);
       if (ends_since_signal_)
         ends_between_signals_ = std::exchange(ends_since_signal_, 0);
       // a GPU wait for a buffer behind a closed gate could outlast Metal's patience: the Signal is followed once the

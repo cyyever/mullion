@@ -257,7 +257,7 @@ Presenter::encodeCommands(
       (*encoder_count)++;
     blit.encodeCommands((const wmtcmd_blit_nop *)&copy);
     blit.endEncoding();
-    std::lock_guard lock(window_mutex_);
+    std::scoped_lock lock(window_mutex_);
     window_frames_.push_back(std::move(frame));
   }
   return drawable;
@@ -277,7 +277,7 @@ void
 Presenter::drawToWindow(double after) {
   WindowFrame frame;
   {
-    std::lock_guard lock(window_mutex_);
+    std::scoped_lock lock(window_mutex_);
     if (window_frames_.empty())
       return;
     frame = std::move(window_frames_.front());

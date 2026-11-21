@@ -349,13 +349,13 @@ public:
     Com<ID3D12Device> parent;
     if (FAILED(pipeline->GetDevice(__uuidof(ID3D12Device), (void **)&parent)) || parent.ptr() != device_)
       return FAIL(E_INVALIDARG);
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     try {
       auto state = static_cast<MTLD3D12PipelineState *>(pipeline);
       if (entries_.contains(name ? name : L""))
         return FAIL(E_INVALIDARG);
       Entry entry{state->library_key, state, {}};
-      std::lock_guard shader_lock(state->shader_mutex);
+      std::scoped_lock shader_lock(state->shader_mutex);
       for (auto &[key, data] : state->cached_shaders) {
         data = shaders_.try_emplace(key, data).first->second;
         entry.shaders.push_back(key);
@@ -402,13 +402,13 @@ public:
 
   SIZE_T STDMETHODCALLTYPE
   GetSerializedSize() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return SerializedSize();
   }
 
   HRESULT STDMETHODCALLTYPE
   Serialize(void *blob, SIZE_T size) override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     auto required = SerializedSize();
     if (!blob || size < required)
       return FAIL(E_INVALIDARG);

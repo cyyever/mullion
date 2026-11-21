@@ -133,7 +133,7 @@ struct TextureShare {
   // JoinShare takes its reference under the same lock, so a count that reaches 0 under it is final. dropped before
   // the lock, another thread could find the share, take it up and release it, and delete it before this one looks
   void decRef() {
-    std::lock_guard<std::mutex> lock(share_registry_mutex);
+    std::scoped_lock lock(share_registry_mutex);
     if (refcount.fetch_sub(1u, std::memory_order_acq_rel) != 1u)
       return;
     share_registry.erase(data.share_id);
@@ -174,7 +174,7 @@ IsLegacySharedHandle(HANDLE hResource) {
 // the object's references and still resolves
 static Rc<TextureShare>
 JoinShare(const SharedTextureData &data, HANDLE carried = nullptr) {
-  std::lock_guard<std::mutex> lock(share_registry_mutex);
+  std::scoped_lock lock(share_registry_mutex);
   auto it = share_registry.find(data.share_id);
   if (it != share_registry.end())
     return Rc<TextureShare>(it->second);
@@ -774,7 +774,7 @@ HRESULT CreateDeviceTextureInternal(MTLD3D11Device *pDevice,
     }
 
     {
-      std::lock_guard<std::mutex> lock(share_registry_mutex);
+      std::scoped_lock lock(share_registry_mutex);
       share_registry.emplace(share->data.share_id, share.ptr());
     }
 

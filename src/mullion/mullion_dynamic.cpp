@@ -25,7 +25,7 @@ DynamicBuffer::decRef() {
 
 Rc<BufferAllocation>
 DynamicBuffer::allocate(uint64_t coherent_seq_id, std::optional<uint32_t> filled) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (!fifo.empty() && fifo.front().will_free_at <= coherent_seq_id) {
     auto ret = std::move(fifo.front().allocation);
     fifo.pop();
@@ -42,7 +42,7 @@ DynamicBuffer::allocate(uint64_t coherent_seq_id, std::optional<uint32_t> filled
 
 void
 DynamicBuffer::updateImmediateName(uint64_t current_seq_id, Rc<BufferAllocation> &&allocation, uint32_t suballocation, bool owned_by_command_list) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (!owned_by_command_list_)
     fifo.push(QueueEntry{.allocation = std::move(name_), .will_free_at = current_seq_id});
   name_ = std::move(allocation);
@@ -52,7 +52,7 @@ DynamicBuffer::updateImmediateName(uint64_t current_seq_id, Rc<BufferAllocation>
 
 void
 DynamicBuffer::recycle(uint64_t current_seq_id, Rc<BufferAllocation> &&allocation) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (owned_by_command_list_) {
     if (name_.ptr() == allocation.ptr()) {
       owned_by_command_list_ = false;
@@ -89,7 +89,7 @@ DynamicLinearTexture::decRef() {
 
 Rc<TextureAllocation>
 DynamicLinearTexture::allocate(uint64_t coherent_seq_id) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   Rc<TextureAllocation> ret;
   for (;;) {
     if (fifo.empty()) {
@@ -113,7 +113,7 @@ DynamicLinearTexture::allocate(uint64_t coherent_seq_id) {
 
 void
 DynamicLinearTexture::updateImmediateName(uint64_t current_seq_id, Rc<TextureAllocation> &&allocation, bool owned_by_command_list) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (!owned_by_command_list_)
     fifo.push(QueueEntry{.allocation = std::move(name_), .will_free_at = current_seq_id});
   name_ = std::move(allocation);
@@ -122,7 +122,7 @@ DynamicLinearTexture::updateImmediateName(uint64_t current_seq_id, Rc<TextureAll
 
 void
 DynamicLinearTexture::recycle(uint64_t current_seq_id, Rc<TextureAllocation> &&allocation) {
-  std::lock_guard<mullion::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (owned_by_command_list_) {
     if (name_.ptr() == allocation.ptr()) {
       owned_by_command_list_ = false;

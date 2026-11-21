@@ -205,7 +205,7 @@ template <>
 HRESULT StateObjectCache<MTL_STREAM_OUTPUT_DESC, IMTLD3D11StreamOutputLayout>::
     CreateStateObject(const MTL_STREAM_OUTPUT_DESC *pSOLayoutDesc,
                       IMTLD3D11StreamOutputLayout **ppSOLayout) {
-  std::lock_guard<mullion::mutex> lock(mutex_cache);
+  std::scoped_lock lock(mutex_cache);
   InitReturnPtr(ppSOLayout);
 
   if (!pSOLayoutDesc)

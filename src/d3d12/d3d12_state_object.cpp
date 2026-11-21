@@ -54,7 +54,7 @@ public:
   // null, with `error`, for a container that is no usable library
   sm50_shader_t
   Shader(SM50Error &error) {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     if (!shader_ && !SM50Initialize(bytecode_.data(), bytecode_.size(), &shader_, nullptr, &error))
       bytecode_ = {};
     return shader_;
@@ -290,7 +290,7 @@ struct RayFunction {
 
   ~RayFunction() {
     {
-      std::lock_guard lock(device->ray_functions.mutex);
+      std::scoped_lock lock(device->ray_functions.mutex);
       // another of the key may have been made since the last reference to this one went
       if (auto found = device->ray_functions.made.find(key);
           found != device->ray_functions.made.end() && found->second.expired())
@@ -552,7 +552,7 @@ class MTLD3D12StateObjectImpl : public MTLD3D12DeviceChild<MTLD3D12StateObject, 
 
     auto &shared = device_->ray_functions;
     auto made = [&]() -> std::shared_ptr<RayFunction> {
-      std::lock_guard lock(shared.mutex);
+      std::scoped_lock lock(shared.mutex);
       auto found = shared.made.find(key);
       return found == shared.made.end() ? nullptr : std::static_pointer_cast<RayFunction>(found->second.lock());
     };
@@ -637,7 +637,7 @@ class MTLD3D12StateObjectImpl : public MTLD3D12DeviceChild<MTLD3D12StateObject, 
     // another thread may have made the same meanwhile: a pipeline links one function of the name
     std::shared_ptr<RayFunction> other;
     {
-      std::lock_guard lock(shared.mutex);
+      std::scoped_lock lock(shared.mutex);
       auto &kept = shared.made[key];
       if (!(other = std::static_pointer_cast<RayFunction>(kept.lock())))
         kept = function;

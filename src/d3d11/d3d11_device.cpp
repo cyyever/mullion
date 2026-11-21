@@ -117,7 +117,7 @@ public:
   ULONG STDMETHODCALLTYPE Release() override { return container_->Release(); }
 
   HRESULT STDMETHODCALLTYPE SetMessageCountLimit(UINT64 limit) override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     limit_ = limit;
     while (messages_.size() > limit_) {
       messages_.pop_front();
@@ -126,12 +126,12 @@ public:
     return S_OK;
   }
   void STDMETHODCALLTYPE ClearStoredMessages() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     messages_.clear();
     allowed_ = denied_ = discarded_ = 0;
   }
   HRESULT STDMETHODCALLTYPE GetMessage(UINT64 index, D3D11_MESSAGE *out, SIZE_T *bytes) override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     if (!bytes)
       return E_INVALIDARG;
     for (const auto &message : messages_) {
@@ -154,29 +154,29 @@ public:
     return E_INVALIDARG;
   }
   UINT64 STDMETHODCALLTYPE GetNumMessagesAllowedByStorageFilter() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return allowed_;
   }
   UINT64 STDMETHODCALLTYPE GetNumMessagesDeniedByStorageFilter() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return denied_;
   }
   UINT64 STDMETHODCALLTYPE GetNumStoredMessages() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return messages_.size();
   }
   UINT64 STDMETHODCALLTYPE GetNumStoredMessagesAllowedByRetrievalFilter() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return std::count_if(messages_.begin(), messages_.end(), [&](const Message &message) {
       return retrieval_.back().accepts(message.category, message.severity, message.id);
     });
   }
   UINT64 STDMETHODCALLTYPE GetNumMessagesDiscardedByMessageCountLimit() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return discarded_;
   }
   UINT64 STDMETHODCALLTYPE GetMessageCountLimit() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return limit_;
   }
 
@@ -187,7 +187,7 @@ public:
     return GetFilter(storage_, out, bytes);
   }
   void STDMETHODCALLTYPE ClearStorageFilter() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     storage_.back() = {};
   }
   HRESULT STDMETHODCALLTYPE PushEmptyStorageFilter() override {
@@ -199,12 +199,12 @@ public:
     return AddFilter(storage_, filter, true);
   }
   void STDMETHODCALLTYPE PopStorageFilter() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     if (storage_.size() > 1)
       storage_.pop_back();
   }
   UINT STDMETHODCALLTYPE GetStorageFilterStackSize() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return storage_.size();
   }
   HRESULT STDMETHODCALLTYPE AddRetrievalFilterEntries(D3D11_INFO_QUEUE_FILTER *filter) override {
@@ -214,7 +214,7 @@ public:
     return GetFilter(retrieval_, out, bytes);
   }
   void STDMETHODCALLTYPE ClearRetrievalFilter() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     retrieval_.back() = {};
   }
   HRESULT STDMETHODCALLTYPE PushEmptyRetrievalFilter() override {
@@ -226,12 +226,12 @@ public:
     return AddFilter(retrieval_, filter, true);
   }
   void STDMETHODCALLTYPE PopRetrievalFilter() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     if (retrieval_.size() > 1)
       retrieval_.pop_back();
   }
   UINT STDMETHODCALLTYPE GetRetrievalFilterStackSize() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return retrieval_.size();
   }
 
@@ -287,23 +287,23 @@ public:
     return SetBreak(break_ids_, id, enable);
   }
   BOOL STDMETHODCALLTYPE GetBreakOnCategory(D3D11_MESSAGE_CATEGORY category) override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return break_categories_.contains(category);
   }
   BOOL STDMETHODCALLTYPE GetBreakOnSeverity(D3D11_MESSAGE_SEVERITY severity) override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return break_severities_.contains(severity);
   }
   BOOL STDMETHODCALLTYPE GetBreakOnID(D3D11_MESSAGE_ID id) override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return break_ids_.contains(id);
   }
   void STDMETHODCALLTYPE SetMuteDebugOutput(BOOL mute) override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     mute_ = !!mute;
   }
   BOOL STDMETHODCALLTYPE GetMuteDebugOutput() override {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     return mute_;
   }
 
@@ -311,7 +311,7 @@ private:
   HRESULT AddFilter(std::vector<Filter> &stack, const D3D11_INFO_QUEUE_FILTER *filter, bool push) {
     if (!filter)
       return E_INVALIDARG;
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     try {
       auto next = push ? Filter{} : stack.back();
       if (!next.add(*filter))
@@ -326,7 +326,7 @@ private:
     }
   }
   HRESULT CopyFilter(std::vector<Filter> &stack) {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     try {
       stack.push_back(stack.back());
       return S_OK;
@@ -337,7 +337,7 @@ private:
   HRESULT GetFilter(const std::vector<Filter> &stack, D3D11_INFO_QUEUE_FILTER *out, SIZE_T *bytes) {
     if (!bytes)
       return E_INVALIDARG;
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     const auto &filter = stack.back();
     auto size = sizeof(*out) + filter.allow.bytes() + filter.deny.bytes();
     auto available = out ? *bytes : 0;
@@ -352,7 +352,7 @@ private:
     return S_OK;
   }
   template <typename T> HRESULT SetBreak(std::set<T> &conditions, T value, BOOL enable) {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock lock(mutex_);
     try {
       if (enable)
         conditions.insert(value);
