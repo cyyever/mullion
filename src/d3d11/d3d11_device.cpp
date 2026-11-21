@@ -1777,7 +1777,7 @@ public:
     return E_FAIL;
   }
 
-  void STDMETHODCALLTYPE Trim() override { WARN("DXGIDevice3::Trim: no-op"); };
+  void STDMETHODCALLTYPE Trim() override {};
 
   WMT::Device STDMETHODCALLTYPE GetMTLDevice() override {
     return adapter_->GetMTLDevice();

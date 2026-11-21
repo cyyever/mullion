@@ -56,7 +56,6 @@ public:
 
   ThreadpoolWork *RunThreadpoolWork() {
 
-    TRACE("Start compiling 1 PSO");
 
     WMT::Reference<WMT::Error> err;
     MTL_COMPILED_SHADER vs, ps;
@@ -110,7 +109,7 @@ public:
     }
 
     TraceGraphicsPipeline(state_.handle, *description);
-    TRACE("Compiled 1 PSO");
+
 
     return this;
   }
@@ -164,7 +163,6 @@ public:
 
   ThreadpoolWork *RunThreadpoolWork() {
 
-    TRACE("Start compiling 1 PSO");
 
     WMT::Reference<WMT::Error> err;
     MTL_COMPILED_SHADER cs;
@@ -187,7 +185,7 @@ public:
     }
 
     TRACE_IN(Shader, "D3D11 Compute:", state_.handle, " CS=", shader_hash_.string());
-    TRACE("Compiled 1 PSO");
+
 
     return this;
   }

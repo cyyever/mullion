@@ -1,7 +1,7 @@
 # a device's release drops the command buffers it committed but has not run
 --- a/src/mullion/mullion_command_queue.cpp
 +++ b/src/mullion/mullion_command_queue.cpp
-@@ -162,8 +162,7 @@
+@@ -162,7 +162,6 @@
    if (stopped.load())
      return;
    // what was committed runs to its end, with its completions
@@ -10,4 +10,3 @@
 +  ;
    if (stopped.exchange(true))
      return;
-   TRACE("Destructing command queue");

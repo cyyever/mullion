@@ -865,12 +865,8 @@ NvAPI_GPU_GetLogicalGpuInfo(NvLogicalGpuHandle hLogicalGpu, NV_LOGICAL_GPU_DATA 
 
 static void *QueryInterfaceImpl(NvU32 id);
 
-// MULLION_LOG_LEVEL=debug lists every function a program asks for, and whether it got one
 extern "C" __cdecl void *nvapi_QueryInterface(NvU32 id) {
-  void *function = QueryInterfaceImpl(id);
-  if (Logger::logLevel() <= LogLevel::Debug)
-    Logger::debug(str::format("nvapi: QueryInterface ", std::hex, id, function ? "" : " (none)"));
-  return function;
+  return QueryInterfaceImpl(id);
 }
 
 static void *QueryInterfaceImpl(NvU32 id) {

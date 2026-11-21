@@ -296,7 +296,7 @@ public:
           result = StagingMapResult::Mappable;
         }
         if (result == StagingMapResult::Mappable) {
-          TRACE("staging map ready");
+
           pMappedResource->pData = staging->mappedImmediateMemory();
           pMappedResource->RowPitch = staging->bytesPerRow;
           pMappedResource->DepthPitch = staging->bytesPerImage;
@@ -310,7 +310,7 @@ public:
         if (MapFlags & D3D11_MAP_FLAG_DO_NOT_WAIT) {
           return DXGI_ERROR_WAS_STILL_DRAWING;
         }
-        TRACE("staging map block");
+
         auto& statistics = cmd_queue.CurrentFrameStatistics();
         auto t0 = clock::now();
         cmd_queue.WaitCPUFence(coherent_seq_id + uint64_t(result));

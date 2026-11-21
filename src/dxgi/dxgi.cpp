@@ -155,7 +155,6 @@ extern "C" HRESULT __stdcall DXGIDeclareAdapterRemovalSupport() {
   if (std::exchange(enabled, true))
     return FAIL(DXGI_ERROR_ALREADY_EXISTS);
 
-  Logger::warn("DXGIDeclareAdapterRemovalSupport: stub");
   return S_OK;
 }
 
