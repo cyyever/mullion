@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <bit>
 #include <functional>
+#include <limits>
 #include "d3d12_command_allocator.hpp"
 #include "d3d12_acceleration_structure.hpp"
 #include "airconv_ray.h"
@@ -34,7 +35,9 @@
 
 namespace mullion {
 
-enum class DirtyState : uint8_t {
+// Flags stores the mask in the underlying type, with one bit per enumerator.
+// NOLINTNEXTLINE(performance-enum-size)
+enum class DirtyState : uint32_t {
   VertexBuffer,
   GraphicsRootArguments,
   GraphicsRootSignature,
@@ -47,7 +50,9 @@ enum class DirtyState : uint8_t {
   DepthBounds,
   GraphicsPipelineState,
   ComputePipelineState,
+  Count,
 };
+static_assert(uint32_t(DirtyState::Count) <= std::numeric_limits<Flags<DirtyState>::IntType>::digits);
 
 enum class DrawCallStatus : uint8_t {
   Invalid,
