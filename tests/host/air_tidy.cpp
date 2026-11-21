@@ -64,3 +64,15 @@ std::vector<int> append_with_reserve(const std::vector<int> &input) {
     output.push_back(value);
   return output;
 }
+
+struct PaddedRecord { // EXPECT: clang-analyzer-optin.performance.Padding
+  char a; unsigned long long x;
+  char b; unsigned long long y;
+  char c; unsigned long long z;
+  char d; unsigned long long u;
+  char e; unsigned long long v;
+};
+unsigned long long padded_record() {
+  PaddedRecord value{};
+  return value.x;
+}
