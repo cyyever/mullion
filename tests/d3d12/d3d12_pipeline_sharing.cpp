@@ -46,16 +46,19 @@ main(int argc, char **argv) {
   D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{.pRootSignature = rs.Get(), .VS = bytecode(vs), .PS = bytecode(ps)};
   desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
   desc.SampleMask = UINT_MAX;
-  desc.RasterizerState = {D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE};
-  desc.DepthStencilState = {TRUE, D3D12_DEPTH_WRITE_MASK_ALL, D3D12_COMPARISON_FUNC_LESS};
+  desc.RasterizerState = {.FillMode = D3D12_FILL_MODE_SOLID, .CullMode = D3D12_CULL_MODE_NONE};
+  desc.DepthStencilState = {.DepthEnable = TRUE, .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+                            .DepthFunc = D3D12_COMPARISON_FUNC_LESS};
   desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
   desc.NumRenderTargets = 1;
   desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
   desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
   desc.SampleDesc.Count = 1;
   auto blended = desc, deeper = desc;
-  blended.BlendState.RenderTarget[0] = {TRUE, FALSE, D3D12_BLEND_ONE, D3D12_BLEND_ONE, D3D12_BLEND_OP_ADD,
-                                        D3D12_BLEND_ONE, D3D12_BLEND_ONE, D3D12_BLEND_OP_ADD};
+  blended.BlendState.RenderTarget[0] = {.BlendEnable = TRUE, .SrcBlend = D3D12_BLEND_ONE,
+                                        .DestBlend = D3D12_BLEND_ONE, .BlendOp = D3D12_BLEND_OP_ADD,
+                                        .SrcBlendAlpha = D3D12_BLEND_ONE, .DestBlendAlpha = D3D12_BLEND_ONE,
+                                        .BlendOpAlpha = D3D12_BLEND_OP_ADD};
   blended.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
   deeper.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
 
@@ -71,6 +74,10 @@ main(int argc, char **argv) {
       if (name)
         named[name] += count;
     return named;
+  };
+  auto pipeline_creations = [&](const D3D12_GRAPHICS_PIPELINE_STATE_DESC &variant) {
+    auto calls = make(variant);
+    return calls["MTLDevice_newRenderPipelineState"] + calls["MTLDevice_newMeshRenderPipelineState"];
   };
   make(desc);
   for (auto *again : {&desc, &blended}) {
@@ -107,18 +114,18 @@ main(int argc, char **argv) {
   expect(files > 1, "%u archive files for %zu pipelines", files, many.size() + 3);
   CHECK(make_device(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device)));
   desc.pRootSignature = (rs = root_signature(device.Get(), {})).Get();
-  auto made = make(desc)["MTLDevice_newRenderPipelineState"];
+  auto made = pipeline_creations(desc);
   expect(made == 1, "%llu Metal pipeline creations, want the archive's one", (unsigned long long)made);
   unsigned missed = 0;
   for (auto &variant : many) {
     variant.pRootSignature = rs.Get();
-    missed += make(variant)["MTLDevice_newRenderPipelineState"] != 1;
+    missed += pipeline_creations(variant) != 1;
   }
   expect(!missed, "%u of %zu pipelines not found in the archive", missed, many.size());
   step("a pipeline the archive lacks");
   auto unseen = desc;
   unseen.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-  made = make(unseen)["MTLDevice_newRenderPipelineState"];
+  made = pipeline_creations(unseen);
   expect(made == 2, "%llu Metal pipeline creations, want the lookup and the compile", (unsigned long long)made);
 
   // more pairs than a file holds (kPipelinesPerArchive), each of a pixel shader of its own
@@ -156,7 +163,7 @@ main(int argc, char **argv) {
   missed = 0;
   for (size_t i = 0; i < pairs; i++)
     for (bool stencil : {false, true})
-      missed += make(paired(i, stencil))["MTLDevice_newRenderPipelineState"] != 1;
+      missed += pipeline_creations(paired(i, stencil)) != 1;
   expect(!missed, "%u of %zu pipelines not found in the archive", missed, 2 * pairs);
   return verdict();
 }
