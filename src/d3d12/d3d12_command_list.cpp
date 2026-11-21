@@ -2617,7 +2617,11 @@ public:
     MTL_DXGI_FORMAT_DESC hoisted_format;
     if (pDst->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX &&
         SUCCEEDED(MTLQueryDXGIFormat(device_->GetMTLDevice(), dst_desc.Format, hoisted_format)) &&
-        !(hoisted_format.Flag & (MTL_DXGI_FORMAT_EMULATED_RGB32 | MTL_DXGI_FORMAT_EMULATED_D24))) {
+        !(hoisted_format.Flag & (MTL_DXGI_FORMAT_EMULATED_RGB32 | MTL_DXGI_FORMAT_EMULATED_D24)) &&
+        dst_desc.Format != DXGI_FORMAT_BC7_TYPELESS && dst_desc.Format != DXGI_FORMAT_BC7_UNORM &&
+        dst_desc.Format != DXGI_FORMAT_BC7_UNORM_SRGB &&
+        static_cast<MTLD3D12Resource *>(pDst->pResource)->texture &&
+        !static_cast<MTLD3D12Resource *>(pDst->pResource)->texture->accurateBC) {
       if (!PreCopy(hoisted, pDst->pResource, pDst->SubresourceIndex, pSrc->pResource,
                    pSrc->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX ? pSrc->SubresourceIndex : 0))
         return;
@@ -2693,6 +2697,19 @@ public:
                                     src_box.front * src_depth_pitch;
         uint64_t upload_offset = src_offset;
         uint64_t row_pitch = pSrc->PlacedFootprint.Footprint.RowPitch, image_pitch = src_depth_pitch;
+        if (dst_desc.Format == DXGI_FORMAT_BC7_TYPELESS || dst_desc.Format == DXGI_FORMAT_BC7_UNORM ||
+            dst_desc.Format == DXGI_FORMAT_BC7_UNORM_SRGB) {
+          WMTSize blocks{align(src_box.right - src_box.left, block_width) / block_width,
+                         align(src_box.bottom - src_box.top, block_width) / block_width,
+                         src_box.back - src_box.front};
+          row_pitch = blocks.width * 16;
+          image_pitch = row_pitch * blocks.height;
+          std::tie(upload, upload_offset) = allocator_->AllocateTempBuffer(image_pitch * blocks.depth, 256);
+          if (!allocator_->NormalizeBC7(src->current()->buffer(), src_offset, upload, upload_offset,
+                                       {pSrc->PlacedFootprint.Footprint.RowPitch, src_depth_pitch,
+                                        row_pitch, image_pitch}, blocks))
+            return;
+        }
         if (dst_format.Flag & MTL_DXGI_FORMAT_EMULATED_RGB32) {
           WMTSize size{src_box.right - src_box.left, src_box.bottom - src_box.top, src_box.back - src_box.front};
           row_pitch = size.width * MTLGetTexelSize(dst->pixelFormat());
@@ -2801,6 +2818,7 @@ public:
             dst_format, dst_level, dst_slice, {DstX, DstY, DstZ}, dst_extent
         );
       }
+      allocator_->RefreshSignedBC(dst, dst_level, dst_slice);
     } else if (pDst->Type == D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT) {
       auto &dst = static_cast<MTLD3D12Resource *>(pDst->pResource)->buffer;
       if (!dst)
@@ -2887,7 +2905,7 @@ public:
     // a texture of two planes copies itself through CopyTextureRegion
     Hoisted hoisted{this};
     if (DstDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
-        !(pSrc->texture->chroma || pDst->texture->chroma)) {
+        !(pSrc->texture->chroma || pDst->texture->chroma || pDst->texture->accurateBC)) {
       if (!PreCopy(hoisted, pDstResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, pSrcResource,
                    D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES))
         return;
@@ -2905,7 +2923,7 @@ public:
       return;
     }
 
-    if (pSrc->texture->chroma || pDst->texture->chroma) {
+    if (pSrc->texture->chroma || pDst->texture->chroma || pDst->texture->accurateBC) {
       MTL_DXGI_FORMAT_DESC format;
       MTLQueryDXGIFormat(device_->GetMTLDevice(), SrcDesc.Format, format);
       UINT subresources = SrcDesc.MipLevels * SrcDesc.DepthOrArraySize * format.PlanarCount;
@@ -2962,6 +2980,7 @@ public:
                      ? 4
                      : 1;
     auto &shape = tiling.shape;
+    std::vector<std::pair<UINT, UINT>> decoded_mips;
     for (UINT n = 0; n < tile_region_size->NumTiles; n++) {
       auto at = buffer_offset + n * tile;
       auto place = tiling.place(tiling.index(*tile_region_start_coordinate, *tile_region_size, n));
@@ -3000,6 +3019,9 @@ public:
         cmd.slice = place.slice;
         cmd.level = place.level;
         cmd.origin = origin;
+        auto mip = std::pair(place.level, place.slice);
+        if (texture->accurateBC && std::ranges::find(decoded_mips, mip) == decoded_mips.end())
+          decoded_mips.push_back(mip);
       } else {
         auto &cmd = allocator_->EncodeBlitCommand<wmtcmd_blit_copy_from_texture_to_buffer>();
         cmd.type = WMTBlitCommandCopyFromTextureToBuffer;
@@ -3014,6 +3036,8 @@ public:
         cmd.bytes_per_image = image;
       }
     }
+    for (auto [level, slice] : decoded_mips)
+      allocator_->RefreshSignedBC(res->texture.ptr(), level, slice);
   };
 
   void STDMETHODCALLTYPE ResolveSubresource(
