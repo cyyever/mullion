@@ -144,8 +144,8 @@ namespace mullion {
   }
 
 
-  Config::Config() { }
-  Config::~Config() { }
+  Config::Config() = default;
+  Config::~Config() = default;
 
 
   Config::Config(OptionMap&& options)

@@ -301,7 +301,7 @@ public:
     }
   }
 
-  MTLD3D12RootSignatureDeserializer() {}
+  MTLD3D12RootSignatureDeserializer() = default;
 
   HRESULT
   Deserialize(const void *pBytecode, SIZE_T DataSize) {

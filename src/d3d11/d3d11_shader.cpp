@@ -38,7 +38,7 @@ public:
     sm50_common.next = nullptr;
   }
 
-  ~GeneralShaderCompileTask() {}
+  ~GeneralShaderCompileTask() = default;
 
   bool GetShader(MTL_COMPILED_SHADER *pShaderData) final {
     bool ret = false;

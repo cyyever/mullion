@@ -29,7 +29,7 @@ public:
       : MTLD3D11DeviceChild<IMTLD3D11InputLayout>(device),
         input_layout(input_layout), d3d10(this) {}
 
-  ~MTLD3D11InputLayout() {}
+  ~MTLD3D11InputLayout() = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {

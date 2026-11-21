@@ -11,7 +11,7 @@ namespace mullion {
 MTLD3D11ClassLinkage::MTLD3D11ClassLinkage(MTLD3D11Device *pDevice)
     : MTLD3D11DeviceChild<ID3D11ClassLinkage>(pDevice) {}
 
-MTLD3D11ClassLinkage::~MTLD3D11ClassLinkage() {}
+MTLD3D11ClassLinkage::~MTLD3D11ClassLinkage() = default;
 
 HRESULT STDMETHODCALLTYPE
 MTLD3D11ClassLinkage::QueryInterface(REFIID riid, void **ppvObject) {

@@ -799,7 +799,7 @@ public:
     encoder_count = 0;
   }
 
-  ~MTLD3D12GraphicsCommandListImpl() {}
+  ~MTLD3D12GraphicsCommandListImpl() = default;
 
   void
   ResetState(ID3D12PipelineState *pInitialPipelineState) {

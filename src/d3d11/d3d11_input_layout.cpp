@@ -123,7 +123,7 @@ public:
     null_gs.shader = desc.GeometryShader;
   }
 
-  ~MTLD3D11StreamOutputLayout() {}
+  ~MTLD3D11StreamOutputLayout() = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {

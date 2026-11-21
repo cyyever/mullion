@@ -601,9 +601,7 @@ class MTLD3D11CommandListPool : public MTLD3D11CommandListPoolBase {
 public:
   MTLD3D11CommandListPool(MTLD3D11Device *device) : device(device){};
 
-  ~MTLD3D11CommandListPool(){
-
-  };
+  ~MTLD3D11CommandListPool() = default;
 
   void
   RecycleCommandList(ID3D11CommandList *cmdlist) override {

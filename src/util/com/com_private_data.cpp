@@ -15,7 +15,7 @@
 
 namespace mullion {
 
-ComPrivateDataEntry::ComPrivateDataEntry() {}
+ComPrivateDataEntry::ComPrivateDataEntry() = default;
 ComPrivateDataEntry::ComPrivateDataEntry(REFGUID guid, UINT size,
                                          const void *data)
     : m_guid(guid), m_type(ComPrivateDataType::Data), m_size(size),

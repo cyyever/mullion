@@ -60,7 +60,7 @@ private:
       subset_ = ResourceSubsetState(info.byteOffset, info.byteWidth);
     }
 
-    ~TBufferSRV() {}
+    ~TBufferSRV() = default;
   };
 
   using UAVBase = TResourceViewBase<tag_unordered_access_view<D3D11Buffer>>;

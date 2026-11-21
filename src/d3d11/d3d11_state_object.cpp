@@ -200,7 +200,7 @@ public:
       sampler_(std::move(sampler)),
       desc_(desc),
       d3d10_(this) {}
-  ~MTLD3D11SamplerState() {}
+  ~MTLD3D11SamplerState() = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -291,7 +291,7 @@ public:
         return false;
     return true;
   }
-  ~MTLD3D11BlendState() {}
+  ~MTLD3D11BlendState() = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -406,7 +406,7 @@ public:
   MTLD3D11RasterizerState(MTLD3D11Device *device,
                           const D3D11_RASTERIZER_DESC2 *desc)
       : ManagedDeviceChild<IMTLD3D11RasterizerState>(device), desc_(*desc), d3d10_(this) {}
-  ~MTLD3D11RasterizerState() {};
+  ~MTLD3D11RasterizerState() = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -539,7 +539,7 @@ public:
         states_[planes][readonly] = device->GetMTLDevice().newDepthStencilState(effective);
       }
   }
-  ~MTLD3D11DepthStencilState() {};
+  ~MTLD3D11DepthStencilState() = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
