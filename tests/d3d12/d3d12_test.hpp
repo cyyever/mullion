@@ -11,6 +11,9 @@
 #include <dxcapi.h>
 #include <wrl/client.h>
 #include <cstdio>
+#include <print>
+#include <source_location>
+#include <string_view>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -20,11 +23,23 @@
 
 using Microsoft::WRL::ComPtr;
 
-#define CHECK(x)                                                                                                       \
-  if (FAILED(x)) {                                                                                                     \
-    printf("failed: %s (line %d)\n", #x, __LINE__);                                                                    \
-    return 1;                                                                                                          \
-  }
+namespace d3d12_test {
+[[nodiscard]] inline bool
+check(HRESULT result, std::string_view expression,
+      std::source_location location = std::source_location::current()) {
+  if (SUCCEEDED(result))
+    return true;
+  std::println("failed: {} (line {})", expression, location.line());
+  return false;
+}
+
+} // namespace d3d12_test
+
+#define CHECK(x) \
+  do { \
+    if (!::d3d12_test::check((x), #x)) \
+      return 1; \
+  } while (false)
 
 // a compiled shader as it is, also written to the directory MULLION_TEST_SHADERS names, under a name of its own
 // (its entry and a hash of its code): what the library is given, for the converter's tools (airconv) and for
