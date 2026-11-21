@@ -71,7 +71,7 @@ private:
 };
 
 uint32_t ArgumentBufferBuilder::DefineBuffer(
-  std::string name, AddressSpace addressp_space, MemoryAccess access,
+  const std::string &name, AddressSpace addressp_space, MemoryAccess access,
   MSLRepresentableType type, uint32_t location_index,
   std::optional<uint32_t> raster_order_group
 ) {
@@ -83,7 +83,7 @@ uint32_t ArgumentBufferBuilder::DefineBuffer(
     .array_size = 1,
     .memory_access = access,
     .address_space = addressp_space,
-    .type = type,
+    .type = std::move(type),
     .arg_name = name,
     .raster_order_group = raster_order_group,
   });
@@ -91,7 +91,7 @@ uint32_t ArgumentBufferBuilder::DefineBuffer(
 };
 
 uint32_t ArgumentBufferBuilder::DefineSampler(
-  std::string name, uint32_t location_index
+  const std::string &name, uint32_t location_index
 ) {
   auto element_index = fieldsType.size();
   assert(!fields.count(name) && "otherwise duplicated field name");
@@ -105,7 +105,7 @@ uint32_t ArgumentBufferBuilder::DefineSampler(
 };
 
 uint32_t ArgumentBufferBuilder::DefineTexture(
-  std::string name, TextureKind kind, MemoryAccess access,
+  const std::string &name, TextureKind kind, MemoryAccess access,
   MSLScalerType scaler_type, uint32_t location_index,
   std::optional<uint32_t> raster_order_group, bool compared
 ) {
@@ -130,7 +130,7 @@ uint32_t ArgumentBufferBuilder::DefineTexture(
 };
 
 uint32_t ArgumentBufferBuilder::DefineInteger64(
-  std::string name, uint32_t location_index
+  const std::string &name, uint32_t location_index
 ) {
   auto element_index = fieldsType.size();
   assert(!fields.count(name) && "otherwise duplicated field name");
@@ -528,7 +528,7 @@ uint32_t FunctionSignatureBuilder::DefineMeshPrimitiveOutput(const MeshPrimitive
 };
 
 auto FunctionSignatureBuilder::CreateFunction(
-  std::string name, llvm::LLVMContext &context, llvm::Module &module,
+  const std::string &name, llvm::LLVMContext &context, llvm::Module &module,
   uint64_t sign_mask, bool skip_output
 ) -> std::pair<llvm::Function *, llvm::MDNode *> {
   std::vector<Metadata *> metadata_input;

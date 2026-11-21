@@ -553,7 +553,7 @@ llvm::Expected<llvm::BasicBlock *> convert_basicblocks(
         [&](BasicBlockCall call) {
           block_to_visit.push_back(call.return_point);
         },
-        [&](BasicBlockDXIL dxil) {
+        [&](const BasicBlockDXIL &dxil) {
           block_to_visit.push_back(dxil.next);
         },
       },
@@ -662,7 +662,7 @@ llvm::Expected<llvm::BasicBlock *> convert_basicblocks(
                 "call terminator must be lowered"
               );
             },
-            [&](BasicBlockDXIL dxil) -> llvm::Error {
+            [&](const BasicBlockDXIL &dxil) -> llvm::Error {
               auto from = builder.GetInsertBlock();
               auto body = convert_dxil(dxil.shader, ctx, dxil.function, visited[dxil.next]);
               if (!body)

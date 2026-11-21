@@ -31,7 +31,7 @@ namespace mullion {
 template <typename Context> struct SimpleCommandContext {
   Context &ctx;
 
-  WMT::Reference<WMT::ComputePipelineState> getComputePipeline(std::string name);
+  WMT::Reference<WMT::ComputePipelineState> getComputePipeline(const std::string &name);
   void startComputePass();
   void endPass();
   void startBlitPass();

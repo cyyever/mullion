@@ -431,7 +431,7 @@ class ArgumentBufferBuilder {
    * buffer) */
 public:
   uint32_t DefineBuffer(
-    std::string name, AddressSpace addressp_space, MemoryAccess access,
+    const std::string &name, AddressSpace addressp_space, MemoryAccess access,
     MSLRepresentableType type, uint32_t location_index = UINT32_MAX,
     std::optional<uint32_t> raster_order_group = std::nullopt
   );
@@ -440,14 +440,14 @@ public:
   //   struct_type_metadata
   // );
   uint32_t DefineTexture(
-    std::string name, TextureKind kind, MemoryAccess access,
+    const std::string &name, TextureKind kind, MemoryAccess access,
     MSLScalerType scaler_type, uint32_t location_index = UINT32_MAX,
     std::optional<uint32_t> raster_order_group = std::nullopt, bool compared = false
   );
   uint32_t
-  DefineSampler(std::string name, uint32_t location_index = UINT32_MAX);
+  DefineSampler(const std::string &name, uint32_t location_index = UINT32_MAX);
   uint32_t
-  DefineInteger64(std::string name, uint32_t location_index = UINT32_MAX);
+  DefineInteger64(const std::string &name, uint32_t location_index = UINT32_MAX);
 
   auto Build(llvm::LLVMContext &context, const llvm::DataLayout &layout) const
     -> std::tuple<llvm::StructType *, llvm::MDNode *>;
@@ -673,7 +673,7 @@ public:
   void UsePatch(std::string domain) { patch = domain; }
 
   auto CreateFunction(
-    std::string name, llvm::LLVMContext &context, llvm::Module &module,
+    const std::string &name, llvm::LLVMContext &context, llvm::Module &module,
     uint64_t sign_mask, bool skip_output
   ) -> std::pair<llvm::Function *, llvm::MDNode *>;
 

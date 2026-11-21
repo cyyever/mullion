@@ -744,7 +744,7 @@ read_control_flow(
                     return BasicBlockUnconditionalBranch{clone(call.return_point)};
                   return BasicBlockCall{call.func_id, clone(call.return_point)};
                 },
-                [&](BasicBlockDXIL dxil) -> BasicBlockTarget {
+                [&](const BasicBlockDXIL &dxil) -> BasicBlockTarget {
                   return BasicBlockDXIL{dxil.shader, dxil.function, clone(dxil.next)};
                 },
             },

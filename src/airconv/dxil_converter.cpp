@@ -2460,8 +2460,8 @@ convert_dxil(
   };
   // `combine` over the active lanes in turn, of what `count` makes of each lane's `v`, broadcast to all
   using Combine = std::function<Value *(Value *, Value *)>;
-  auto over_lanes = [&](Value *v, Value *identity, std::function<Value *(Value * lane, Value * value)> count,
-                        Combine combine) -> Value * {
+  auto over_lanes = [&](Value *v, Value *identity, const std::function<Value *(Value * lane, Value * value)> &count,
+                        const Combine &combine) -> Value * {
     auto mask = ballot(ir.getTrue());
     auto head = ir.GetInsertBlock();
     auto exit = SplitBlock(head, &*ir.GetInsertPoint());
@@ -2705,7 +2705,7 @@ convert_dxil(
   };
   // a reduction or prefix (exclusive) of `v` over the active lanes, or over those in `group` (a lane mask). Metal has
   // these for 32 bits and less, without groups; the rest walk the lanes
-  auto reduce = [&](const std::string &name, Value *v, Signedness sign, bool prefix, Combine combine, Value *identity,
+  auto reduce = [&](const std::string &name, Value *v, Signedness sign, bool prefix, const Combine &combine, Value *identity,
                     Value *group = nullptr) -> Value * {
     // Metal's half sums count the helper lanes a branch leaves out; given the identity, they add nothing
     if (ctx.shader_type == D3D10_SB_PIXEL_SHADER && !helper_waves && v->getType()->isHalfTy())
