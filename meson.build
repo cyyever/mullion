@@ -203,17 +203,15 @@ add_project_arguments(cc.get_supported_arguments(compiler_args), language: 'c')
 add_project_arguments(clang.get_supported_arguments(native_compiler_args), language: 'c', native: true)
 add_project_link_arguments(cpp.get_supported_link_arguments(link_args), language: 'cpp')
 add_project_link_arguments(cc.get_supported_link_arguments(link_args), language: 'c')
-# the oldest macOS Mullion runs on: the Metal bridge uses its APIs without asking whether they are there (residency
-# sets, row-major matrices in acceleration structures) and asks for what is newer. a Metal library made for a newer
-# macOS does not load on it, and the SDK's own version is the metal compiler's default
-macos_min = '-mmacosx-version-min=15.0'
+# Match the deployment target of the Whisky Wine runtime and embedded Metal libraries.
+macos_min = '-mmacosx-version-min=27.2'
 if mullion_crossbuild
   add_project_arguments(['-arch', native_compiler_arch], language: 'c',  native: true)
   add_project_arguments(['-arch', native_compiler_arch], language: 'cpp',  native: true)
   add_project_link_arguments(['-arch', native_compiler_arch], language: 'cpp',  native: true)
   # Match the macOS 27.2 Wine runtime.
-  add_project_arguments('-mmacosx-version-min=27.2', language: ['c', 'cpp'], native: true)
-  add_project_link_arguments('-mmacosx-version-min=27.2', language: ['c', 'cpp'], native: true)
+  add_project_arguments(macos_min, language: ['c', 'cpp'], native: true)
+  add_project_link_arguments(macos_min, language: ['c', 'cpp'], native: true)
 endif
 
 subdir('libs')

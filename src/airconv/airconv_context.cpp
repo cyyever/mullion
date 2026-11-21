@@ -101,11 +101,11 @@ AvoidNarrowedSignBitCounts(llvm::Module &M) {
       if (auto Call = dyn_cast<CallInst>(&I))
         if (auto Callee = Call->getCalledFunction();
             Callee && Call->arg_size() >= 1 && Call->getType()->getScalarSizeInBits() == 32 &&
-            (Callee->getName().startswith("air.clz.") || Callee->getName().startswith("air.popcount.")))
+            (Callee->getName().starts_with("air.clz.") || Callee->getName().starts_with("air.popcount.")))
           counts.push_back(Call);
   for (auto Call : counts) {
     auto Name = Call->getCalledFunction()->getName();
-    bool Leading = Name.startswith("air.clz.");
+    bool Leading = Name.starts_with("air.clz.");
     auto Suffix = Name.substr(Leading ? strlen("air.clz") : strlen("air.popcount")); // ".i32", ".v2i32"...
     auto Ty = Call->getType();
     auto Attrs = Call->getCalledFunction()->getAttributes();
