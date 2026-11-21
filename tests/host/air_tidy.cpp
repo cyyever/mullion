@@ -26,7 +26,7 @@ void unrelated() { other::write(); }
 
 struct Record {
   Record(const Record &);
-  Record(Record &&);
+  Record(Record &&); // EXPECT: performance-noexcept-move-constructor
   void read() const;
 };
 void inspect(const Record (&items)[4]) {
