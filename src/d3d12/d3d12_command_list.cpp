@@ -408,7 +408,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
     if (!resource)
       named_.clear();
     else
-      named_[resource] = {subresource, state, barrier_serial_};
+      named_[resource] = {.subresource=subresource, .state=state, .serial=barrier_serial_};
   }
 
   // a texture used where no barrier says so: no clear of it before may fold into a later pass. a clear that stays
@@ -540,7 +540,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
     if (predication_region_) {
       auto skips = allocator_->gpu_heap_buffer_address_ +
                    (reinterpret_cast<char *>(&predication_region_->skips) - static_cast<char *>(allocator_->gpu_heap_));
-      predicated_statistics_.push_back({vertices, primitives, 0, skips});
+      predicated_statistics_.push_back({.vertices=vertices, .primitives=primitives, .threads=0, .skips=skips});
       return;
     }
     for (auto &[_, sum] : active_statistics_) {
@@ -602,7 +602,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
       return;
     // what says whether the region was skipped is a word of the region's as the others are
     predicated_.push_back(
-        {uint32_t((reinterpret_cast<char *>(&predication_region_->skips) - static_cast<char *>(allocator_->gpu_heap_)) / 4), 0, 1}
+        {.word=uint32_t((reinterpret_cast<char *>(&predication_region_->skips) - static_cast<char *>(allocator_->gpu_heap_)) / 4), .value=0, .skipped=1}
     );
     auto [mapped, offset] = allocator_->AllocateGPUHeap(predicated_.size() * sizeof(PredicatedWord), 4);
     if (allocator_->records_)
@@ -655,7 +655,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
     if (allocator_->records_)
       allocator_->RecordGPUHeap(mapped, sizeof(args), "predicated arguments", count * sizeof(uint32_t), sizeof(uint32_t));
     memcpy(mapped, &args, sizeof(args));
-    predicated_.push_back({uint32_t(offset / 4 + count), reinterpret_cast<const uint32_t *>(&args)[count], 0});
+    predicated_.push_back({.word=uint32_t(offset / 4 + count), .value=reinterpret_cast<const uint32_t *>(&args)[count], .skipped=0});
     return offset;
   }
 
@@ -675,7 +675,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
     uint64_t skipped = allocator_->gpu_heap_buffer_address_ + zero_offset;
     auto word = uint32_t((reinterpret_cast<char *>(&data->max_count_buffer) - (char *)allocator_->gpu_heap_) / 4);
     for (unsigned half = 0; half < 2; half++)
-      predicated_.push_back({word + half, uint32_t(data->max_count_buffer >> 32 * half), uint32_t(skipped >> 32 * half)});
+      predicated_.push_back({.word=word + half, .value=uint32_t(data->max_count_buffer >> 32 * half), .skipped=uint32_t(skipped >> 32 * half)});
   }
 
   // the ended occlusion queries' sums, once the passes they counted in are over
@@ -707,7 +707,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
       auto &cmd_setpso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
       cmd_setpso.type = WMTComputeCommandSetPSO;
       cmd_setpso.pso = device_->occlusion_sum;
-      cmd_setpso.threadgroup_size = {1, 1, 1};
+      cmd_setpso.threadgroup_size = {.width=1, .height=1, .depth=1};
       const std::pair<obj_handle_t, uint64_t> buffers[] = {
           {allocator_->gpu_heap_buffer_, upload(sums.data(), sums.size() * sizeof(OcclusionSum), "occlusion sums")},
           {allocator_->gpu_heap_buffer_, slots},
@@ -722,7 +722,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
       }
       auto &cmd_dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
       cmd_dispatch.type = WMTComputeCommandDispatch;
-      cmd_dispatch.size = {(uint32_t)sums.size(), 1, 1};
+      cmd_dispatch.size = {.width=(uint32_t)sums.size(), .height=1, .depth=1};
       first = last;
     }
     occlusion_sums_.clear();
@@ -762,7 +762,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
       auto &cmd_setpso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
       cmd_setpso.type = WMTComputeCommandSetPSO;
       cmd_setpso.pso = device_->pipeline_statistics_sum;
-      cmd_setpso.threadgroup_size = {1, 1, 1};
+      cmd_setpso.threadgroup_size = {.width=1, .height=1, .depth=1};
       const std::pair<obj_handle_t, uint64_t> buffers[] = {
           {allocator_->gpu_heap_buffer_, upload(sums.data(), sums.size() * sizeof(StatisticsSum), "statistics sums")},
           {allocator_->gpu_heap_buffer_, dispatches},
@@ -779,7 +779,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
       }
       auto &cmd_dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
       cmd_dispatch.type = WMTComputeCommandDispatch;
-      cmd_dispatch.size = {(uint32_t)sums.size(), 1, 1};
+      cmd_dispatch.size = {.width=(uint32_t)sums.size(), .height=1, .depth=1};
       first = last;
     }
     statistics_sums_.clear();
@@ -1026,7 +1026,7 @@ public:
     auto &pso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
     pso.type = WMTComputeCommandSetPSO;
     pso.pso = device_->depth_bounds_samples[kind];
-    pso.threadgroup_size = {8, 8, 1};
+    pso.threadgroup_size = {.width=8, .height=8, .depth=1};
     auto &texture = allocator_->EncodeComputeCommand<wmtcmd_compute_settexture>();
     texture.type = WMTComputeCommandSetTexture;
     texture.texture = depth.handle;
@@ -1041,7 +1041,7 @@ public:
       float range[2];
       uint32_t pitch;
       uint32_t pad;
-    } bounds{{std::clamp(depth_bounds_[0], 0.0f, 1.0f), std::clamp(depth_bounds_[1], 0.0f, 1.0f)}, dsv.Width, 0};
+    } bounds{.range={std::clamp(depth_bounds_[0], 0.0f, 1.0f), std::clamp(depth_bounds_[1], 0.0f, 1.0f)}, .pitch=dsv.Width, .pad=0};
     static_assert(sizeof(bounds) == 16);
     auto &bytes = allocator_->EncodeComputeCommand<wmtcmd_compute_setbytes>();
     bytes.type = WMTComputeCommandSetBytes;
@@ -1050,7 +1050,7 @@ public:
     bytes.index = 0;
     auto &dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
     dispatch.type = WMTComputeCommandDispatchThreads;
-    dispatch.size = {dsv.Width, dsv.Height, 1};
+    dispatch.size = {.width=dsv.Width, .height=dsv.Height, .depth=1};
   }
 
   // whether draws shade coarse pixels: some combination of the rates may be coarser than 1x1
@@ -1075,8 +1075,8 @@ public:
     copy.src = shading_rate_image_->texture->current()->texture();
     copy.slice = 0;
     copy.level = 0;
-    copy.origin = {0, 0, 0};
-    copy.size = {width, height, 1};
+    copy.origin = {.x=0, .y=0, .z=0};
+    copy.size = {.width=width, .height=height, .depth=1};
     copy.dst = shading_rate_bytes_;
     copy.offset = shading_rate_offset_;
     copy.bytes_per_row = width;
@@ -1511,14 +1511,14 @@ public:
         auto metal_viewport = allocator_->AllocateCommandData<WMTViewport>(count);
         for (auto i = 0u; i < count; i++) {
           auto &viewport = viewports[i < num_viewports ? i : 0];
-          metal_viewport[i] = {viewport.TopLeftX, viewport.TopLeftY, viewport.Width,
-                               viewport.Height,   viewport.MinDepth, viewport.MaxDepth};
+          metal_viewport[i] = {.originX=viewport.TopLeftX, .originY=viewport.TopLeftY, .width=viewport.Width,
+                               .height=viewport.Height,   .znear=viewport.MinDepth, .zfar=viewport.MaxDepth};
         }
         if (viewport_mode) {
           for (auto i = 0u; i < count; i++) {
             auto &v = metal_viewport[i];
-            v = {0, 0, double(pass->render_target_width), double(pass->render_target_height),
-                 viewport_mode == 1 ? 0 : v.znear, viewport_mode == 1 ? 1 : v.zfar};
+            v = {.originX=0, .originY=0, .width=double(pass->render_target_width), .height=double(pass->render_target_height),
+                 .znear=viewport_mode == 1 ? 0 : v.znear, .zfar=viewport_mode == 1 ? 1 : v.zfar};
           }
         } else {
           *(float *)scale = EnlargeViewports({metal_viewport, count}, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
@@ -1552,7 +1552,7 @@ public:
               std::clamp(std::min(d3d_rect.right, LONG(std::floor(viewport.TopLeftX + viewport.Width))), left, width);
           LONG bottom =
               std::clamp(std::min(d3d_rect.bottom, LONG(std::floor(viewport.TopLeftY + viewport.Height))), top, height);
-          metal_scissors[i] = {uint32_t(left), uint32_t(top), uint32_t(right - left), uint32_t(bottom - top)};
+          metal_scissors[i] = {.x=uint32_t(left), .y=uint32_t(top), .width=uint32_t(right - left), .height=uint32_t(bottom - top)};
         } else {
           metal_scissors[i] = {};
         }
@@ -1605,10 +1605,10 @@ public:
       if (shading_rate_image_)
         shading_rate_image_->GetDesc(&desc);
       SM50_SHADING_RATE rates{
-          uint32_t(shading_rate_),
-          {uint32_t(shading_rate_combiners_[0]), uint32_t(shading_rate_combiners_[1])},
-          uint32_t(desc.Width),
-          desc.Height
+          .base=uint32_t(shading_rate_),
+          .combiners={uint32_t(shading_rate_combiners_[0]), uint32_t(shading_rate_combiners_[1])},
+          .image_width=uint32_t(desc.Width),
+          .image_height=desc.Height
       };
       auto &bytes = allocator_->EncodeRenderCommand<wmtcmd_render_setbytes>();
       bytes.type = WMTRenderCommandSetFragmentBytes;
@@ -1715,7 +1715,7 @@ public:
   // an indexed draw's view: without an index buffer every index reads 0, as from an empty 16-bit one
   D3D12_INDEX_BUFFER_VIEW
   IndexedView(const D3D12_INDEX_BUFFER_VIEW &View) {
-    return View.BufferLocation ? View : D3D12_INDEX_BUFFER_VIEW{0, 0, DXGI_FORMAT_R16_UINT};
+    return View.BufferLocation ? View : D3D12_INDEX_BUFFER_VIEW{.BufferLocation=0, .SizeInBytes=0, .Format=DXGI_FORMAT_R16_UINT};
   }
 
   // a tessellated draw runs each group of patches in one object threadgroup of 32 threads (airconv's layout), which
@@ -1733,7 +1733,7 @@ public:
       WARN("Omitted mesh draw (TS): one object threadgroup exceeds the draw memory budget");
       return;
     }
-    TessellationInputs inputs{View, ControlPoints};
+    TessellationInputs inputs{.view=View, .control_points=ControlPoints};
     auto [Mapped, Offset] = allocator_->AllocateGPUHeap(sizeof(inputs) + sizeof(Args), 16);
     if (allocator_->records_)
       allocator_->RecordGPUHeap(Mapped, sizeof(inputs) + sizeof(Args), "tessellation inputs", sizeof(inputs),
@@ -1742,7 +1742,7 @@ public:
     memcpy(reinterpret_cast<char *>(Mapped) + sizeof(inputs), &Args, sizeof(Args));
     // the object stage counts patches from the arguments' first word, so a skipped draw has none
     if (predication_region_)
-      predicated_.push_back({uint32_t((Offset + sizeof(inputs)) / 4), reinterpret_cast<const uint32_t *>(&Args)[0], 0});
+      predicated_.push_back({.word=uint32_t((Offset + sizeof(inputs)) / 4), .value=reinterpret_cast<const uint32_t *>(&Args)[0], .skipped=0});
     EncodeBuffer(WMTRenderCommandSetObjectBuffer, Offset, SM50_BINDING_INDEX_INDEX_BUFFER);
     EncodeBuffer(
         WMTRenderCommandSetObjectBuffer, Offset + offsetof(TessellationInputs, control_points),
@@ -1858,7 +1858,7 @@ public:
     memcpy(reinterpret_cast<char *>(Mapped) + sizeof(View), &Args, sizeof(Args));
     // the object stage reads the vertex count from the arguments' first word, so a skipped draw has none
     if (predication_region_)
-      predicated_.push_back({uint32_t((Offset + sizeof(View)) / 4), reinterpret_cast<const uint32_t *>(&Args)[0], 0});
+      predicated_.push_back({.word=uint32_t((Offset + sizeof(View)) / 4), .value=reinterpret_cast<const uint32_t *>(&Args)[0], .skipped=0});
     bool mesh_only = MeshOnly();
     auto stage = mesh_only ? WMTRenderCommandSetMeshBuffer : WMTRenderCommandSetObjectBuffer;
     EncodeBuffer(stage, Offset, SM50_BINDING_INDEX_INDEX_BUFFER);
@@ -1895,7 +1895,7 @@ public:
     memcpy(Targets, &targets, sizeof(targets));
     StreamOut(TargetsOffset, ScratchOffset, draw, [&] {
       auto &cmd = allocator_->EncodeRenderCommand<wmtcmd_render_draw>();
-      cmd = {WMTRenderCommandDraw};
+      cmd = {.type=WMTRenderCommandDraw};
       cmd.primitive_type = WMTPrimitiveTypePoint;
       cmd.vertex_count = SM50StreamOutputZeroed(groups) / sizeof(uint32_t);
       cmd.instance_count = 1;
@@ -1950,7 +1950,7 @@ public:
     if (single) {
       set_pso(device_->GetLib().StreamOutputSnapshot());
       auto &cmd = allocator_->EncodeRenderCommand<wmtcmd_render_draw>();
-      cmd = {WMTRenderCommandDraw};
+      cmd = {.type=WMTRenderCommandDraw};
       cmd.primitive_type = WMTPrimitiveTypePoint;
       cmd.vertex_count = std::size(so_views_);
       cmd.instance_count = 1;
@@ -1990,21 +1990,21 @@ public:
     CountDraw(VertexCountPerInstance, InstanceCount);
     if (pso_graphics_->threads_per_patch) {
       EncodeTessellationDraw(
-          D3D12_DRAW_ARGUMENTS{VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation},
+          D3D12_DRAW_ARGUMENTS{.VertexCountPerInstance=VertexCountPerInstance, .InstanceCount=InstanceCount, .StartVertexLocation=StartVertexLocation, .StartInstanceLocation=StartInstanceLocation},
           VertexCountPerInstance, cp_count, {}
       );
       return;
     }
     if (Geometry()) {
       EncodeGeometryDraw(
-          D3D12_DRAW_ARGUMENTS{VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation},
+          D3D12_DRAW_ARGUMENTS{.VertexCountPerInstance=VertexCountPerInstance, .InstanceCount=InstanceCount, .StartVertexLocation=StartVertexLocation, .StartInstanceLocation=StartInstanceLocation},
           VertexCountPerInstance, {}
       );
       return;
     }
     // Metal's indirect draw arguments are D3D12's, instances second
     if (auto offset = Predicated(
-            D3D12_DRAW_ARGUMENTS{VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation}, 1
+            D3D12_DRAW_ARGUMENTS{.VertexCountPerInstance=VertexCountPerInstance, .InstanceCount=InstanceCount, .StartVertexLocation=StartVertexLocation, .StartInstanceLocation=StartInstanceLocation}, 1
         )) {
       auto &cmd = allocator_->EncodeRenderCommand<wmtcmd_render_draw_indirect>();
       cmd.type = WMTRenderCommandDrawIndirect;
@@ -2043,7 +2043,7 @@ public:
     if (pso_graphics_->threads_per_patch) {
       EncodeTessellationDraw(
           D3D12_DRAW_INDEXED_ARGUMENTS{
-              IndexCountPerInstance, InstanceCount, StartVertexLocation, BaseVertexLocation, StartInstanceLocation
+              .IndexCountPerInstance=IndexCountPerInstance, .InstanceCount=InstanceCount, .StartIndexLocation=StartVertexLocation, .BaseVertexLocation=BaseVertexLocation, .StartInstanceLocation=StartInstanceLocation
           },
           IndexCountPerInstance, cp_count, IndexedView(index_view_)
       );
@@ -2052,7 +2052,7 @@ public:
     if (Geometry()) {
       EncodeGeometryDraw(
           D3D12_DRAW_INDEXED_ARGUMENTS{
-              IndexCountPerInstance, InstanceCount, StartVertexLocation, BaseVertexLocation, StartInstanceLocation
+              .IndexCountPerInstance=IndexCountPerInstance, .InstanceCount=InstanceCount, .StartIndexLocation=StartVertexLocation, .BaseVertexLocation=BaseVertexLocation, .StartInstanceLocation=StartInstanceLocation
           },
           IndexCountPerInstance, IndexedView(index_view_)
       );
@@ -2065,7 +2065,7 @@ public:
       if (!count)
         return;
       if (auto offset = Predicated(
-              D3D12_DRAW_INDEXED_ARGUMENTS{count, InstanceCount, start, BaseVertexLocation, StartInstanceLocation}, 1
+              D3D12_DRAW_INDEXED_ARGUMENTS{.IndexCountPerInstance=count, .InstanceCount=InstanceCount, .StartIndexLocation=start, .BaseVertexLocation=BaseVertexLocation, .StartInstanceLocation=StartInstanceLocation}, 1
           )) {
         auto &cmd = allocator_->EncodeRenderCommand<wmtcmd_render_draw_indexed_indirect>();
         cmd.type = WMTRenderCommandDrawIndexedIndirect;
@@ -2219,7 +2219,7 @@ public:
       if (!PreDispatch())
         return;
       parts->at_once = pso_compute_->groups_at_once;
-      parts->size = {X, Y, Z};
+      parts->size = {.width=X, .height=Y, .depth=Z};
       parts->type = EncoderType::ComputeParts;
       Isolate(X, Y, Z);
       allocator_->InvalidateCurrentPass();
@@ -2232,13 +2232,13 @@ public:
     if (predication_region_ && !active_statistics_.empty()) {
       auto skips = allocator_->gpu_heap_buffer_address_ +
                    (reinterpret_cast<char *>(&predication_region_->skips) - static_cast<char *>(allocator_->gpu_heap_));
-      predicated_statistics_.push_back({0, 0, threads, skips});
+      predicated_statistics_.push_back({.vertices=0, .primitives=0, .threads=threads, .skips=skips});
     } else {
       for (auto &[_, sum] : active_statistics_)
         sum.counts[10] += threads;
     }
 
-    if (auto offset = Predicated(D3D12_DISPATCH_ARGUMENTS{X, Y, Z}, 0)) {
+    if (auto offset = Predicated(D3D12_DISPATCH_ARGUMENTS{.ThreadGroupCountX=X, .ThreadGroupCountY=Y, .ThreadGroupCountZ=Z}, 0)) {
       auto &cmd = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch_indirect>();
       cmd.type = WMTComputeCommandDispatchIndirect;
       cmd.indirect_args_buffer = allocator_->gpu_heap_buffer_;
@@ -2247,7 +2247,7 @@ public:
     }
     auto &cmd_dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
     cmd_dispatch.type = WMTComputeCommandDispatch;
-    cmd_dispatch.size = {X, Y, Z};
+    cmd_dispatch.size = {.width=X, .height=Y, .depth=Z};
     Isolate(X, Y, Z);
   };
 
@@ -2331,7 +2331,7 @@ public:
     PredicatedPasses predicated(this);
     if (!pDstBuffer || !pSrcBuffer)
       return;
-    Hoisted hoisted{this};
+    Hoisted hoisted{.list=this};
     if (!PreCopy(hoisted, pDstBuffer, 0, pSrcBuffer, 0))
       return;
 
@@ -2413,8 +2413,8 @@ public:
     in.bytes_per_row = bytes_per_row;
     in.bytes_per_image = bytes_per_image;
     // the units in the destination's texels, which a level smaller than a block does not have all of
-    in.size = {std::min<uint64_t>(wide * dst_unit, dst_extent.right - dst_origin.x),
-               std::min<uint64_t>(high * dst_unit, dst_extent.bottom - dst_origin.y), size.depth};
+    in.size = {.width=std::min<uint64_t>(wide * dst_unit, dst_extent.right - dst_origin.x),
+               .height=std::min<uint64_t>(high * dst_unit, dst_extent.bottom - dst_origin.y), .depth=size.depth};
     in.dst = dst->current()->texture();
     in.level = dst_level;
     in.slice = dst_slice;
@@ -2433,7 +2433,7 @@ public:
     auto dst_desc = pDst->pResource->GetDesc();
     // a copy into a texture may run before the render pass, but not one of RGB32 or D24 texels, which a kernel
     // converts
-    Hoisted hoisted{this};
+    Hoisted hoisted{.list=this};
     MTL_DXGI_FORMAT_DESC hoisted_format;
     if (pDst->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX &&
         SUCCEEDED(MTLQueryDXGIFormat(device_->GetMTLDevice(), dst_desc.Format, hoisted_format)) &&
@@ -2454,10 +2454,10 @@ public:
 
     if (pSrc->Type == D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT) {
       full_src_box = {
-          0, 0, 0,
-          pSrc->PlacedFootprint.Footprint.Width,
-          pSrc->PlacedFootprint.Footprint.Height,
-          pSrc->PlacedFootprint.Footprint.Depth
+          .left=0, .top=0, .front=0,
+          .right=pSrc->PlacedFootprint.Footprint.Width,
+          .bottom=pSrc->PlacedFootprint.Footprint.Height,
+          .back=pSrc->PlacedFootprint.Footprint.Depth
       };
     } else {
       DecomposeSubresource(src_desc, pSrc->SubresourceIndex, &src_level, &src_slice, &src_planar);
@@ -2519,30 +2519,30 @@ public:
         uint64_t row_pitch = pSrc->PlacedFootprint.Footprint.RowPitch, image_pitch = src_depth_pitch;
         if (dst_desc.Format == DXGI_FORMAT_BC7_TYPELESS || dst_desc.Format == DXGI_FORMAT_BC7_UNORM ||
             dst_desc.Format == DXGI_FORMAT_BC7_UNORM_SRGB) {
-          WMTSize blocks{align(src_box.right - src_box.left, block_width) / block_width,
-                         align(src_box.bottom - src_box.top, block_width) / block_width,
-                         src_box.back - src_box.front};
+          WMTSize blocks{.width=align(src_box.right - src_box.left, block_width) / block_width,
+                         .height=align(src_box.bottom - src_box.top, block_width) / block_width,
+                         .depth=src_box.back - src_box.front};
           row_pitch = blocks.width * 16;
           image_pitch = row_pitch * blocks.height;
           std::tie(upload, upload_offset) = allocator_->AllocateTempBuffer(image_pitch * blocks.depth, 256);
           if (!allocator_->NormalizeBC7(src->current()->buffer(), src_offset, upload, upload_offset,
-                                       {pSrc->PlacedFootprint.Footprint.RowPitch, src_depth_pitch,
-                                        row_pitch, image_pitch}, blocks))
+                                       {.src_row=pSrc->PlacedFootprint.Footprint.RowPitch, .src_image=src_depth_pitch,
+                                        .dst_row=row_pitch, .dst_image=image_pitch}, blocks))
             return;
         }
         if (dst_format.Flag & MTL_DXGI_FORMAT_EMULATED_RGB32) {
-          WMTSize size{src_box.right - src_box.left, src_box.bottom - src_box.top, src_box.back - src_box.front};
+          WMTSize size{.width=src_box.right - src_box.left, .height=src_box.bottom - src_box.top, .depth=src_box.back - src_box.front};
           row_pitch = size.width * MTLGetTexelSize(dst->pixelFormat());
           image_pitch = row_pitch * size.height;
           std::tie(upload, upload_offset) = allocator_->AllocateTempBuffer(image_pitch * size.depth, 256);
           allocator_->rgb32_copy_.run(
               true, src->current()->buffer(), src_offset, upload, upload_offset,
-              {pSrc->PlacedFootprint.Footprint.RowPitch, src_depth_pitch, row_pitch, image_pitch}, size
+              {.src_row=pSrc->PlacedFootprint.Footprint.RowPitch, .src_image=src_depth_pitch, .dst_row=row_pitch, .dst_image=image_pitch}, size
           );
         }
         // a D24 footprint stores UNORM24 codes (D3D11.3 19.1.3.1); Metal stores them as float32.
         if (!dst_planar && (dst_format.Flag & MTL_DXGI_FORMAT_EMULATED_D24)) {
-          WMTSize size{src_box.right - src_box.left, src_box.bottom - src_box.top, 1};
+          WMTSize size{.width=src_box.right - src_box.left, .height=src_box.bottom - src_box.top, .depth=1};
           row_pitch = align(size.width * sizeof(float), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
           std::tie(upload, upload_offset) =
               allocator_->AllocateTempBuffer(row_pitch * size.height, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
@@ -2558,18 +2558,18 @@ public:
         cmd_cp.bytes_per_image = image_pitch;
         // D3D10.1 reinterpret copies carry one source unit into one destination unit (CopyResource, Remarks)
         cmd_cp.size = {
-            std::min<uint64_t>(align(src_box.right - src_box.left, block_width) / block_width * dst_block_width,
+            .width=std::min<uint64_t>(align(src_box.right - src_box.left, block_width) / block_width * dst_block_width,
                                dst_extent.right - DstX),
-            std::min<uint64_t>(align(src_box.bottom - src_box.top, block_width) / block_width * dst_block_width,
+            .height=std::min<uint64_t>(align(src_box.bottom - src_box.top, block_width) / block_width * dst_block_width,
                                dst_extent.bottom - DstY),
-            src_box.back - src_box.front};
+            .depth=src_box.back - src_box.front};
         cmd_cp.dst = dst->current()->texture();
         cmd_cp.level = dst_level;
         cmd_cp.slice = dst_slice;
         cmd_cp.options = (dst_planar_count > 1)
                              ? (dst_planar ? WMTBlitOptionStencilFromDepthStencil : WMTBlitOptionDepthFromDepthStencil)
                              : WMTBlitOptionNone;
-        cmd_cp.origin = {DstX, DstY, DstZ};
+        cmd_cp.origin = {.x=DstX, .y=DstY, .z=DstZ};
       } else {
         auto resource = static_cast<MTLD3D12Resource *>(pSrc->pResource);
         if (!resource->texture)
@@ -2605,8 +2605,8 @@ public:
           cmd_to_tmp.src = src->current()->texture();
           cmd_to_tmp.level = src_level;
           cmd_to_tmp.slice = src_slice;
-          cmd_to_tmp.origin = {src_box.left, src_box.top, src_box.front};
-          cmd_to_tmp.size = {width, height, src_box.back - src_box.front};
+          cmd_to_tmp.origin = {.x=src_box.left, .y=src_box.top, .z=src_box.front};
+          cmd_to_tmp.size = {.width=width, .height=height, .depth=src_box.back - src_box.front};
           cmd_to_tmp.dst = temp_buffer;
           cmd_to_tmp.offset = temp_buffer_offset;
           cmd_to_tmp.bytes_per_image = 0; // DSV cannot be 3D
@@ -2624,8 +2624,8 @@ public:
           cmd_to_tex.dst = dst->current()->texture();
           cmd_to_tex.level = dst_level;
           cmd_to_tex.slice = dst_slice;
-          cmd_to_tex.origin = {DstX, DstY, DstZ};
-          cmd_to_tex.size = {src_box.right - src_box.left, src_box.bottom - src_box.top, src_box.back - src_box.front};
+          cmd_to_tex.origin = {.x=DstX, .y=DstY, .z=DstZ};
+          cmd_to_tex.size = {.width=src_box.right - src_box.left, .height=src_box.bottom - src_box.top, .depth=src_box.back - src_box.front};
           cmd_to_tex.options = (dst_planar_count > 1) ? (dst_planar ? WMTBlitOptionStencilFromDepthStencil
                                                                     : WMTBlitOptionDepthFromDepthStencil)
                                                       : WMTBlitOptionNone;
@@ -2633,9 +2633,9 @@ public:
         }
 
         CopyTexels(
-            src, src_format, src_level, src_slice, {src_box.left, src_box.top, src_box.front},
-            {src_box.right - src_box.left, src_box.bottom - src_box.top, src_box.back - src_box.front}, dst,
-            dst_format, dst_level, dst_slice, {DstX, DstY, DstZ}, dst_extent
+            src, src_format, src_level, src_slice, {.x=src_box.left, .y=src_box.top, .z=src_box.front},
+            {.width=src_box.right - src_box.left, .height=src_box.bottom - src_box.top, .depth=src_box.back - src_box.front}, dst,
+            dst_format, dst_level, dst_slice, {.x=DstX, .y=DstY, .z=DstZ}, dst_extent
         );
       }
       allocator_->RefreshSignedBC(dst, dst_level, dst_slice);
@@ -2674,7 +2674,7 @@ public:
                                     DstZ * dst_depth_pitch;
         uint64_t download_offset = dst_offset, row_pitch = pDst->PlacedFootprint.Footprint.RowPitch,
                  image_pitch = dst_depth_pitch;
-        WMTSize size{src_box.right - src_box.left, src_box.bottom - src_box.top, src_box.back - src_box.front};
+        WMTSize size{.width=src_box.right - src_box.left, .height=src_box.bottom - src_box.top, .depth=src_box.back - src_box.front};
         bool rgb32 = src_format.Flag & MTL_DXGI_FORMAT_EMULATED_RGB32;
         if (rgb32) {
           row_pitch = size.width * MTLGetTexelSize(src->pixelFormat());
@@ -2686,8 +2686,8 @@ public:
         cmd_cp.src = src->current()->texture();
         cmd_cp.level = src_level;
         cmd_cp.slice = src_slice;
-        cmd_cp.origin = {src_box.left, src_box.top, src_box.front};
-        cmd_cp.size = {src_box.right - src_box.left, src_box.bottom - src_box.top, src_box.back - src_box.front};
+        cmd_cp.origin = {.x=src_box.left, .y=src_box.top, .z=src_box.front};
+        cmd_cp.size = {.width=src_box.right - src_box.left, .height=src_box.bottom - src_box.top, .depth=src_box.back - src_box.front};
         cmd_cp.dst = download;
         cmd_cp.offset = download_offset;
         cmd_cp.bytes_per_row = row_pitch;
@@ -2698,7 +2698,7 @@ public:
         if (rgb32)
           allocator_->rgb32_copy_.run(
               false, download, download_offset, dst->current()->buffer(), dst_offset,
-              {row_pitch, image_pitch, pDst->PlacedFootprint.Footprint.RowPitch, dst_depth_pitch}, size
+              {.src_row=row_pitch, .src_image=image_pitch, .dst_row=pDst->PlacedFootprint.Footprint.RowPitch, .dst_image=dst_depth_pitch}, size
           );
         if (!src_planar && (src_format.Flag & MTL_DXGI_FORMAT_EMULATED_D24))
           allocator_->CopyD24(false, download, download_offset, row_pitch, download, download_offset, row_pitch, size);
@@ -2723,7 +2723,7 @@ public:
       return;
 
     // a texture of two planes copies itself through CopyTextureRegion
-    Hoisted hoisted{this};
+    Hoisted hoisted{.list=this};
     if (DstDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
         !(pSrc->texture->chroma || pDst->texture->chroma || pDst->texture->accurateBC)) {
       if (!PreCopy(hoisted, pDstResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, pSrcResource,
@@ -2766,7 +2766,7 @@ public:
         for (UINT level = 0; level < SrcDesc.MipLevels; level++) {
           auto extent = GetResourceExtent(SrcDesc, level);
           CopyTexels(
-              pSrc->texture.ptr(), src_format, level, slice, {}, {extent.right, extent.bottom, extent.back},
+              pSrc->texture.ptr(), src_format, level, slice, {}, {.width=extent.right, .height=extent.bottom, .depth=extent.back},
               pDst->texture.ptr(), dst_format, level, slice, {}, GetResourceExtent(DstDesc, level)
           );
         }
@@ -2820,11 +2820,11 @@ public:
         continue;
       auto &texture = res->texture;
       auto mip = [&](UINT size) { return std::max(size >> place.level, 1u); };
-      WMTOrigin origin{place.origin.x * shape.WidthInTexels, place.origin.y * shape.HeightInTexels, place.origin.z * shape.DepthInTexels};
+      WMTOrigin origin{.x=place.origin.x * shape.WidthInTexels, .y=place.origin.y * shape.HeightInTexels, .z=place.origin.z * shape.DepthInTexels};
       WMTSize extent{
-          std::min<uint64_t>(shape.WidthInTexels, mip(texture->width()) - origin.x),
-          std::min<uint64_t>(shape.HeightInTexels, mip(texture->height()) - origin.y),
-          std::min<uint64_t>(shape.DepthInTexels, mip(texture->depth()) - origin.z)
+          .width=std::min<uint64_t>(shape.WidthInTexels, mip(texture->width()) - origin.x),
+          .height=std::min<uint64_t>(shape.HeightInTexels, mip(texture->height()) - origin.y),
+          .depth=std::min<uint64_t>(shape.DepthInTexels, mip(texture->depth()) - origin.z)
       };
       uint32_t image = tile / shape.DepthInTexels, row = image / (shape.HeightInTexels / block);
       if (in) {
@@ -3502,7 +3502,7 @@ public:
     rt.depth_plane = AttachmentDesc.DepthPlane;
     rt.load_action = WMTLoadActionClear;
     rt.store_action = WMTStoreActionStore;
-    rt.clear_color = {Color[0], Color[1], Color[2], Color[3]};
+    rt.clear_color = {.r=Color[0], .g=Color[1], .b=Color[2], .a=Color[3]};
     SanitizeRTVClearColor(AttachmentDesc.Texture->pixelFormat(AttachmentDesc.View), rt.clear_color);
   };
 
@@ -3519,7 +3519,7 @@ public:
     clear->clear_sample_count = Desc.Texture->sampleCount();
     allocator_->InvalidateCurrentPass();
     clear_joinable_ = true;
-    clears_.push_back({clear});
+    clears_.push_back({.pass=clear});
     return clear;
   }
 
@@ -3560,7 +3560,7 @@ public:
     UINT element_stride =
         std::max<UINT>(1u, UINT(View.slice.byteLength / (uint64_t(View.slice.elementCount) * sizeof(uint32_t))));
     int64_t first = View.slice.byteOffset >> 2, words = View.slice.byteLength >> 2;
-    D3D12_RECT whole{0, 0, (LONG)(words / element_stride), 1};
+    D3D12_RECT whole{.left=0, .top=0, .right=(LONG)(words / element_stride), .bottom=1};
     for (auto &rect : RectCount ? std::span(pRects, RectCount) : std::span(&whole, 1)) {
       int64_t left = std::max<int64_t>(rect.left, 0), right = std::min<int64_t>(rect.right, words / element_stride);
       if (right <= left || rect.bottom <= std::max<LONG>(rect.top, 0) || rect.top >= 1)
@@ -3602,7 +3602,7 @@ public:
                    count = !volume ? texture->arrayLength(View.view)
                                    : View.slice_count ? View.slice_count : texture->depth(View.view);
     constexpr int64_t kBytes = 65536;
-    D3D12_RECT whole{0, 0, LONG(width), LONG(height)};
+    D3D12_RECT whole{.left=0, .top=0, .right=LONG(width), .bottom=LONG(height)};
     for (auto &rect : RectCount ? std::span(pRects, RectCount) : std::span(&whole, 1)) {
       const int64_t left = std::max<int64_t>(rect.left, 0), top = std::max<int64_t>(rect.top, 0),
                     right = std::min<int64_t>(rect.right, width), bottom = std::min<int64_t>(rect.bottom, height);
@@ -3624,11 +3624,11 @@ public:
           copy.src_offset = offset;
           copy.bytes_per_row = wide * sizeof(texel);
           copy.bytes_per_image = wide * rows * sizeof(texel);
-          copy.size = {uint64_t(wide), uint64_t(std::min(rows, bottom - y)), 1};
+          copy.size = {.width=uint64_t(wide), .height=uint64_t(std::min(rows, bottom - y)), .depth=1};
           copy.dst = texture->current()->texture();
           copy.level = View.view.mip_start;
           copy.slice = volume ? 0 : slice;
-          copy.origin = {uint64_t(left), uint64_t(y), volume ? slice : 0};
+          copy.origin = {.x=uint64_t(left), .y=uint64_t(y), .z=volume ? slice : 0};
         }
     }
     return true;
@@ -3888,7 +3888,7 @@ public:
       ERR("BeginQuery: query type ", Type, " is not implemented");
       return;
     }
-    active_queries_.push_back({static_cast<MTLD3D12QueryHeap *>(pHeap), Index, (uint32_t)visibility_slots_.size()});
+    active_queries_.push_back({.heap=static_cast<MTLD3D12QueryHeap *>(pHeap), .index=Index, .first=(uint32_t)visibility_slots_.size()});
     CountVisibility();
     // a pipeline that emulates the depth bounds test has a variant for draws an occlusion query counts
     // (MTLD3D12GraphicsPipelineState::RenderTargets)
@@ -3938,7 +3938,7 @@ public:
       if (auto open = allocator_->encoder_current;
           open && (open->type == EncoderType::Render || open->type == EncoderType::Compute ||
                    open->type == EncoderType::Blit)) {
-        open->stamps = new (allocator_->AllocateCommandData<Stamp>(1)) Stamp{heap, Index, open->stamps};
+        open->stamps = new (allocator_->AllocateCommandData<Stamp>(1)) Stamp{.heap=heap, .query=Index, .next=open->stamps};
         return;
       }
       allocator_->InvalidateCurrentPass();
@@ -3955,7 +3955,7 @@ public:
         fill.value = 0;
         allocator_->InvalidateCurrentPass();
       }
-      pass->stamps = new (allocator_->AllocateCommandData<Stamp>(1)) Stamp{heap, Index, pass->stamps};
+      pass->stamps = new (allocator_->AllocateCommandData<Stamp>(1)) Stamp{.heap=heap, .query=Index, .next=pass->stamps};
       return;
     }
     auto query = std::ranges::find_if(active_queries_, [&](auto &q) {
@@ -3968,7 +3968,7 @@ public:
     auto count = (uint32_t)visibility_slots_.size() - query->first;
     // sums run together at the next resolve, so a query ended again before one keeps only its latest result
     std::erase_if(occlusion_sums_, [&](auto &sum) { return sum.first == heap && sum.second.query == Index; });
-    occlusion_sums_.push_back({heap, {Index, query->first, count, Type == D3D12_QUERY_TYPE_BINARY_OCCLUSION}});
+    occlusion_sums_.push_back({heap, {.query=Index, .first=query->first, .count=count, .binary=Type == D3D12_QUERY_TYPE_BINARY_OCCLUSION}});
     active_queries_.erase(query);
     CountVisibility();
     if (pso_graphics_ && pso_graphics_->depth_bounds_emulated)
@@ -4061,7 +4061,7 @@ public:
       auto &cmd_setpso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
       cmd_setpso.type = WMTComputeCommandSetPSO;
       cmd_setpso.pso = device_->binary_occlusion_resolve;
-      cmd_setpso.threadgroup_size = {1, 1, 1};
+      cmd_setpso.threadgroup_size = {.width=1, .height=1, .depth=1};
       const std::pair<obj_handle_t, uint64_t> buffers[] = {
           {heap->results, uint64_t(StartIndex) * heap->result_size},
           {dst, AlignedDstBufferOffset},
@@ -4075,7 +4075,7 @@ public:
       }
       auto &cmd_dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
       cmd_dispatch.type = WMTComputeCommandDispatch;
-      cmd_dispatch.size = {QueryCount, 1, 1};
+      cmd_dispatch.size = {.width=QueryCount, .height=1, .depth=1};
       allocator_->InvalidateCurrentPass();
       return;
     }
@@ -4115,7 +4115,7 @@ public:
     auto &cmd_setpso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
     cmd_setpso.type = WMTComputeCommandSetPSO;
     cmd_setpso.pso = device_->predicate;
-    cmd_setpso.threadgroup_size = {1, 1, 1};
+    cmd_setpso.threadgroup_size = {.width=1, .height=1, .depth=1};
     const std::pair<obj_handle_t, uint64_t> buffers[] = {
         {static_cast<MTLD3D12Resource *>(pBuffer)->buffer->current()->buffer(), AlignedBufferOffset},
         {allocator_->gpu_heap_buffer_, offset},
@@ -4129,7 +4129,7 @@ public:
     }
     auto &cmd_dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
     cmd_dispatch.type = WMTComputeCommandDispatch;
-    cmd_dispatch.size = {1, 1, 1};
+    cmd_dispatch.size = {.width=1, .height=1, .depth=1};
     allocator_->InvalidateCurrentPass();
     if (before) {
       allocator_->encoder_current = render;
@@ -4231,7 +4231,7 @@ public:
           if (allocator_->records_)
             allocator_->RecordGPUHeap(mapped, size, "indirect invocations", 0, size);
           cmd->statistics = allocator_->gpu_heap_buffer_address_ + offset;
-          indirect_dispatches_.push_back({cmd->statistics, MaxCommandCount});
+          indirect_dispatches_.push_back({.counts=cmd->statistics, .length=MaxCommandCount});
         }
       }
       cmd->max_count_buffer = CountBufferAddress;
@@ -4389,10 +4389,10 @@ public:
       if (allocator_->records_)
         allocator_->RecordGPUHeap(Mapped, sizeof(TessellationInputs), "tessellation inputs");
       *reinterpret_cast<TessellationInputs *>(Mapped) = {
-          sig->CommandType != D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED ? D3D12_INDEX_BUFFER_VIEW{}
+          .view=sig->CommandType != D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED ? D3D12_INDEX_BUFFER_VIEW{}
           : sig->UpdateIndexBuffer                                        ? IndexedView({})
                                                                           : IndexedView(index_view_),
-          cp_count
+          .control_points=cp_count
       };
       cmd->index_buffer_view = allocator_->gpu_heap_buffer_address_ + Offset;
       cmd->control_points = cp_count;
@@ -4461,18 +4461,18 @@ public:
     auto draws = allocator_->ArgumentsAt(cmd->draws), roots = allocator_->ArgumentsAt(cmd->rootsig_qwords),
          samplers = allocator_->ArgumentsAt(cmd->static_samplers), vertices = allocator_->ArgumentsAt(cmd->vertex_buffer),
          counts = allocator_->ArgumentsAt(cmd->statistics), targets = allocator_->ArgumentsAt(cmd->so_targets);
-    WMTSize object{cmd->geometry_threads, 1, 1}, mesh{pso_graphics_->gs_mesh_invocations, 1, 1};
+    WMTSize object{.width=cmd->geometry_threads, .height=1, .depth=1}, mesh{.width=pso_graphics_->gs_mesh_invocations, .height=1, .depth=1};
     // a mesh function alone takes the warps as mesh threadgroups, and what the object stage reads (MeshOnly)
     bool mesh_only = geometry && MeshOnly();
     auto stage = mesh_only ? WMTRenderCommandSetMeshBuffer : WMTRenderCommandSetObjectBuffer;
     if (mesh_only)
       std::swap(object, mesh);
     if (dispatch_mesh) {
-      object = {cmd->object_threads[0], cmd->object_threads[1], cmd->object_threads[2]};
-      mesh = {cmd->mesh_threads[0], cmd->mesh_threads[1], cmd->mesh_threads[2]};
+      object = {.width=cmd->object_threads[0], .height=cmd->object_threads[1], .depth=cmd->object_threads[2]};
+      mesh = {.width=cmd->mesh_threads[0], .height=cmd->mesh_threads[1], .depth=cmd->mesh_threads[2]};
     } else if (cmd->threads_per_patch) {
-      object = {cmd->threads_per_patch, 32 / cmd->threads_per_patch, 1};
-      mesh = {32, 1, 1};
+      object = {.width=cmd->threads_per_patch, .height=32 / cmd->threads_per_patch, .depth=1};
+      mesh = {.width=32, .height=1, .depth=1};
     }
     // GS and tessellation object stages add the physical draw's origin; these indirect grids start at zero.
     if (!dispatch_mesh) {
@@ -4659,7 +4659,7 @@ public:
               .min_mip = min_mip,
               .pitch = map->width(),
           },
-          {width, height, slices}
+          {.width=width, .height=height, .depth=slices}
       );
     }
   }
@@ -4680,7 +4680,7 @@ public:
         D3D12_TEXTURE_COPY_LOCATION from{pSrcResource, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, {.SubresourceIndex = SrcSubresource}};
         D3D12_BOX box{};
         if (pSrcRect)
-          box = {(UINT)pSrcRect->left, (UINT)pSrcRect->top, 0, (UINT)pSrcRect->right, (UINT)pSrcRect->bottom, 1};
+          box = {.left=(UINT)pSrcRect->left, .top=(UINT)pSrcRect->top, .front=0, .right=(UINT)pSrcRect->right, .bottom=(UINT)pSrcRect->bottom, .back=1};
         CopyTextureRegion(&to, DstX, DstY, 0, &from, pSrcRect ? &box : nullptr);
         return;
       }
@@ -4689,7 +4689,7 @@ public:
     if (ResolveMode == D3D12_RESOLVE_MODE_ENCODE_SAMPLER_FEEDBACK ||
         ResolveMode == D3D12_RESOLVE_MODE_DECODE_SAMPLER_FEEDBACK) {
       bool encode = ResolveMode == D3D12_RESOLVE_MODE_ENCODE_SAMPLER_FEEDBACK;
-      POINT from = pSrcRect ? POINT{pSrcRect->left, pSrcRect->top} : POINT{}, to = {(LONG)DstX, (LONG)DstY};
+      POINT from = pSrcRect ? POINT{.x=pSrcRect->left, .y=pSrcRect->top} : POINT{}, to = {.x=(LONG)DstX, .y=(LONG)DstY};
       TranscodeFeedback(
           encode, static_cast<MTLD3D12Resource *>(encode ? pDstResource : pSrcResource),
           encode ? DstSubresource : SrcSubresource, encode ? to : from,
@@ -4738,7 +4738,7 @@ public:
       return texture->createView(desc);
     };
     auto dst_view = view(dst, false), src_view = view(src, true);
-    D3D12_RECT whole{0, 0, (LONG)src->texture->width(src_view), (LONG)src->texture->height(src_view)},
+    D3D12_RECT whole{.left=0, .top=0, .right=(LONG)src->texture->width(src_view), .bottom=(LONG)src->texture->height(src_view)},
         rect = pSrcRect ? *pSrcRect : whole;
     auto planes = DepthStencilPlanarFlags(dst->texture->pixelFormat());
     // Metal's own resolve is of a whole attachment into one as large, by averaging colors of the formats it resolves
@@ -4802,7 +4802,7 @@ public:
         // a marker says how far the GPU got, to an application that reads it after a device removal and at no other
         // time (d3d12.immediateMarkers)
         if (device_->immediate_markers)
-          markers_.push_back({param.Dest, param.Value});
+          markers_.push_back({.address=param.Dest, .value=param.Value});
         continue;
       }
       WriteMarkers();
@@ -5076,9 +5076,9 @@ public:
     }
     // with nothing done before it, it goes on in the open pass, as it was recorded
     PreAccelerationStructure();
-    structure_run_ = {allocator_->encoder_current, allocator_->encoder_current->id,
-                      Blit && Blit->type == EncoderType::Blit ? static_cast<BlitEncoderData *>(Blit) : nullptr,
-                      Conversion, bool(Conversion)};
+    structure_run_ = {.pass=allocator_->encoder_current, .id=allocator_->encoder_current->id,
+                      .blit=Blit && Blit->type == EncoderType::Blit ? static_cast<BlitEncoderData *>(Blit) : nullptr,
+                      .compute=Conversion, .converted=bool(Conversion)};
   }
 
   // the open pass of acceleration structure commands, or a new one
@@ -5095,7 +5095,7 @@ public:
   Fills(AccelerationStructure *Structure, AccelerationStructureInputs *Kept, AccelerationStructure *From) {
     auto pass = static_cast<AccelerationStructureEncoderData *>(allocator_->encoder_current);
     auto filled = allocator_->AllocateCommandData<AccelerationStructureFilled>(1);
-    *filled = {Structure, Kept, From, nullptr};
+    *filled = {.structure=Structure, .kept=Kept, .from=From, .next=nullptr};
     *pass->filled_tail = filled;
     pass->filled_tail = &filled->next;
   }
@@ -5173,7 +5173,7 @@ public:
       case D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION: {
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION_DESC info{};
         layout(structure, [&](bool top, uint64_t count, uint64_t size) {
-          info = {SerializedLayout(top, count, size).size, top ? count : 0};
+          info = {.SerializedSizeInBytes=SerializedLayout(top, count, size).size, .NumBottomLevelAccelerationStructurePointers=top ? count : 0};
         });
         WriteImmediate(address, &info, written = sizeof(info));
         break;
@@ -5278,7 +5278,7 @@ public:
       auto &pso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
       pso.type = WMTComputeCommandSetPSO;
       pso.pso = device_->acceleration_structure_transforms;
-      pso.threadgroup_size = {device_->GetSIMDWidth(), 1, 1};
+      pso.threadgroup_size = {.width=device_->GetSIMDWidth(), .height=1, .depth=1};
       for (auto [offset, index] : {std::pair{sources_offset, 0}, std::pair{transposed_offset, 1}}) {
         auto &buffer = allocator_->EncodeComputeCommand<wmtcmd_compute_setbuffer>();
         buffer.type = WMTComputeCommandSetBuffer;
@@ -5288,7 +5288,7 @@ public:
       }
       auto &dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
       dispatch.type = WMTComputeCommandDispatchThreads;
-      dispatch.size = {transforms, 1, 1};
+      dispatch.size = {.width=transforms, .height=1, .depth=1};
       StructureBlits(joined);
     }
     uint64_t size = source ? source->size : 0;
@@ -5310,13 +5310,13 @@ public:
       auto &pso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
       pso.type = WMTComputeCommandSetPSO;
       pso.pso = device_->acceleration_structure_instances;
-      pso.threadgroup_size = {device_->GetSIMDWidth(), 1, 1};
+      pso.threadgroup_size = {.width=device_->GetSIMDWidth(), .height=1, .depth=1};
       // MullionInstanceConversion
       struct {
         uint64_t instances, kept;
         uint32_t pointers, count;
-      } conversion{inputs.InstanceDescs, kept ? kept->data_address : 0,
-                   inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS, inputs.NumDescs};
+      } conversion{.instances=inputs.InstanceDescs, .kept=kept ? kept->data_address : 0,
+                   .pointers=inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS, .count=inputs.NumDescs};
       auto &bytes = allocator_->EncodeComputeCommand<wmtcmd_compute_setbytes>();
       bytes.type = WMTComputeCommandSetBytes;
       bytes.bytes.set(memcpy(allocator_->AllocateCPUHeap(sizeof(conversion), 16), &conversion, sizeof(conversion)));
@@ -5329,7 +5329,7 @@ public:
       converted.index = 1;
       auto &dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
       dispatch.type = WMTComputeCommandDispatchThreads;
-      dispatch.size = {inputs.NumDescs, 1, 1};
+      dispatch.size = {.width=inputs.NumDescs, .height=1, .depth=1};
     }
 
     uint64_t scratch_offset = 0;
@@ -5433,7 +5433,7 @@ public:
         for (size_t part = 0; part < addresses.size() && addresses[part]; part++) {
           if (!*addresses[part] || !lengths[part])
             continue;
-          parts.push_back({*addresses[part], kept->size, lengths[part]});
+          parts.push_back({.from=*addresses[part], .to=kept->size, .length=lengths[part]});
           *addresses[part] = kept->size;
           kept->size = align(kept->size + lengths[part], kAccelerationStructureInputAlignment);
         }
@@ -5442,7 +5442,7 @@ public:
     allocator_->acceleration_structure_inputs_.push_back(kept);
     if (!kept->size)
       return kept;
-    WMTBufferInfo info{kept->size, WMTResourceStorageModePrivate};
+    WMTBufferInfo info{.length=kept->size, .options=WMTResourceStorageModePrivate};
     kept->data = device_->GetMTLDevice().newBuffer(info);
     kept->data_address = info.gpu_address;
     device_->RegisterResidency(kept->data);
@@ -5467,15 +5467,15 @@ public:
     if (Serialized) {
       SerializedLayout layout(top, count, kept->size);
       const D3D12_SERIALIZED_RAYTRACING_ACCELERATION_STRUCTURE_HEADER header{
-          kSerializedIdentifier, layout.size, Structure.size, top ? count : 0
+          .DriverMatchingIdentifier=kSerializedIdentifier, .SerializedSizeInBytesIncludingHeader=layout.size, .DeserializedSizeInBytes=Structure.size, .NumBottomLevelAccelerationStructurePointersAfterHeader=top ? count : 0
       };
-      const SerializedInputs inputs{(uint32_t)kept->type, (uint32_t)kept->flags, (uint32_t)count, 0, kept->size};
+      const SerializedInputs inputs{.type=(uint32_t)kept->type, .flags=(uint32_t)kept->flags, .count=(uint32_t)count, .reserved=0, .size=kept->size};
       WriteImmediate(Destination, &header, sizeof(header));
       WriteImmediate(Destination + layout.inputs, &inputs, sizeof(inputs));
       described = layout.described, data = layout.data;
     } else {
       VisualizationLayout layout(top, count, kept->size);
-      const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_TOOLS_VISUALIZATION_HEADER header{kept->type, (UINT)count};
+      const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_TOOLS_VISUALIZATION_HEADER header{.Type=kept->type, .NumDescs=(UINT)count};
       WriteImmediate(Destination, &header, sizeof(header));
       described = layout.described, data = layout.data;
     }
@@ -5567,14 +5567,14 @@ public:
     if (!pDesc->Width || !pDesc->Height || !pDesc->Depth)
       return;
     SM50_RAY_DISPATCH dispatch{
-        pDesc->RayGenerationShaderRecord.StartAddress,
-        pDesc->MissShaderTable.StartAddress,
-        pDesc->MissShaderTable.StrideInBytes,
-        pDesc->HitGroupTable.StartAddress,
-        pDesc->HitGroupTable.StrideInBytes,
-        pDesc->CallableShaderTable.StartAddress,
-        pDesc->CallableShaderTable.StrideInBytes,
-        {pDesc->Width, pDesc->Height, pDesc->Depth},
+        .ray_generation_record=pDesc->RayGenerationShaderRecord.StartAddress,
+        .miss_table=pDesc->MissShaderTable.StartAddress,
+        .miss_stride=pDesc->MissShaderTable.StrideInBytes,
+        .hit_group_table=pDesc->HitGroupTable.StartAddress,
+        .hit_group_stride=pDesc->HitGroupTable.StrideInBytes,
+        .callable_table=pDesc->CallableShaderTable.StartAddress,
+        .callable_stride=pDesc->CallableShaderTable.StrideInBytes,
+        .dimensions={pDesc->Width, pDesc->Height, pDesc->Depth},
     };
     if (!BeginRays(dispatch.pipeline_flags))
       return;
@@ -5586,7 +5586,7 @@ public:
     BindRays(offset);
     auto &threads = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
     threads.type = WMTComputeCommandDispatchThreads;
-    threads.size = {pDesc->Width, pDesc->Height, pDesc->Depth};
+    threads.size = {.width=pDesc->Width, .height=pDesc->Height, .depth=pDesc->Depth};
   }
 
   // the state object's pipeline and function table in a compute pass, with the list's root arguments
@@ -5604,7 +5604,7 @@ public:
     auto &pso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
     pso.type = WMTComputeCommandSetPSO;
     pso.pso = pipeline;
-    pso.threadgroup_size = {device_->GetSIMDWidth(), 1, 1};
+    pso.threadgroup_size = {.width=device_->GetSIMDWidth(), .height=1, .depth=1};
     // the next compute dispatch binds its own pipeline again
     dirty_state_.set(DirtyState::ComputePipelineState);
     if (rootsig_compute_) {
@@ -5670,11 +5670,11 @@ public:
       return;
     CountDraw(0, 0);
     // the groups are the amplification shader's, or without one the mesh shader's
-    auto size = [](const uint32_t threads[3]) { return WMTSize{threads[0], threads[1], threads[2]}; };
+    auto size = [](const uint32_t threads[3]) { return WMTSize{.width=threads[0], .height=threads[1], .depth=threads[2]}; };
     auto draw = [&](UINT x, UINT y, UINT z) {
       auto &cmd = allocator_->EncodeRenderCommand<wmtcmd_render_draw_meshthreadgroups>();
       cmd.type = WMTRenderCommandDrawMeshThreadgroups;
-      cmd.threadgroup_per_grid = {x, y, z};
+      cmd.threadgroup_per_grid = {.width=x, .height=y, .depth=z};
       cmd.object_threadgroup_size = size(pso_graphics_->object_threads);
       cmd.mesh_threadgroup_size = size(pso_graphics_->mesh_threads);
     };
@@ -5814,7 +5814,7 @@ public:
     auto &pso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
     pso.type = WMTComputeCommandSetPSO;
     pso.pso = device_->downscale_motion;
-    pso.threadgroup_size = {8, 4, 1};
+    pso.threadgroup_size = {.width=8, .height=4, .depth=1};
     auto &from = allocator_->EncodeComputeCommand<wmtcmd_compute_settexture>();
     from.type = WMTComputeCommandSetTexture;
     from.texture = view.handle;
@@ -5831,7 +5831,7 @@ public:
     bytes.index = 0;
     auto &dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
     dispatch.type = WMTComputeCommandDispatchThreads;
-    dispatch.size = {uint32_t(cache->motion.width()), uint32_t(cache->motion.height()), 1};
+    dispatch.size = {.width=uint32_t(cache->motion.width()), .height=uint32_t(cache->motion.height()), .depth=1};
   }
 
   static Texture *
@@ -6091,23 +6091,23 @@ public:
              motion_height =
                  native_motion ? uint64_t(content_height) * motion->height() / color->height() : content_height;
     pass->props = WMTFXTemporalScalerProps{
-        content_width,
-        content_height,
-        bool(pDesc->InReset),
-        bool(pDesc->DepthReversed),
-        motion_pass ? 1.0f : pDesc->MotionVectorScaleX,
-        motion_pass ? 1.0f : pDesc->MotionVectorScaleY,
-        pDesc->JitterOffsetX,
-        pDesc->JitterOffsetY,
-        pDesc->PreExposure,
-        ContentOffset(pDesc->ColorOffsetX, content_width, color->width()),
-        ContentOffset(pDesc->ColorOffsetY, content_height, color->height()),
-        ContentOffset(pDesc->DepthOffsetX, content_width, depth->width()),
-        ContentOffset(pDesc->DepthOffsetY, content_height, depth->height()),
-        ContentOffset(motion_x, motion_width, motion_read->width()),
-        ContentOffset(motion_y, motion_height, motion_read->height()),
-        reactive ? ContentOffset(pDesc->ReactiveMaskOffsetX, content_width, reactive->width()) : 0,
-        reactive ? ContentOffset(pDesc->ReactiveMaskOffsetY, content_height, reactive->height()) : 0,
+        .input_content_width=content_width,
+        .input_content_height=content_height,
+        .reset=bool(pDesc->InReset),
+        .depth_reversed=bool(pDesc->DepthReversed),
+        .motion_vector_scale_x=motion_pass ? 1.0f : pDesc->MotionVectorScaleX,
+        .motion_vector_scale_y=motion_pass ? 1.0f : pDesc->MotionVectorScaleY,
+        .jitter_offset_x=pDesc->JitterOffsetX,
+        .jitter_offset_y=pDesc->JitterOffsetY,
+        .pre_exposure=pDesc->PreExposure,
+        .color_offset_x=ContentOffset(pDesc->ColorOffsetX, content_width, color->width()),
+        .color_offset_y=ContentOffset(pDesc->ColorOffsetY, content_height, color->height()),
+        .depth_offset_x=ContentOffset(pDesc->DepthOffsetX, content_width, depth->width()),
+        .depth_offset_y=ContentOffset(pDesc->DepthOffsetY, content_height, depth->height()),
+        .motion_offset_x=ContentOffset(motion_x, motion_width, motion_read->width()),
+        .motion_offset_y=ContentOffset(motion_y, motion_height, motion_read->height()),
+        .reactive_offset_x=reactive ? ContentOffset(pDesc->ReactiveMaskOffsetX, content_width, reactive->width()) : 0,
+        .reactive_offset_y=reactive ? ContentOffset(pDesc->ReactiveMaskOffsetY, content_height, reactive->height()) : 0,
     };
     auto &props = pass->props;
     if (!cache->support.content_offsets &&

@@ -298,7 +298,7 @@ extern "C" HRESULT __stdcall D3D11On12CreateDevice(
         D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
     };
-    D3D12_FEATURE_DATA_FEATURE_LEVELS query = {std::size(levels), levels};
+    D3D12_FEATURE_DATA_FEATURE_LEVELS query = {.NumFeatureLevels=std::size(levels), .pFeatureLevelsRequested=levels};
     if (FAILED(d3d12->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &query, sizeof(query))))
       return E_INVALIDARG;
     d3d12FeatureLevel[0] = std::min(query.MaxSupportedFeatureLevel, GetMaxFeatureLevel(source->GetMTLDevice()));

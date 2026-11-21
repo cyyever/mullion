@@ -13,7 +13,7 @@ void InitializeTextureData(MTLD3D11Device *pDevice, WMT::Texture target,
   uint32_t height = Desc.Height;
   uint32_t depth = Desc.Depth;
   for (uint32_t level = 0; level < Desc.MipLevels; level++) {
-    target.replaceRegion({0, 0, 0}, {width, height, depth}, level, 0,
+    target.replaceRegion({.x=0, .y=0, .z=0}, {.width=width, .height=height, .depth=depth}, level, 0,
                          subresources[level].pSysMem,
                          subresources[level].SysMemPitch,
                          subresources[level].SysMemSlicePitch);
@@ -41,7 +41,7 @@ void InitializeTextureData(MTLD3D11Device *pDevice, WMT::Texture target,
              ", expect at least ", bytes_per_row);
       }
       target.replaceRegion(
-          {0, 0, 0}, {width, height, 1}, level, slice,
+          {.x=0, .y=0, .z=0}, {.width=width, .height=height, .depth=1}, level, slice,
           subresources[idx].pSysMem,
           std::max(subresources[idx].SysMemPitch, bytes_per_row), 0);
     }
@@ -63,7 +63,7 @@ void InitializeTextureData(MTLD3D11Device *pDevice, WMT::Texture target,
       uint32_t bytes_per_row = 0, _, __;
       GetLinearTextureLayout(pDevice, Desc, level, bytes_per_row, _, __, false);
       target.replaceRegion(
-          {0, 0, 0}, {width, 1, 1}, level, slice, subresources[idx].pSysMem,
+          {.x=0, .y=0, .z=0}, {.width=width, .height=1, .depth=1}, level, slice, subresources[idx].pSysMem,
           std::max(subresources[idx].SysMemPitch, bytes_per_row), 0);
     }
     width = std::max(1u, width >> 1);

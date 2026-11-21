@@ -95,7 +95,7 @@ D3D12CreateDevice(IUnknown *pAdapter, D3D_FEATURE_LEVEL MinimumFeatureLevel, REF
 }
 
 static const GUID CLSID_D3D12SDKConfiguration = {
-    0x7cda6aca, 0xa03e, 0x49c8, {0x94, 0x58, 0x03, 0x34, 0xd2, 0x0e, 0x07, 0xce}};
+    .Data1=0x7cda6aca, .Data2=0xa03e, .Data3=0x49c8, .Data4={0x94, 0x58, 0x03, 0x34, 0xd2, 0x0e, 0x07, 0xce}};
 
 // Mullion's d3d12.dll always loads its own d3d12core.dll, so there is no other runtime to select: any SDK
 // version and path the application asks for is accepted, and its devices come from Mullion as before.
@@ -235,7 +235,7 @@ ShaderProgramType(const void *container, size_t size) {
 // that is here is experimental shader models, with which Direct3D takes shaders that carry no hash (INF-0004)
 extern "C" HRESULT WINAPI
 D3D12EnableExperimentalFeatures(UINT NumFeatures, const IID *pIIDs, void *pConfigurationStructs, UINT *pConfigurationStructSizes) {
-  static const GUID shader_models = {0x76f5573e, 0xf13a, 0x40f5, {0xb2, 0x97, 0x81, 0xce, 0x9e, 0x18, 0x93, 0x3f}};
+  static const GUID shader_models = {.Data1=0x76f5573e, .Data2=0xf13a, .Data3=0x40f5, .Data4={0xb2, 0x97, 0x81, 0xce, 0x9e, 0x18, 0x93, 0x3f}};
   if (NumFeatures && !pIIDs)
     return FAIL(E_INVALIDARG);
   if (!std::all_of(pIIDs, pIIDs + NumFeatures, [](REFIID iid) { return iid == shader_models; }))

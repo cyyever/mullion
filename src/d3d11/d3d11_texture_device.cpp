@@ -555,7 +555,7 @@ public:
       // included, so the name lives as long as a resource of the share does anywhere
       swprintf(share_->carrier->data.published_name, MAX_PATH + 1, L"%s", pName);
       swprintf(share_->data.published_name, MAX_PATH + 1, L"%s", pName);
-      SECURITY_ATTRIBUTES internal = {sizeof(internal), nullptr, FALSE};
+      SECURITY_ATTRIBUTES internal = {.nLength=sizeof(internal), .lpSecurityDescriptor=nullptr, .bInheritHandle=FALSE};
       if (Attributes)
         internal = *Attributes;
       // the caller's inheritance belongs to the handle at the end of this call; this object's own handle is not the

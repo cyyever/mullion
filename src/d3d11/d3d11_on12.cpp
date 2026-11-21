@@ -315,7 +315,7 @@ D3D11On12Device::UnwrapUnderlyingResource(
     desc12.DepthOrArraySize = 1;
     desc12.MipLevels = desc.MipLevels;
     desc12.Format = desc.Format;
-    desc12.SampleDesc = {1, 0};
+    desc12.SampleDesc = {.Count=1, .Quality=0};
     if constexpr (requires { desc.Height; })
       desc12.Height = desc.Height;
     if constexpr (requires { desc.ArraySize; })

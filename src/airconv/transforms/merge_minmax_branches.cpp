@@ -25,7 +25,7 @@ Match(BasicBlock *Head, unsigned Kind) {
   if (Reduce == Join || Reduce->getSinglePredecessor() != Head || Reduce->getSingleSuccessor() != Join ||
       !Join->hasNPredecessors(2))
     return {};
-  return Diamond{Branch, Head, Reduce, Join};
+  return Diamond{.Branch=Branch, .Head=Head, .Reduce=Reduce, .Join=Join};
 }
 
 // a derivative has no memory effects, though its declaration does not say so (AIRBuilder::CreateDerivative)

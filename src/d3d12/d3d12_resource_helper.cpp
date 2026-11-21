@@ -428,7 +428,7 @@ ValidateHeapProperties(const D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS
 
 D3D12_BOX
 GetResourceExtent(const D3D12_RESOURCE_DESC &Desc, UINT MipSlice) {
-  D3D12_BOX box{0, 0, 0, 1, 1, 1};
+  D3D12_BOX box{.left=0, .top=0, .front=0, .right=1, .bottom=1, .back=1};
   switch (Desc.Dimension) {
   default:
     break;

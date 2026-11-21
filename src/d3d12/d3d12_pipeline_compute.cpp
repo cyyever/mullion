@@ -70,7 +70,7 @@ public:
     if (HRESULT hr = InitializeShader(device_, pDesc->CS, &shader_cs, &ref_cs); FAILED(hr))
       return hr;
 
-    threadgroup_size = {ref_cs.ThreadgroupSize[0], ref_cs.ThreadgroupSize[1], ref_cs.ThreadgroupSize[2]};
+    threadgroup_size = {.width=ref_cs.ThreadgroupSize[0], .height=ref_cs.ThreadgroupSize[1], .depth=ref_cs.ThreadgroupSize[2]};
     bool locks = ref_cs.DeviceAtomics64 &&
                  (!ref_cs.DeviceAtomics64Native || (device_->GetShaderFlags() & SM50_SHADER_FLAG_NO_ATOMIC_MINMAX64));
     groups_work_together = ref_cs.GroupsWorkTogether || locks;
@@ -354,7 +354,7 @@ public:
       auto state = static_cast<MTLD3D12PipelineState *>(pipeline);
       if (entries_.contains(name ? name : L""))
         return FAIL(E_INVALIDARG);
-      Entry entry{state->library_key, state, {}};
+      Entry entry{.key=state->library_key, .pipeline=state, .shaders={}};
       std::scoped_lock shader_lock(state->shader_mutex);
       for (auto &[key, data] : state->cached_shaders) {
         data = shaders_.try_emplace(key, data).first->second;

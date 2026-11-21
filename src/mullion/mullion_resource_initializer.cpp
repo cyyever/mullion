@@ -151,7 +151,7 @@ ResourceInitializer::initRenderTargetWithZero(
     info->render_target_height = height_sub;
     info->colors[0].texture = allocation->texture();
     info->colors[0].load_action = WMTLoadActionClear;
-    info->colors[0].clear_color = {0, 0, 0, 0};
+    info->colors[0].clear_color = {.r=0, .g=0, .b=0, .a=0};
     info->colors[0].store_action = WMTStoreActionStore;
     info->colors[0].slice = slice;
     info->colors[0].level = level;
@@ -218,11 +218,11 @@ ResourceInitializer::initWithZero(
     copy->src_offset = 0;
     copy->bytes_per_row = bytes_per_row_needed;
     copy->bytes_per_image = is_3d_tex ? bytes_per_image_needed : 0;
-    copy->size = {width_sub, height_sub, depth_sub};
+    copy->size = {.width=width_sub, .height=height_sub, .depth=depth_sub};
     copy->dst = allocation->texture();
     copy->slice = slice;
     copy->level = level;
-    copy->origin = {0, 0, 0};
+    copy->origin = {.x=0, .y=0, .z=0};
 
   } while (false);
 
@@ -313,11 +313,11 @@ ResourceInitializer::initWithData(
     copy->src_offset = temp_offset;
     copy->bytes_per_row = bytes_per_row_needed;
     copy->bytes_per_image = is_3d_tex ? bytes_per_image_needed : 0;
-    copy->size = {width_sub, height_sub, depth_sub};
+    copy->size = {.width=width_sub, .height=height_sub, .depth=depth_sub};
     copy->dst = allocation->texture();
     copy->slice = slice;
     copy->level = level;
-    copy->origin = {0, 0, 0};
+    copy->origin = {.x=0, .y=0, .z=0};
 
   } while (false);
 
@@ -377,11 +377,11 @@ ResourceInitializer::initDepthStencilWithData(
     depth_copy->src_offset = depth_buf_offset;
     depth_copy->bytes_per_row = depth_bytes_per_row;
     depth_copy->bytes_per_image = 0;
-    depth_copy->size = {width_sub, height_sub, 1};
+    depth_copy->size = {.width=width_sub, .height=height_sub, .depth=1};
     depth_copy->dst = allocation->texture();
     depth_copy->slice = slice;
     depth_copy->level = level;
-    depth_copy->origin = {0, 0, 0};
+    depth_copy->origin = {.x=0, .y=0, .z=0};
     depth_copy->options = WMTBlitOptionDepthFromDepthStencil;
 
     stencil_copy->type = WMTBlitCommandCopyFromBufferToTextureWithBlitOption;
@@ -389,11 +389,11 @@ ResourceInitializer::initDepthStencilWithData(
     stencil_copy->src_offset = stencil_buf_offset;
     stencil_copy->bytes_per_row = stencil_bytes_per_row;
     stencil_copy->bytes_per_image = 0;
-    stencil_copy->size = {width_sub, height_sub, 1};
+    stencil_copy->size = {.width=width_sub, .height=height_sub, .depth=1};
     stencil_copy->dst = allocation->texture();
     stencil_copy->slice = slice;
     stencil_copy->level = level;
-    stencil_copy->origin = {0, 0, 0};
+    stencil_copy->origin = {.x=0, .y=0, .z=0};
     stencil_copy->options = WMTBlitOptionStencilFromDepthStencil;
 
   } while (false);

@@ -335,7 +335,7 @@ RootSignaturePart(
   if (!Name && SUCCEEDED(microsoft::DXBCGetRootSignature(pBytecode, ppPart, pSize)))
     return S_OK;
   bool found = false;
-  for (auto &subobject : ReadSubobjects({pBytecode, Length})) {
+  for (auto &subobject : ReadSubobjects({.pShaderBytecode=pBytecode, .BytecodeLength=Length})) {
     bool global = subobject.type == D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
     bool local = subobject.type == D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
     if (!(Name ? (global || local) && subobject.name == Name : global))
@@ -618,7 +618,7 @@ public:
     std::vector<Bound> bound;
     auto bind = [&](UINT kind, UINT space, UINT first, UINT count, D3D12_SHADER_VISIBILITY stages) {
       // an unbounded range's count is UINT_MAX: it takes every register from its first
-      Bound next{kind, space, first, uint64_t(first) + count - 1, stages};
+      Bound next{.kind=kind, .space=space, .first=first, .last=uint64_t(first) + count - 1, .stages=stages};
       for (auto &b : bound)
         if (b.kind == kind && b.space == space && b.first <= next.last && next.first <= b.last &&
             (b.stages == stages || b.stages == D3D12_SHADER_VISIBILITY_ALL || stages == D3D12_SHADER_VISIBILITY_ALL))
@@ -678,7 +678,7 @@ public:
       }
       EncodedStaticSamplers = static_samplers_encoded_.data();
       if (desc.Flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) {
-        WMTBufferInfo info{static_samplers_encoded_.size() * sizeof(uint64_t), WMTResourceStorageModeShared};
+        WMTBufferInfo info{.length=static_samplers_encoded_.size() * sizeof(uint64_t), .options=WMTResourceStorageModeShared};
         static_samplers_buffer_ = device_->GetMTLDevice().newBuffer(info);
         if (!static_samplers_buffer_)
           return FAIL(E_OUTOFMEMORY);

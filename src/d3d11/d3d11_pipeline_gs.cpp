@@ -66,21 +66,21 @@ public:
         break;
       // the counting pass draws nothing
       ShaderVariantStreamOutput so{
-          pDesc->SOLayout, counting, pDesc->InputPrimitive, pDesc->PassThrough && !counting, pDesc->QuadLines && !counting
+          .layout=pDesc->SOLayout, .counting=counting, .input_primitive=pDesc->InputPrimitive, .pass_through=pDesc->PassThrough && !counting, .quad_lines=pDesc->QuadLines && !counting
       };
       VertexShader[counting] = pDesc->VertexShader->get_shader(ShaderVariantGeometryVertex{
-          pDesc->InputLayout, pDesc->GeometryShader, pDesc->IndexBufferFormat, pDesc->GSStripTopology, so});
+          .input_layout_handle=pDesc->InputLayout, .geometry_shader_handle=pDesc->GeometryShader, .index_buffer_format=pDesc->IndexBufferFormat, .strip_topology=pDesc->GSStripTopology, .stream_output=so});
       GeometryShader[counting] =
           owner->get_shader(ShaderVariantGeometry{
-          pDesc->VertexShader, pDesc->GSStripTopology, so, pDesc->PipelineStatistics, pDesc->ClipDistances != 0});
+          .vertex_shader_handle=pDesc->VertexShader, .strip_topology=pDesc->GSStripTopology, .stream_output=so, .pipeline_statistics=pDesc->PipelineStatistics, .clip_distance_varyings=pDesc->ClipDistances != 0});
     }
 
     if (pDesc->PixelShader) {
       PixelShader = pDesc->PixelShader->get_pixel_shader(ShaderVariantPixel{
-          pDesc->SampleMask, pDesc->BlendState->IsDualSourceBlending(),
-          depth_stencil_format == WMTPixelFormatInvalid,
-          unorm_output_reg_mask, pDesc->PipelineStatistics, pDesc->BlendState->IsAlphaToCoverage(),
-          pDesc->CenteredSamples, pDesc->SingleRasterSample, pDesc->PairedSamples, pDesc->ClipDistances},
+          .sample_mask=pDesc->SampleMask, .dual_source_blending=pDesc->BlendState->IsDualSourceBlending(),
+          .disable_depth_output=depth_stencil_format == WMTPixelFormatInvalid,
+          .unorm_output_reg_mask=unorm_output_reg_mask, .pipeline_statistics=pDesc->PipelineStatistics, .alpha_to_coverage=pDesc->BlendState->IsAlphaToCoverage(),
+          .centered_samples=pDesc->CenteredSamples, .single_raster_sample=pDesc->SingleRasterSample, .paired_samples=pDesc->PairedSamples, .clip_distances=pDesc->ClipDistances},
           {rtv_formats, num_rtvs}, pDesc->BlendState, pDesc->PixelMinMaxFiltering);
       ps_valid_render_targets = pDesc->PixelShader->reflection().PSValidRenderTargets;
     } else {
@@ -98,7 +98,7 @@ public:
       return pipeline->GetPipeline(pPipeline);
     }
     ready_.wait(false, std::memory_order_acquire);
-    *pPipeline = {state_mesh_[0], state_mesh_[1], GeometryInstances, MeshInstances, MeshInvocations};
+    *pPipeline = {.PipelineState=state_mesh_[0], .StreamOutputCount=state_mesh_[1], .GeometryInstances=GeometryInstances, .MeshInstances=MeshInstances, .MeshInvocations=MeshInvocations};
   }
 
   ThreadpoolWork *RunThreadpoolWork() override {

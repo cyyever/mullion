@@ -90,8 +90,8 @@ void getWindowSize(HWND hWindow, uint32_t *pWidth, uint32_t *pHeight) {
 bool resizeWindow(HWND hWindow, MullionWindowState *pState, uint32_t width,
                   uint32_t height) {
   // Adjust window position and size
-  RECT newRect = {0, 0, 0, 0};
-  RECT oldRect = {0, 0, 0, 0};
+  RECT newRect = {.left=0, .top=0, .right=0, .bottom=0};
+  RECT oldRect = {.left=0, .top=0, .right=0, .bottom=0};
 
   if (!::GetWindowRect(hWindow, &oldRect))
     return false;
@@ -231,12 +231,12 @@ bool restoreDisplayMode(HMONITOR hMonitor) {
 }
 
 HMONITOR getWindowMonitor(HWND hWindow) {
-  RECT windowRect = {0, 0, 0, 0};
+  RECT windowRect = {.left=0, .top=0, .right=0, .bottom=0};
   ::GetWindowRect(hWindow, &windowRect);
 
   HMONITOR monitor =
-      ::MonitorFromPoint({(windowRect.left + windowRect.right) / 2,
-                          (windowRect.top + windowRect.bottom) / 2},
+      ::MonitorFromPoint({.x=(windowRect.left + windowRect.right) / 2,
+                          .y=(windowRect.top + windowRect.bottom) / 2},
                          MONITOR_DEFAULTTOPRIMARY);
 
   return monitor;

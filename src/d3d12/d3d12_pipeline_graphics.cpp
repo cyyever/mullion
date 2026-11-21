@@ -825,7 +825,7 @@ protected:
   // kept bytecode as Direct3D 12 describes it, none for none
   static D3D12_SHADER_BYTECODE
   Bytecode(const std::shared_ptr<const std::string> &kept) {
-    return kept ? D3D12_SHADER_BYTECODE{kept->data(), kept->size()} : D3D12_SHADER_BYTECODE{};
+    return kept ? D3D12_SHADER_BYTECODE{.pShaderBytecode=kept->data(), .BytecodeLength=kept->size()} : D3D12_SHADER_BYTECODE{};
   }
   // whether a pipeline's geometry shader can count pipeline statistics
   bool statistics_geometry_ = false;
@@ -1859,7 +1859,7 @@ public:
            signature = Com<MTLD3D12RootSignature, false>(static_cast<MTLD3D12RootSignature *>(pDesc->pRootSignature)),
            data_ps, common,
            ps_name](bool statistics, bool late, bool coarse, uint32_t blends, bool depth, bool bare) mutable {
-            D3D12_SHADER_BYTECODE bytecode{code->data(), code->size()};
+            D3D12_SHADER_BYTECODE bytecode{.pShaderBytecode=code->data(), .BytecodeLength=code->size()};
             SM50Shader shader;
             auto data = data_ps;
             data.pipeline_statistics = statistics;
@@ -1966,7 +1966,7 @@ public:
       };
       // the mesh shader names its outputs as the pixel shader's inputs, and without an amplification shader runs
       // DispatchMesh's grid itself (in parts, past Metal's limit)
-      SM50_SHADER_MESH_SHADER_DATA link{&common, SM50_SHADER_MESH_SHADER, pDesc->PS.pShaderBytecode};
+      SM50_SHADER_MESH_SHADER_DATA link{.next=&common, .type=SM50_SHADER_MESH_SHADER, .pixel_shader_bytecode=pDesc->PS.pShaderBytecode};
       link.amplified = AS.pShaderBytecode;
       object_stage = AS.pShaderBytecode || conservative;
       if (conservative) {

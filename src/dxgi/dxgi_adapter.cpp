@@ -20,10 +20,10 @@
 
 namespace mullion {
 
-const GUID kWineDXGIAdapterUUID = {0x17399d75,
-                                   0x964e,
-                                   0x4c03,
-                                   {0x99, 0xf8, 0x9d, 0x4f, 0xd1, 0x96, 0xdd, 0x62}};
+const GUID kWineDXGIAdapterUUID = {.Data1=0x17399d75,
+                                   .Data2=0x964e,
+                                   .Data3=0x4c03,
+                                   .Data4={0x99, 0xf8, 0x9d, 0x4f, 0xd1, 0x96, 0xdd, 0x62}};
 
 Com<IDXGIOutput> CreateOutput(IMTLDXGIAdapter *pAadapter, HMONITOR monitor, DxgiOptions &options);
 

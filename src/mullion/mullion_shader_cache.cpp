@@ -30,7 +30,7 @@ ShaderCacheDirectory() {
 
 ShaderReflection
 ReadShaderReflection(sm50_shader_t shader, const MTL_SHADER_REFLECTION &reflection) {
-  ShaderReflection read{reflection};
+  ShaderReflection read{.reflection=reflection};
   read.arguments.resize(size_t(reflection.NumConstantBuffers) + reflection.NumArguments);
   if (!read.arguments.empty())
     SM50GetArgumentsInfo(shader, read.arguments.data(), read.arguments.data() + reflection.NumConstantBuffers);
@@ -156,7 +156,7 @@ ShaderCache::setReflection(const Sha1Digest &shader, const ShaderReflection &ref
     if (!reflections_.emplace(shader, reflection).second)
       return;
   }
-  ReflectionRecord record{{}, {}, sizeof(MTL_SM50_SHADER_ARGUMENT), uint32_t(reflection.arguments.size())};
+  ReflectionRecord record{.magic={}, .layout={}, .argument_size=sizeof(MTL_SM50_SHADER_ARGUMENT), .arguments=uint32_t(reflection.arguments.size())};
   memcpy(record.magic, kReflectionMagic, sizeof(record.magic));
   memcpy(record.layout, kReflectionLayout, sizeof(record.layout));
   std::string bytes(reinterpret_cast<const char *>(&record), sizeof(record));

@@ -141,9 +141,9 @@ PopulateWMTSamplerInfo(WMT::Device Device, WMTSamplerInfo &InfoOut, D3D12_SAMPLE
 
 D3D12_SAMPLER_DESC
 SamplerDescription(const D3D12_STATIC_SAMPLER_DESC &Desc) {
-  D3D12_SAMPLER_DESC desc{Desc.Filter,     Desc.AddressU,      Desc.AddressV,       Desc.AddressW,
-                          Desc.MipLODBias, Desc.MaxAnisotropy, Desc.ComparisonFunc, {},
-                          Desc.MinLOD,     Desc.MaxLOD};
+  D3D12_SAMPLER_DESC desc{.Filter=Desc.Filter,     .AddressU=Desc.AddressU,      .AddressV=Desc.AddressV,       .AddressW=Desc.AddressW,
+                          .MipLODBias=Desc.MipLODBias, .MaxAnisotropy=Desc.MaxAnisotropy, .ComparisonFunc=Desc.ComparisonFunc, .BorderColor={},
+                          .MinLOD=Desc.MinLOD,     .MaxLOD=Desc.MaxLOD};
   switch (uint32_t(Desc.BorderColor)) {
   case D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK:
     break;

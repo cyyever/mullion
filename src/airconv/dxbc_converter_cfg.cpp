@@ -121,7 +121,7 @@ read_control_flow(
       auto if_true = fresh_bb("if_true");
       auto end_if = fresh_bb("end_if");
       bb_endif.push(end_if);
-      bb_current->target = BasicBlockConditionalBranch{readCondition(Inst, 0, phase), if_true, end_if};
+      bb_current->target = BasicBlockConditionalBranch{.cond=readCondition(Inst, 0, phase), .true_branch=if_true, .false_branch=end_if};
       bb_current = if_true;
       break;
     }
@@ -173,14 +173,14 @@ read_control_flow(
     case D3D10_SB_OPCODE_BREAKC: {
       auto after_breakc = fresh_bb("after_breakc");
       bb_current->target =
-          BasicBlockConditionalBranch{readCondition(Inst, 0, phase), bb_break_target.top(), after_breakc};
+          BasicBlockConditionalBranch{.cond=readCondition(Inst, 0, phase), .true_branch=bb_break_target.top(), .false_branch=after_breakc};
       bb_current = after_breakc;
       break;
     }
     case D3D10_SB_OPCODE_CONTINUEC: {
       auto after_continuec = fresh_bb("after_continuec");
       bb_current->target =
-          BasicBlockConditionalBranch{readCondition(Inst, 0, phase), bb_continue_target.top(), after_continuec};
+          BasicBlockConditionalBranch{.cond=readCondition(Inst, 0, phase), .true_branch=bb_continue_target.top(), .false_branch=after_continuec};
       bb_current = after_continuec;
       break;
     }
@@ -189,7 +189,7 @@ read_control_flow(
       bb_break_target.push(end_switch);
 
       bb_current->target =
-          BasicBlockSwitch{readSrcOperand(Inst.Operand(0), phase, OperandDataType::Integer), {}, end_switch};
+          BasicBlockSwitch{.value=readSrcOperand(Inst.Operand(0), phase, OperandDataType::Integer), .cases={}, .case_default=end_switch};
       switch_ctx.push(&std::get<BasicBlockSwitch>(bb_current->target));
       bb_current = &bb_void;
       break;
@@ -248,7 +248,7 @@ read_control_flow(
                         : instance_ctx.empty() ? bb_return
                                                : instance_ctx.top()->sync;
       auto after_retc = fresh_bb("after_retc");
-      bb_current->target = BasicBlockConditionalBranch{readCondition(Inst, 0, phase), ret_target, after_retc};
+      bb_current->target = BasicBlockConditionalBranch{.cond=readCondition(Inst, 0, phase), .true_branch=ret_target, .false_branch=after_retc};
       bb_current = after_retc;
       break;
     }
@@ -257,7 +257,7 @@ read_control_flow(
       shader_info.discards = true;
       auto fulfilled_ = fresh_bb("discard_fulfilled");
       auto otherwise_ = fresh_bb("discard_otherwise");
-      bb_current->target = BasicBlockConditionalBranch{readCondition(Inst, 0, phase), fulfilled_, otherwise_};
+      bb_current->target = BasicBlockConditionalBranch{.cond=readCondition(Inst, 0, phase), .true_branch=fulfilled_, .false_branch=otherwise_};
       fulfilled_->target = BasicBlockUnconditionalBranch{otherwise_};
       fulfilled_->instructions.push_back(InstPixelDiscard{});
       bb_current = otherwise_;
@@ -275,7 +275,7 @@ read_control_flow(
       });
 
       auto instance_count = sm50_shader->output_control_point_count;
-      bb_current->target = BasicBlockInstanceBarrier{instance_count, control_point_active, control_point_end};
+      bb_current->target = BasicBlockInstanceBarrier{.instance_count=instance_count, .active=control_point_active, .sync=control_point_end};
       instance_ctx.push(&std::get<BasicBlockInstanceBarrier>(bb_current->target));
       bb_current = control_point_active;
       break;
@@ -294,7 +294,7 @@ read_control_flow(
           .tgsm_execution_barrier = true,
       });
 
-      bb_current->target = BasicBlockInstanceBarrier{1, fork_join_active, fork_join_end};
+      bb_current->target = BasicBlockInstanceBarrier{.instance_count=1, .active=fork_join_active, .sync=fork_join_end};
       instance_ctx.push(&std::get<BasicBlockInstanceBarrier>(bb_current->target));
       bb_current = fork_join_active;
       break;
@@ -319,7 +319,7 @@ read_control_flow(
     case D3D10_SB_OPCODE_CALL: {
       auto after_call = fresh_bb("after_call");
       auto func_id = Inst.m_Operands[0].m_Index[0].m_RegIndex;
-      bb_current->target = BasicBlockCall{func_id, after_call};
+      bb_current->target = BasicBlockCall{.func_id=func_id, .return_point=after_call};
       // a function's own calls are inlined into each copy of it; the main program comes before every label
       if (func_entries.empty())
         call_targets.emplace_back(bb_current, &std::get<BasicBlockCall>(bb_current->target));
@@ -329,9 +329,9 @@ read_control_flow(
     case D3D10_SB_OPCODE_CALLC: {
       auto if_true = fresh_bb("if_true");
       auto after_callc = fresh_bb("after_callc");
-      bb_current->target = BasicBlockConditionalBranch{readCondition(Inst, 0, phase), if_true, after_callc};
+      bb_current->target = BasicBlockConditionalBranch{.cond=readCondition(Inst, 0, phase), .true_branch=if_true, .false_branch=after_callc};
       auto func_id = Inst.m_Operands[1].m_Index[0].m_RegIndex;
-      if_true->target = BasicBlockCall{func_id, after_callc};
+      if_true->target = BasicBlockCall{.func_id=func_id, .return_point=after_callc};
       if (func_entries.empty())
         call_targets.emplace_back(if_true, &std::get<BasicBlockCall>(if_true->target));
       bb_current = after_callc;
@@ -675,7 +675,7 @@ read_control_flow(
     // otherwise output is written to payload memory directly
     if (sm50_shader->shader_type == microsoft::D3D11_SB_HULL_SHADER &&
         (shader_info.output_control_point_read || !shader_info.no_control_point_phase_passthrough)) {
-      bb_current->target = BasicBlockHullShaderWriteOutput{sm50_shader->output_control_point_count, bb_return};
+      bb_current->target = BasicBlockHullShaderWriteOutput{.instance_count=sm50_shader->output_control_point_count, .epilogue=bb_return};
     } else {
       bb_current->target = BasicBlockUnconditionalBranch{bb_return};
     }
@@ -720,7 +720,7 @@ read_control_flow(
                   return BasicBlockUnconditionalBranch{clone(uncond.target)};
                 },
                 [&](BasicBlockConditionalBranch cond) -> BasicBlockTarget {
-                  return BasicBlockConditionalBranch{cond.cond, clone(cond.true_branch), clone(cond.false_branch)};
+                  return BasicBlockConditionalBranch{.cond=cond.cond, .true_branch=clone(cond.true_branch), .false_branch=clone(cond.false_branch)};
                 },
                 [&](const BasicBlockSwitch &swc) -> BasicBlockTarget {
                   BasicBlockSwitch new_swc;
@@ -733,19 +733,19 @@ read_control_flow(
                 },
                 [&](BasicBlockInstanceBarrier instance) -> BasicBlockTarget {
                   return BasicBlockInstanceBarrier{
-                      instance.instance_count, clone(instance.active), clone(instance.sync)
+                      .instance_count=instance.instance_count, .active=clone(instance.active), .sync=clone(instance.sync)
                   };
                 },
                 [&](BasicBlockHullShaderWriteOutput hull_end) -> BasicBlockTarget {
-                  return BasicBlockHullShaderWriteOutput{hull_end.instance_count, clone(hull_end.epilogue)};
+                  return BasicBlockHullShaderWriteOutput{.instance_count=hull_end.instance_count, .epilogue=clone(hull_end.epilogue)};
                 },
                 [&](BasicBlockCall call) -> BasicBlockTarget {
                   if (stack_depth == 1)
                     return BasicBlockUnconditionalBranch{clone(call.return_point)};
-                  return BasicBlockCall{call.func_id, clone(call.return_point)};
+                  return BasicBlockCall{.func_id=call.func_id, .return_point=clone(call.return_point)};
                 },
                 [&](const BasicBlockDXIL &dxil) -> BasicBlockTarget {
-                  return BasicBlockDXIL{dxil.shader, dxil.function, clone(dxil.next)};
+                  return BasicBlockDXIL{.shader=dxil.shader, .function=dxil.function, .next=clone(dxil.next)};
                 },
             },
             current->target

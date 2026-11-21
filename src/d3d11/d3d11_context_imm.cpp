@@ -123,7 +123,7 @@ public:
   MTLD3D11ImmediateContext(MTLD3D11Device *pDevice, CommandQueue &cmd_queue) :
       ImmediateContextBase(pDevice, ctx_state, pDevice->mutex),
       cmd_queue(cmd_queue),
-      ctx_state({cmd_queue}),
+      ctx_state({.cmd_queue=cmd_queue}),
       d3dmt_(this, mutex),
       video_(this) {
         ignore_map_flag_no_wait_ = Config::getInstance().getOption<bool>("d3d11.ignoreMapFlagNoWait", false);
@@ -537,7 +537,7 @@ public:
     }
     case D3D11_QUERY_TIMESTAMP_DISJOINT: {
       if (pData && hr == S_OK) {
-        (*static_cast<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT *>(pData)) = {1'000'000'000, FALSE};
+        (*static_cast<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT *>(pData)) = {.Frequency=1'000'000'000, .Disjoint=FALSE};
       }
       break;
     }

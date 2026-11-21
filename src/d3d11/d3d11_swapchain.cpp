@@ -314,12 +314,12 @@ public:
       return hr;
 
     DXGI_MODE_DESC1 preferred_display_mode = {
-        desc_.Width,
-        desc_.Height,
-        fullscreen_desc_.RefreshRate,
-        desc_.Format,
-        fullscreen_desc_.ScanlineOrdering,
-        fullscreen_desc_.Scaling
+        .Width=desc_.Width,
+        .Height=desc_.Height,
+        .RefreshRate=fullscreen_desc_.RefreshRate,
+        .Format=desc_.Format,
+        .ScanlineOrdering=fullscreen_desc_.ScanlineOrdering,
+        .Scaling=fullscreen_desc_.Scaling
     };
     bool modeSwitch = (desc_.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH) != 0u;
     if (modeSwitch && FAILED(ChangeDisplayMode(output.ptr(), &preferred_display_mode))) {
@@ -397,11 +397,11 @@ public:
     if (HRESULT hr = pOutput->GetDesc(&output_desc); FAILED(hr))
       return hr;
     wsi::WsiMode wsi_mode{
-        selected_mode.Width,
-        selected_mode.Height,
-        {selected_mode.RefreshRate.Numerator, selected_mode.RefreshRate.Denominator},
-        GetMonitorFormatBpp(selected_mode.Format),
-        selected_mode.ScanlineOrdering == DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST ||
+        .width=selected_mode.Width,
+        .height=selected_mode.Height,
+        .refreshRate={.numerator=selected_mode.RefreshRate.Numerator, .denominator=selected_mode.RefreshRate.Denominator},
+        .bitsPerPixel=GetMonitorFormatBpp(selected_mode.Format),
+        .interlaced=selected_mode.ScanlineOrdering == DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST ||
             selected_mode.ScanlineOrdering == DXGI_MODE_SCANLINE_ORDER_LOWER_FIELD_FIRST
     };
     if (!wsi::setWindowMode(output_desc.Monitor, hWnd, wsi_mode))
@@ -841,7 +841,7 @@ public:
     // the frame presented last is the last buffer, which the frame shown keeps where it is not new
     if (hr == S_OK && desc_.SwapEffect >= DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL && backbuffers_.size() > 1)
       for (auto [to, from] : PresentCopies(pPresentParameters, desc_.Width, desc_.Height)) {
-        D3D11_BOX box{UINT(to.left + from.x), UINT(to.top + from.y), 0, UINT(to.right + from.x), UINT(to.bottom + from.y), 1};
+        D3D11_BOX box{.left=UINT(to.left + from.x), .top=UINT(to.top + from.y), .front=0, .right=UINT(to.right + from.x), .bottom=UINT(to.bottom + from.y), .back=1};
         for (UINT eye = 0; eye < backbuffer_desc_.ArraySize; eye++)
           device_context_->CopySubresourceRegion(
               backbuffers_[0].ptr(), eye, to.left, to.top, 0, backbuffers_.back().ptr(), eye, &box
@@ -872,7 +872,7 @@ public:
     // the output is mono: a stereo buffer shows its left eye, or its right one when the present prefers it
     auto &shown = backbuffers_[0]->texture();
     auto eye = shown->createView(
-        {shown->pixelFormat(), WMTTextureType2D, 0, 1, PresentFlags & DXGI_PRESENT_STEREO_PREFER_RIGHT ? 1u : 0u, 1}
+        {.format=shown->pixelFormat(), .type=WMTTextureType2D, .firstMiplevel=0, .miplevelCount=1, .firstArraySlice=PresentFlags & DXGI_PRESENT_STEREO_PREFER_RIGHT ? 1u : 0u, .arraySize=1}
     );
     if constexpr (EnableMetalFX) {
       chunk->emitcc([

@@ -88,7 +88,7 @@ TextureView::TextureView(TextureAllocation *allocation, unsigned index, TextureV
   texture = parent.newTextureView(
       descriptor.format, descriptor.type, descriptor.firstMiplevel, descriptor.miplevelCount,
       descriptor.firstArraySlice, descriptor.arraySize,
-      {WMTTextureSwizzleRed, WMTTextureSwizzleGreen, WMTTextureSwizzleBlue, WMTTextureSwizzleAlpha}, gpuResourceID
+      {.r=WMTTextureSwizzleRed, .g=WMTTextureSwizzleGreen, .b=WMTTextureSwizzleBlue, .a=WMTTextureSwizzleAlpha}, gpuResourceID
   );
 }
 

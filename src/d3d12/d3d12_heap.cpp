@@ -148,10 +148,10 @@ public:
           next.AllocationBase == address)
         return FAIL(E_INVALIDARG);
     }
-    desc_ = {Size ? Size : region.RegionSize,
-             {D3D12_HEAP_TYPE_CUSTOM, D3D12_CPU_PAGE_PROPERTY_WRITE_BACK, D3D12_MEMORY_POOL_L0, 1, 1},
-             D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
-             D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | D3D12_HEAP_FLAG_SHARED | D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER};
+    desc_ = {.SizeInBytes=Size ? Size : region.RegionSize,
+             .Properties={.Type=D3D12_HEAP_TYPE_CUSTOM, .CPUPageProperty=D3D12_CPU_PAGE_PROPERTY_WRITE_BACK, .MemoryPoolPreference=D3D12_MEMORY_POOL_L0, .CreationNodeMask=1, .VisibleNodeMask=1},
+             .Alignment=D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+             .Flags=D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | D3D12_HEAP_FLAG_SHARED | D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER};
     return S_OK;
   }
 

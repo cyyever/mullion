@@ -28,7 +28,7 @@ Reach(BasicBlock *First, BasicBlock *Head, BasicBlock *Join) {
   if (First->getSinglePredecessor() != Head)
     return {};
   if (First->getSingleSuccessor() == Join)
-    return Arm{First, First};
+    return Arm{.First=First, .Last=First};
   auto Branch = dyn_cast_or_null<CondBrInst>(First->getTerminator());
   if (!Branch)
     return {};
@@ -36,7 +36,7 @@ Reach(BasicBlock *First, BasicBlock *Head, BasicBlock *Join) {
   if (A == B || !Last || B->getSingleSuccessor() != Last || A->getSinglePredecessor() != First ||
       B->getSinglePredecessor() != First || !Last->hasNPredecessors(2) || Last->getSingleSuccessor() != Join)
     return {};
-  return Arm{First, Last};
+  return Arm{.First=First, .Last=Last};
 }
 
 std::optional<Diamond>
@@ -49,7 +49,7 @@ Match(BasicBlock *Head, unsigned Kind) {
   auto Check = Join && Own != Scaled && Own->getSinglePredecessor() == Head ? Reach(Scaled, Head, Join) : std::nullopt;
   if (!Check || !Join->hasNPredecessors(2))
     return {};
-  return Diamond{Branch, {Own, Own}, *Check, Join};
+  return Diamond{.Branch=Branch, .Own={.First=Own, .Last=Own}, .Scaled=*Check, .Join=Join};
 }
 
 // the blocks of an arm

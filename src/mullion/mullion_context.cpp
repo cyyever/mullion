@@ -634,7 +634,7 @@ ArgumentEncodingContext::copyBufferRenderTarget(const Rc<Texture> &texture, bool
     cmd.src_offset = offset + texture->render_buffer_offset;
     cmd.bytes_per_row = bytes;
     cmd.bytes_per_image = bytes;
-    cmd.size = {texture->width(), 1, 1};
+    cmd.size = {.width=texture->width(), .height=1, .depth=1};
     cmd.dst = image;
     cmd.slice = cmd.level = 0;
     cmd.origin = {};
@@ -644,7 +644,7 @@ ArgumentEncodingContext::copyBufferRenderTarget(const Rc<Texture> &texture, bool
     cmd.src = image;
     cmd.slice = cmd.level = 0;
     cmd.origin = {};
-    cmd.size = {texture->width(), 1, 1};
+    cmd.size = {.width=texture->width(), .height=1, .depth=1};
     cmd.dst = buffer->buffer();
     cmd.offset = offset + texture->render_buffer_offset;
     cmd.bytes_per_row = bytes;
@@ -2373,7 +2373,7 @@ ArgumentEncodingContext::countComputePipelineStatistics(
   auto count = reinterpret_cast<PipelineStatisticsDispatch *>(
       static_cast<char *>(allocation->mappedMemory(0)) + statistics_offset_);
   auto threads = uint64_t(size.width) * size.height * size.depth;
-  *count = {threads * groups.width * groups.height * groups.depth, threads};
+  *count = {.invocations=threads * groups.width * groups.height * groups.depth, .threads=threads};
   for (auto &query : pipeline_queries_)
     query->dispatch_statistics.emplace_back(statistics_page_, statistics_offset_);
   auto offset = statistics_offset_;
@@ -2385,10 +2385,10 @@ ArgumentEncodingContext::countComputePipelineStatistics(
     dispatch_statistics_pso_ = ctx.getComputePipeline("pipeline_statistics_dispatch");
   if (!dispatch_statistics_pso_)
     abort();
-  ctx.setComputePSO(dispatch_statistics_pso_, {1, 1, 1});
+  ctx.setComputePSO(dispatch_statistics_pso_, {.width=1, .height=1, .depth=1});
   ctx.setComputeBuffer(kCustomBufferArgumentIndex0, allocation->buffer(), offset);
   ctx.setComputeBuffer(kCustomBufferArgumentIndex1, arguments, arguments_offset);
-  ctx.dispatch({1, 1, 1});
+  ctx.dispatch({.width=1, .height=1, .depth=1});
   // the arguments may be overwritten by the application dispatch (D3D11.3 20.4.7).
   auto &barrier = encodeComputeCommand<wmtcmd_compute_memory_barrier>();
   barrier.type = WMTComputeCommandMemoryBarrier;

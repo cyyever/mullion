@@ -157,7 +157,7 @@ class MTLD3D11DeferredContext : public DeferredContextBase {
 public:
   MTLD3D11DeferredContext(MTLD3D11Device *pDevice, UINT ContextFlags) :
       DeferredContextBase(pDevice, ctx_state, mutex),
-      ctx_state({pDevice->GetMullionDevice().queue(), {}}),
+      ctx_state({.cmd_queue=pDevice->GetMullionDevice().queue(), .current_cmdlist={}}),
       context_flag(ContextFlags) {
     BeginCommandList();
   }
@@ -221,15 +221,15 @@ public:
     uint32_t id = ctx_state.current_cmdlist->used_dynamic_buffers.size();
     // track the current allocation in case of a following NO_OVERWRITE map
     if (ret == ctx_state.current_dynamic_buffer_allocations.end()) {
-      ctx_state.current_dynamic_buffer_allocations.insert(ret, {dynamic.ptr(), {new_allocation.ptr(), id, 0}});
+      ctx_state.current_dynamic_buffer_allocations.insert(ret, {dynamic.ptr(), {.allocation=new_allocation.ptr(), .allocation_id=id, .suballocation=0}});
     } else {
       auto previous_allocation_id = ret->second.allocation_id;
       ctx_state.current_cmdlist->used_dynamic_buffers[previous_allocation_id].latest = false;
-      ret->second = {new_allocation.ptr(), id, 0};
+      ret->second = {.allocation=new_allocation.ptr(), .allocation_id=id, .suballocation=0};
     }
     // collect allocated buffers and recycle them when the command list is released
     ctx_state.current_cmdlist->used_dynamic_buffers.push_back(
-        used_dynamic_buffer{dynamic.ptr(), new_allocation, 0, true}
+        used_dynamic_buffer{.buffer=dynamic.ptr(), .allocation=new_allocation, .suballocation=0, .latest=true}
     );
     EmitST([allocation = new_allocation, buffer = Rc(dynamic->buffer)](ArgumentEncodingContext &enc) mutable {
       allocation->useSuballocation(0);
@@ -277,7 +277,7 @@ public:
         ret->second = {new_allocation.ptr(), id};
       }
       // collect allocated buffers and recycle them when the command list is released
-      ctx_state.current_cmdlist->used_dynamic_lineartextures.push_back({dynamic, new_allocation, false});
+      ctx_state.current_cmdlist->used_dynamic_lineartextures.push_back({.texture=dynamic, .allocation=new_allocation, .latest=false});
       EmitST([allocation = new_allocation, texture = Rc(dynamic->texture)](ArgumentEncodingContext &enc) mutable {
         auto _ = texture->rename(forward_rc(allocation));
       });

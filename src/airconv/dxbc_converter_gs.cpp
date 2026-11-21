@@ -158,7 +158,7 @@ aliased_line(llvm::IRBuilder<> &builder, llvm::air::AIRBuilder &air, air::AirTyp
     position = builder.CreateInsertElement(position, f(0.5), 2);
     line_positions[corner] = builder.CreateInsertElement(position, f(1), 3);
   }
-  return {line_positions, {first, last}, line_culled};
+  return {.positions=line_positions, .endpoints={first, last}, .culled=line_culled};
 }
 
 // the vertices of an input primitive
@@ -368,7 +368,7 @@ stream_output_input(air::FunctionSignatureBuilder &signature, llvm::LLVMContext 
       .array_size = 0,
       .memory_access = air::MemoryAccess::read,
       .address_space = air::AddressSpace::constant,
-      .type = air::MSLWhateverStruct{"stream_output_targets", stream_output_targets_type(context, types)},
+      .type = air::MSLWhateverStruct{.name="stream_output_targets", .type=stream_output_targets_type(context, types)},
       .raster_order_group = {}
   });
 }
@@ -899,9 +899,9 @@ convert_dxbc_geometry_shader(
     return llvm::make_error<UnsupportedFeature>("conservative or quad-line geometry shader invocations sharing a mesh threadgroup");
   // it's intended to declare a bit more max primitive count
   auto mesh_idx = func_signature.DefineInput(air::InputMesh{
-      quads ? 4 * (max_vertex_out - 1) : conservative ? 3 * triangles : invocations * mesh_vertices,
-      quads ? 2 * (max_vertex_out - 1) : conservative ? triangles : invocations * mesh_vertices,
-      quads ? air::MeshOutputTopology::Triangle : topology
+      .vertex_count=quads ? 4 * (max_vertex_out - 1) : conservative ? 3 * triangles : invocations * mesh_vertices,
+      .primitive_count=quads ? 2 * (max_vertex_out - 1) : conservative ? triangles : invocations * mesh_vertices,
+      .topology=quads ? air::MeshOutputTopology::Triangle : topology
   });
   uint32_t tg_in_grid_idx = func_signature.DefineInput(air::InputThreadgroupPositionInGrid{});
   // a tessellated draw's mesh threadgroups have the domain stage's threads, of which the first does the work; a
@@ -1157,7 +1157,7 @@ convert_dxbc_geometry_shader(
           builder.CreateICmpEQ(zero_const, builder.CreateAnd(current_write_vertex, one_const)), types._int
       );
 
-      MeshOutputContext gs_out_ctx{current_vertex_with_offset, current_primitive_idx};
+      MeshOutputContext gs_out_ctx{.vertex_id=current_vertex_with_offset, .primitive_id=current_primitive_idx};
       for (auto &h : gs_output_handlers) {
         co_yield h(gs_out_ctx);
       }
@@ -1232,7 +1232,7 @@ convert_dxbc_geometry_shader(
       auto current_primitive_count = builder.CreateLoad(types._int, primitive_count);
       auto current_primitive_idx = builder.CreateAdd(current_primitive_count, current_write_vertex);
 
-      MeshOutputContext gs_out_ctx{current_vertex_with_offset, current_primitive_idx};
+      MeshOutputContext gs_out_ctx{.vertex_id=current_vertex_with_offset, .primitive_id=current_primitive_idx};
       for (auto &h : gs_output_handlers) {
         co_yield h(gs_out_ctx);
       }
@@ -1289,7 +1289,7 @@ convert_dxbc_geometry_shader(
       builder.CreateStore(builder.CreateAdd(one_const, current_write_vertex), next_write_vertex);
       auto point = builder.CreateAdd(vertex_base, current_write_vertex);
 
-      MeshOutputContext gs_out_ctx{point, point};
+      MeshOutputContext gs_out_ctx{.vertex_id=point, .primitive_id=point};
       for (auto &h : gs_output_handlers) {
         co_yield h(gs_out_ctx);
       }
@@ -1379,7 +1379,7 @@ convert_dxbc_geometry_shader(
             resource_map.output.ptr_int4
         );
         auto vertex = builder.CreateAdd(vertex_base, builder.getInt32(u));
-        MeshOutputContext gs_out_ctx{vertex, primitive};
+        MeshOutputContext gs_out_ctx{.vertex_id=vertex, .primitive_id=primitive};
         for (auto &h : gs_output_handlers)
           co_yield h(gs_out_ctx);
         emit_clip_distances(vertex);
@@ -1502,7 +1502,7 @@ convert_dxbc_geometry_shader(
         builder.CreateStore(builder.CreateBitCast(grown, types._int4), output_at(position_reg));
         auto vertex = builder.CreateAdd(vertex_base, builder.getInt32(u));
         // Set both triangles' primitive outputs through the ordinary GS handlers.
-        MeshOutputContext output{vertex, builder.CreateAdd(primitive, builder.getInt32(u / 2))};
+        MeshOutputContext output{.vertex_id=vertex, .primitive_id=builder.CreateAdd(primitive, builder.getInt32(u / 2))};
         for (auto &handler : gs_output_handlers)
           co_yield handler(output);
         emit_clip_distances(vertex);
@@ -2186,7 +2186,7 @@ convert_null_geometry_shader(
       .size = direct ? uint32_t(SM50_STREAM_OUTPUT_DIRECT_PAYLOAD_SIZE)
                      : SM50GeometryPayloadSize(pVertexStage->max_output_register)
   });
-  func_signature.DefineInput(air::InputMesh{1, 1, air::MeshOutputTopology::Point});
+  func_signature.DefineInput(air::InputMesh{.vertex_count=1, .primitive_count=1, .topology=air::MeshOutputTopology::Point});
   auto [function, function_metadata] = func_signature.CreateFunction(name, context, module, 0, false);
   llvm::IRBuilder<> builder(llvm::BasicBlock::Create(context, "entry", function));
   setup_metal_version(module, SM50_SHADER_METAL_400);
@@ -2207,17 +2207,17 @@ static OwnVertices
 own_vertices(D3D10_SB_PRIMITIVE primitive) {
   switch (primitive) {
   case D3D10_SB_PRIMITIVE_POINT:
-    return {1};
+    return {.count=1};
   case D3D10_SB_PRIMITIVE_LINE:
-    return {2};
+    return {.count=2};
   case D3D10_SB_PRIMITIVE_TRIANGLE:
-    return {3};
+    return {.count=3};
   case D3D10_SB_PRIMITIVE_LINE_ADJ:
-    return {2, 1};
+    return {.count=2, .first=1};
   case D3D10_SB_PRIMITIVE_TRIANGLE_ADJ:
-    return {3, 0, 2};
+    return {.count=3, .first=0, .every=2};
   default:
-    return {vertices_per_primitive(primitive)};
+    return {.count=vertices_per_primitive(primitive)};
   }
 }
 static pvalue
@@ -2370,8 +2370,8 @@ convert_pass_through_geometry_shader(
   uint32_t corners = local ? local_triangle_vertices : quads ? 4 : hull ? SM50_CONSERVATIVE_HULL_POINTS : own.count,
            primitives = local ? local_triangle_vertices - 2 : quads ? 2 : hull ? SM50_CONSERVATIVE_HULL_POINTS - 2 : 1;
   func_signature.DefineInput(air::InputMesh{
-      corners, primitives,
-      quads || own.count == 3 ? air::MeshOutputTopology::Triangle
+      .vertex_count=corners, .primitive_count=primitives,
+      .topology=quads || own.count == 3 ? air::MeshOutputTopology::Triangle
       : own.count == 2        ? air::MeshOutputTopology::Line
                               : air::MeshOutputTopology::Point
   });
@@ -2415,7 +2415,7 @@ convert_pass_through_geometry_shader(
       continue;
     auto component_types = pVertexStage->register_types(element.reg(), element.componentType());
     for (uint32_t c = 0; c < 4; c++) {
-      varyings.push_back({element.reg(), c, (uint32_t)varyings.size()});
+      varyings.push_back({.reg=element.reg(), .component=c, .index=(uint32_t)varyings.size()});
       func_signature.DefineMeshVertexOutput(air::OutputMeshData{
           .user = varying_name(element.reg(), c), .type = varying_type(component_types[c]), .index = varyings.back().index
       });
@@ -3123,7 +3123,7 @@ convert_dxbc_vertex_for_geometry_shader(
     auto [vertices, primitives, per_primitive] = get_vertex_primitive_count_in_warp(
         input_primitive, false, pShaderInternal->max_output_register
     );
-    func_signature.DefineInput(air::InputMesh{primitives * 3, primitives, air::MeshOutputTopology::Triangle});
+    func_signature.DefineInput(air::InputMesh{.vertex_count=primitives * 3, .primitive_count=primitives, .topology=air::MeshOutputTopology::Triangle});
     func_signature.DefineMeshPrimitiveOutput(air::OutputPrimitiveID{});
     // viewport 0 with a layer and no viewport index, as SM50ShaderInternal::mesh_handlers
     if (pShaderInternal->mesh_layer_without_viewport())
@@ -3153,7 +3153,7 @@ convert_dxbc_vertex_for_geometry_shader(
       auto component_types = pShaderInternal->register_types(element.reg(), element.componentType());
       for (uint32_t c = 0; c < 4; c++) {
         uint32_t index = mesh_varyings.size();
-        mesh_varyings.push_back({element.reg(), c, index, component_types[c] != RegisterComponentType::Float});
+        mesh_varyings.push_back({.reg=element.reg(), .component=c, .index=index, .integer=component_types[c] != RegisterComponentType::Float});
         func_signature.DefineMeshVertexOutput(air::OutputMeshData{
             .user = varying_name(element.reg(), c), .type = varying_type(component_types[c]), .index = index
         });
@@ -3177,8 +3177,8 @@ convert_dxbc_vertex_for_geometry_shader(
       .memory_access = air::MemoryAccess::read,
       .address_space = air::AddressSpace::constant,
       .type = is_indexed_draw //
-          ? air::MSLWhateverStruct{"draw_indexed_arguments", types._mullion_draw_indexed_arguments}
-          : air::MSLWhateverStruct{"draw_arguments", types._mullion_draw_arguments},
+          ? air::MSLWhateverStruct{.name="draw_indexed_arguments", .type=types._mullion_draw_indexed_arguments}
+          : air::MSLWhateverStruct{.name="draw_arguments", .type=types._mullion_draw_arguments},
       .arg_name = "draw_arguments",
       .raster_order_group = {}
   });
@@ -3189,7 +3189,7 @@ convert_dxbc_vertex_for_geometry_shader(
       .array_size = 0,
       .memory_access = air::MemoryAccess::read,
       .address_space = air::AddressSpace::constant,
-      .type = air::MSLWhateverStruct{"draw_origin", origin_type},
+      .type = air::MSLWhateverStruct{.name="draw_origin", .type=origin_type},
       .arg_name = "draw_origin",
       .raster_order_group = {}
   });
@@ -3203,7 +3203,7 @@ convert_dxbc_vertex_for_geometry_shader(
         .memory_access = air::MemoryAccess::read,
         .address_space = air::AddressSpace::device,
         .type = index_view ? air::MSLRepresentableType(air::MSLWhateverStruct{
-                                 "index_buffer_view", llvm::StructType::get(context, {types._long, types._int, types._int})
+                                 .name="index_buffer_view", .type=llvm::StructType::get(context, {types._long, types._int, types._int})
                              })
                 : ia_layout->index_buffer_format == 1 ? air::MSLRepresentableType(air::MSLUshort{})
                                                       : air::MSLRepresentableType(air::MSLUint{}),
@@ -3902,6 +3902,6 @@ convert_dxbc_vertex_for_geometry_shader(
 template <> struct environment_cast<::mullion::dxbc::context, ::mullion::air::AIRBuilderContext> {
   ::mullion::air::AIRBuilderContext
   cast(const ::mullion::dxbc::context &src) {
-    return {src.llvm, src.module, src.builder, src.types, src.air};
+    return {.llvm=src.llvm, .module=src.module, .builder=src.builder, .types=src.types, .air=src.air};
   };
 };

@@ -115,10 +115,10 @@ struct TessellationPayloadLayout {
 
 static TessellationPayloadLayout
 payload_layout(SM50ShaderInternal *hull, uint32_t patches, uint32_t factor, bool groups) {
-  return {patches, hull->max_output_register, hull->output_control_point_count,
-          uint32_t(hull->patch_constant_scalars.size()),
-          get_max_potential_workload_count(factor, hull->tessellation_domain, hull->tessellation_partition) * patches,
-          groups, TessellationPayloadKind::Mesh};
+  return {.patches=patches, .registers=hull->max_output_register, .control_points=hull->output_control_point_count,
+          .constants=uint32_t(hull->patch_constant_scalars.size()),
+          .workloads=get_max_potential_workload_count(factor, hull->tessellation_domain, hull->tessellation_partition) * patches,
+          .groups=groups, .kind=TessellationPayloadKind::Mesh};
 }
 
 size_t
@@ -453,8 +453,8 @@ convert_dxbc_vertex_hull_shader(
       .memory_access = air::MemoryAccess::read,
       .address_space = air::AddressSpace::constant,
       .type = is_indexed_draw //
-                  ? air::MSLWhateverStruct{"draw_indexed_arguments", types._mullion_draw_indexed_arguments}
-                  : air::MSLWhateverStruct{"draw_arguments", types._mullion_draw_arguments},
+                  ? air::MSLWhateverStruct{.name="draw_indexed_arguments", .type=types._mullion_draw_indexed_arguments}
+                  : air::MSLWhateverStruct{.name="draw_arguments", .type=types._mullion_draw_arguments},
       .arg_name = "draw_arguments",
       .raster_order_group = {}
   });
@@ -468,7 +468,7 @@ convert_dxbc_vertex_hull_shader(
         .memory_access = air::MemoryAccess::read,
         .address_space = air::AddressSpace::device,
         .type = index_view ? air::MSLRepresentableType(air::MSLWhateverStruct{
-                                 "index_buffer_view", llvm::StructType::get(context, {types._long, types._int, types._int})
+                                 .name="index_buffer_view", .type=llvm::StructType::get(context, {types._long, types._int, types._int})
                              })
                 : ia_layout->index_buffer_format == 1 ? air::MSLRepresentableType(air::MSLUshort{})
                                                       : air::MSLRepresentableType(air::MSLUint{}),
@@ -509,7 +509,7 @@ convert_dxbc_vertex_hull_shader(
     origin_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
         .buffer_size = {}, .location_index = SM50_BINDING_INDEX_DRAW_ORIGIN, .array_size = 0,
         .memory_access = air::MemoryAccess::read, .address_space = air::AddressSpace::constant,
-        .type = air::MSLWhateverStruct{"draw_origin", origin_type}, .arg_name = "draw_origin", .raster_order_group = {}});
+        .type = air::MSLWhateverStruct{.name="draw_origin", .type=origin_type}, .arg_name = "draw_origin", .raster_order_group = {}});
 
   auto [function, function_metadata] = func_signature.CreateFunction(name, context, module, 0, true);
 
@@ -1194,16 +1194,16 @@ convert_dxbc_tesselator_domain_shader(
   }
   switch (pHullStage->tessellator_output_primitive) {
   case microsoft::D3D11_SB_TESSELLATOR_OUTPUT_POINT: {
-    func_signature.DefineInput(air::InputMesh{mesh_vertices, mesh_primitives, air::MeshOutputTopology::Point});
+    func_signature.DefineInput(air::InputMesh{.vertex_count=mesh_vertices, .primitive_count=mesh_primitives, .topology=air::MeshOutputTopology::Point});
     point_rasterization = true; // TESS TODO: not necessary... if combined with GS/SO
     break;
   }
   case microsoft::D3D11_SB_TESSELLATOR_OUTPUT_LINE: {
-    func_signature.DefineInput(air::InputMesh{mesh_vertices, mesh_primitives, air::MeshOutputTopology::Line});
+    func_signature.DefineInput(air::InputMesh{.vertex_count=mesh_vertices, .primitive_count=mesh_primitives, .topology=air::MeshOutputTopology::Line});
     break;
   }
   default: {
-    func_signature.DefineInput(air::InputMesh{mesh_vertices, mesh_primitives, air::MeshOutputTopology::Triangle});
+    func_signature.DefineInput(air::InputMesh{.vertex_count=mesh_vertices, .primitive_count=mesh_primitives, .topology=air::MeshOutputTopology::Triangle});
     break;
   }
   }
@@ -1429,7 +1429,7 @@ convert_dxbc_tesselator_domain_shader(
   // a primitive's vertices are `corners` threads' when it has its own
   auto primitive_id =
       pieces.primitives ? builder.CreateUDiv(actual_thread_index, builder.getInt32(corners)) : actual_thread_index;
-  MeshOutputContext gs_out_ctx{vertex_id, primitive_id};
+  MeshOutputContext gs_out_ctx{.vertex_id=vertex_id, .primitive_id=primitive_id};
   for (auto &h : ds_output_handlers) {
     if (auto err = h(gs_out_ctx).build(ctx).takeError()) {
       return err;
@@ -1526,7 +1526,7 @@ convert_dxbc_tesselator_domain_shader(
             [&](uint32_t k, uint32_t reg) { return corner_at(p, k, reg); }, resource_map.output.ptr_int4
         );
         auto vertex = builder.CreateAdd(vertex_base, builder.getInt32(u));
-        MeshOutputContext out{vertex, p};
+        MeshOutputContext out{.vertex_id=vertex, .primitive_id=p};
         for (auto &h : ds_output_handlers)
           if (auto err = h(out).build(ctx).takeError())
             return err;

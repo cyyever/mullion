@@ -131,17 +131,17 @@ public:
     auto DescriptorOffset = Iter->second.second;
     if (DescriptorOffset == ~0u - 1) {
       auto Pointer = GetRootConstantPointer(Builder, RootSignatureArgumentIndex, CBuf.arg_index);
-      return ConstantBufferDescriptor{Pointer, nullptr};
+      return ConstantBufferDescriptor{.Pointer=Pointer, .Metadata=nullptr};
     }
     if (DescriptorOffset == ~0u) {
       auto Pointer = GetArgument(Builder, RootSignatureArgumentIndex, CBuf.arg_index);
-      return ConstantBufferDescriptor{Pointer, nullptr};
+      return ConstantBufferDescriptor{.Pointer=Pointer, .Metadata=nullptr};
     }
     auto HeapPointer = GetArgument(Builder, RootSignatureArgumentIndex, CBuf.arg_index);
     auto [Pointer, Metadata] = GetBufferDescriptor(
         Builder, HeapPointer, Index, llvm::PointerType::get(Builder.getIntTy(4)->getContext(), 2), CBuf.range.lower_bound, DescriptorOffset
     );
-    return ConstantBufferDescriptor{Pointer, Unbounded.count({D3D12_DESCRIPTOR_RANGE_TYPE_CBV, Range}) ? nullptr : Metadata};
+    return ConstantBufferDescriptor{.Pointer=Pointer, .Metadata=Unbounded.count({D3D12_DESCRIPTOR_RANGE_TYPE_CBV, Range}) ? nullptr : Metadata};
   }
 
   SamplerDescriptor
@@ -163,7 +163,7 @@ public:
       );
     };
     // sampler, cube_sampler, metadata, border
-    return {Field(TySampleHandler, 0), Field(TySampleHandler, 1), Field(TyInt64, 2), Field(TyInt64, 3)};
+    return {.SamplerHandle=Field(TySampleHandler, 0), .CubeSamplerHandle=Field(TySampleHandler, 1), .Metadata=Field(TyInt64, 2), .Border=Field(TyInt64, 3)};
   }
 
   std::optional<SamplerDescriptor>
@@ -254,8 +254,8 @@ public:
 
     auto [Handle, Metadata, FormatRange] =
         GetTextureDescriptor(Builder, HeapPointer, Index, ResourceKind, SRV.range.lower_bound, DescriptorOffset);
-    return TextureDescirptor{Handle,       Metadata,   false, ResourceKind, ResourceKindLogical,
-                             MemoryAccess, SampleType, FormatRange};
+    return TextureDescirptor{.ResourceHandle=Handle,       .Metadata=Metadata,   .GlobalCoherent=false, .ResourceKind=ResourceKind, .ResourceKindLogical=ResourceKindLogical,
+                             .MemoryAccess=MemoryAccess, .SampleType=SampleType, .Range=FormatRange};
   }
 
   std::optional<TextureDescirptor>
@@ -287,8 +287,8 @@ public:
     auto [Handle, Metadata, FormatRange] =
         GetTextureDescriptor(Builder, HeapPointer, Index, ResourceKind, UAV.range.lower_bound, DescriptorOffset);
     return TextureDescirptor{
-        Handle,  Metadata, UAV.global_coherent, ResourceKind, ResourceKindLogical, MemoryAccess, SampleType,
-        FormatRange, true
+        .ResourceHandle=Handle,  .Metadata=Metadata, .GlobalCoherent=UAV.global_coherent, .ResourceKind=ResourceKind, .ResourceKindLogical=ResourceKindLogical, .MemoryAccess=MemoryAccess, .SampleType=SampleType,
+        .Range=FormatRange, .IsUAV=true
     };
   }
 
@@ -305,14 +305,14 @@ public:
     auto DescriptorOffset = Iter->second.second;
     auto HeapPointer = GetArgument(Builder, RootSignatureArgumentIndex, SRV.arg_index);
     if (DescriptorOffset == ~0u) {
-      return BufferDescriptor{HeapPointer, Builder.builder.getInt64(0xffffffff), SRV.structure_stride, false, false};
+      return BufferDescriptor{.Pointer=HeapPointer, .Metadata=Builder.builder.getInt64(0xffffffff), .StructureStride=SRV.structure_stride, .GlobalCoherent=false, .Bounded=false};
     }
     auto [Pointer, Metadata] = GetBufferDescriptor(
         Builder, HeapPointer, Index, llvm::PointerType::get(Builder.getIntTy()->getContext(), 1), SRV.range.lower_bound, DescriptorOffset, true
     );
 
     return BufferDescriptor{
-        Pointer, Metadata, SRV.structure_stride, false, !Unbounded.count({D3D12_DESCRIPTOR_RANGE_TYPE_SRV, Range})
+        .Pointer=Pointer, .Metadata=Metadata, .StructureStride=SRV.structure_stride, .GlobalCoherent=false, .Bounded=!Unbounded.count({D3D12_DESCRIPTOR_RANGE_TYPE_SRV, Range})
     };
   }
 
@@ -330,7 +330,7 @@ public:
     auto HeapPointer = GetArgument(Builder, RootSignatureArgumentIndex, UAV.arg_index);
     if (DescriptorOffset == ~0u) {
       return BufferDescriptor{
-          HeapPointer, Builder.builder.getInt64(0xffffffff), UAV.structure_stride, UAV.global_coherent, false
+          .Pointer=HeapPointer, .Metadata=Builder.builder.getInt64(0xffffffff), .StructureStride=UAV.structure_stride, .GlobalCoherent=UAV.global_coherent, .Bounded=false
       };
     }
     auto [Pointer, Metadata] = GetBufferDescriptor(
@@ -338,8 +338,8 @@ public:
     );
 
     return BufferDescriptor{
-        Pointer, Metadata, UAV.structure_stride, UAV.global_coherent,
-        !Unbounded.count({D3D12_DESCRIPTOR_RANGE_TYPE_UAV, Range})
+        .Pointer=Pointer, .Metadata=Metadata, .StructureStride=UAV.structure_stride, .GlobalCoherent=UAV.global_coherent,
+        .Bounded=!Unbounded.count({D3D12_DESCRIPTOR_RANGE_TYPE_UAV, Range})
     };
   }
 

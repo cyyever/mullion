@@ -111,7 +111,7 @@ Presenter::changeGammaRamp(const MullionGammaRamp *gamma_ramp) {
     texture_info.array_length = 1;
     gamma_lut_texture_ = device_.newTexture(texture_info);
     gamma_lut_texture_.replaceRegion(
-          {0, 0, 0}, {MULLION_GAMMA_CP_COUNT, 1, 1}, 0, 0,
+          {.x=0, .y=0, .z=0}, {.width=MULLION_GAMMA_CP_COUNT, .height=1, .depth=1}, 0, 0,
           gamma_lut_rgba_.data(),
           MULLION_GAMMA_CP_COUNT * sizeof(float) * 4,
           0);
@@ -165,7 +165,7 @@ Presenter::synchronizeLayerProperties() {
   if (final_colorspace == WMTColorSpaceHDR_scRGB)
     metadata.edr_scale *= 0.8;
 
-  return {metadata, layer_props_, final_colorspace, gamma_lut_texture_, present_blit_, present_scale_};
+  return {.metadata=metadata, .layer_props=layer_props_, .colorspace=final_colorspace, .gamma_lut=gamma_lut_texture_, .blit=present_blit_, .scale=present_scale_};
 }
 
 template <typename CommandBuffer, typename Encoder>
@@ -248,7 +248,7 @@ Presenter::encodeCommands(
     wmtcmd_blit_copy_from_texture_to_buffer copy{.type = WMTBlitCommandCopyFromTextureToBuffer};
     copy.next.set(nullptr);
     copy.src = target.handle;
-    copy.size = {frame.width, frame.height, 1};
+    copy.size = {.width=frame.width, .height=frame.height, .depth=1};
     copy.dst = frame.buffer.handle;
     copy.bytes_per_row = frame.width * 4;
     copy.bytes_per_image = frame.width * frame.height * 4;
@@ -287,7 +287,7 @@ Presenter::drawToWindow(double after) {
                                                         std::chrono::duration<double>(after)
                                                     ));
   // a top-down bitmap: negative height
-  BITMAPINFO bitmap{{sizeof(BITMAPINFOHEADER), (LONG)frame.width, -(LONG)frame.height, 1, 32, BI_RGB}};
+  BITMAPINFO bitmap{.bmiHeader={.biSize=sizeof(BITMAPINFOHEADER), .biWidth=(LONG)frame.width, .biHeight=-(LONG)frame.height, .biPlanes=1, .biBitCount=32, .biCompression=BI_RGB}};
   // the window may be gone, and its own DC may be in use on its thread (CS_OWNDC): a cache DC, or no frame
   RECT client;
   HDC dc;
@@ -316,7 +316,7 @@ Presenter::frameStatistics(DXGI_FRAME_STATISTICS *stats, double refresh_rate) {
   auto qpc = (before.QuadPart + after.QuadPart) / 2 - LONGLONG((shown.now - shown.shown_time) * frequency.QuadPart);
   // the scheduler's last sample is the refresh the frame was shown at
   UINT refresh = UINT(std::llround((shown.shown_time - shown.since) * refresh_rate));
-  *stats = {UINT(shown.shown), refresh, refresh, {.QuadPart = qpc}, {}};
+  *stats = {.PresentCount=UINT(shown.shown), .PresentRefreshCount=refresh, .SyncRefreshCount=refresh, .SyncQPCTime={.QuadPart = qpc}, .SyncGPUTime={}};
   return S_OK;
 }
 
@@ -328,19 +328,19 @@ Presenter::buildRenderPipelineState(bool is_pq, bool with_hdr_metadata, bool is_
 
   uint32_t true_data = true, false_data = false;
   WMTFunctionConstant constants[] = {
-      {{&true_data}, WMTDataTypeBool, kPresentFCIndex_BackbufferSizeMatched},
-      {{is_pq ? &true_data : &false_data}, WMTDataTypeBool, kPresentFCIndex_HDRPQ},
-      {{with_hdr_metadata ? &true_data : &false_data}, WMTDataTypeBool, kPresentFCIndex_WithHDRMetadata},
+      {.data={&true_data}, .type=WMTDataTypeBool, .index=kPresentFCIndex_BackbufferSizeMatched},
+      {.data={is_pq ? &true_data : &false_data}, .type=WMTDataTypeBool, .index=kPresentFCIndex_HDRPQ},
+      {.data={with_hdr_metadata ? &true_data : &false_data}, .type=WMTDataTypeBool, .index=kPresentFCIndex_WithHDRMetadata},
       // linear values the target takes as sRGB bytes: an sRGB back buffer's, or a linear color space's in a GDI
       // bitmap, where an sRGB target's own encoding misses D3D11.3 3.2.3.8 by up to 0.8 of a code
-      {{Is_sRGBVariant(ConvertSwapChainFormat(source_format_)) || (!layer_ && colorspace_ & WMTColorSpaceSRGBLinear)
+      {.data={Is_sRGBVariant(ConvertSwapChainFormat(source_format_)) || (!layer_ && colorspace_ & WMTColorSpaceSRGBLinear)
             ? &true_data
             : &false_data},
-       WMTDataTypeBool, kPresentFCIndex_BackbufferIsSRGB},
-      {{is_ms ? &true_data : &false_data}, WMTDataTypeBool, kPresentFCIndex_BackbufferIsMS},
-      {{gamma_enable ? &true_data : &false_data}, WMTDataTypeBool, kPresentFCIndex_GammaEnabled},
-      {{source_format_ == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM ? &true_data : &false_data}, WMTDataTypeBool,
-       kPresentFCIndex_BackbufferIsXRBias},
+       .type=WMTDataTypeBool, .index=kPresentFCIndex_BackbufferIsSRGB},
+      {.data={is_ms ? &true_data : &false_data}, .type=WMTDataTypeBool, .index=kPresentFCIndex_BackbufferIsMS},
+      {.data={gamma_enable ? &true_data : &false_data}, .type=WMTDataTypeBool, .index=kPresentFCIndex_GammaEnabled},
+      {.data={source_format_ == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM ? &true_data : &false_data}, .type=WMTDataTypeBool,
+       .index=kPresentFCIndex_BackbufferIsXRBias},
   };
 
   WMT::Reference<WMT::Error> error;
