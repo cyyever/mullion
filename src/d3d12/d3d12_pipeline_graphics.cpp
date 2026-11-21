@@ -313,7 +313,8 @@ MTLD3D12PipelineState::DumpShaders(std::initializer_list<D3D12_SHADER_BYTECODE> 
       if (!written.insert(hash).second)
         continue;
     }
-    auto path = dir + "\\" + hash + ".dxbc";
+    auto path = dir;
+    path.append("\\").append(hash).append(".dxbc");
     std::ofstream(path, std::ios::binary).write((const char *)Shader.pShaderBytecode, Shader.BytecodeLength);
     DEBUG("Dumped shader ", path);
   }
@@ -547,7 +548,7 @@ CompileFunction(
   const bool enabled = bool(cache.getReader());
   auto &shared = device->functions;
   // the pipeline keeps the function and what it was loaded from, for a pipeline library that stores it
-  auto keep = [&](std::shared_ptr<const MTLD3D12Device::SharedFunction> kept) {
+  auto keep = [&](const std::shared_ptr<const MTLD3D12Device::SharedFunction> &kept) {
     std::scoped_lock lock(pipeline->shader_mutex);
     pipeline->cached_shaders.emplace(key, kept->data);
     pipeline->functions.push_back(kept);
@@ -559,7 +560,7 @@ CompileFunction(
       std::scoped_lock lock(shared.mutex);
       auto &made = shared.made[key];
       if (auto other = made.lock())
-        kept = other;
+        kept = std::move(other);
       else
         made = kept;
     }
@@ -1066,7 +1067,8 @@ struct Group {
     source += outputs ? ") {\n  Out out;\n" : ") {\n";
     for (uint32_t i = 0; i < culls; i++) {
       auto v = "in.cull" + std::to_string(i);
-      source += "  if (" + v + " == 0 && dfdx(" + v + ") == 0 && dfdy(" + v + ") == 0) {\n    discard_fragment();\n  " + ret + "  }\n";
+      source.append("  if (").append(v).append(" == 0 && dfdx(").append(v).append(") == 0 && dfdy(").append(v)
+          .append(") == 0) {\n    discard_fragment();\n  ").append(ret).append("  }\n");
     }
     if (conservative) {
       source += "  float2 v[] = {";
@@ -2059,7 +2061,7 @@ public:
         if (!variant(geometry_variants_[false][true], false, true))
           return hr;
       }
-      topology_inputs_ = inputs;
+      topology_inputs_ = std::move(inputs);
       if (!later.empty()) {
         deferred = std::make_shared<DeferredPipeline>([jobs = std::move(later)] {
           for (auto &job : jobs)
