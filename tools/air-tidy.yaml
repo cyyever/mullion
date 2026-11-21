@@ -1,5 +1,5 @@
 # modernize-* includes modernize-use-ranges; vector-operation checks missing reserve in append loops.
-Checks: '-*,custom-air-write-error,performance-for-range-copy,performance-inefficient-vector-operation,bugprone-use-after-move,readability-redundant-control-flow,modernize-*,-modernize-use-trailing-return-type,-modernize-avoid-c-arrays,modernize-use-scoped-lock'
+Checks: '-*,custom-air-write-error,performance-*,bugprone-use-after-move,readability-redundant-control-flow,modernize-*,-modernize-use-trailing-return-type,-modernize-avoid-c-arrays,modernize-use-scoped-lock'
 CustomChecks:
   - Name: air-write-error
     Query: |
