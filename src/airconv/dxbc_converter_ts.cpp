@@ -555,7 +555,7 @@ convert_dxbc_vertex_hull_shader(
   auto output_reg_per_patch_type_float =
       llvm::ArrayType::get(output_reg_per_point_type_float, pHullStage->input_control_point_count);
 
-  llvm::GlobalVariable *vertex_out = new llvm::GlobalVariable(
+  auto *vertex_out = new llvm::GlobalVariable(
       module, output_reg_per_group_type, false, llvm::GlobalValue::InternalLinkage,
       llvm::UndefValue::get(output_reg_per_group_type), "vertex_out_hull_in", nullptr,
       llvm::GlobalValue::NotThreadLocal, (uint32_t)air::AddressSpace::threadgroup
@@ -569,7 +569,7 @@ convert_dxbc_vertex_hull_shader(
   // how many workloads each patch of the threadgroup has: none until its patch constant function has counted them,
   // so none for a patch past the draw's last. and the patch's factors, kept from counting to writing
   auto workload_counts_type = llvm::ArrayType::get(types._int, patch_per_group);
-  llvm::GlobalVariable *workload_counts = new llvm::GlobalVariable(
+  auto *workload_counts = new llvm::GlobalVariable(
       module, workload_counts_type, false, llvm::GlobalValue::InternalLinkage,
       llvm::UndefValue::get(workload_counts_type), "workload_counts", nullptr, llvm::GlobalValue::NotThreadLocal,
       (uint32_t)air::AddressSpace::threadgroup
@@ -779,7 +779,7 @@ convert_dxbc_vertex_hull_shader(
       assert(pHullStage->output_control_point_count != ~0u);
 
       if (shader_info.output_control_point_read) {
-        llvm::GlobalVariable *control_point_phase_out = new llvm::GlobalVariable(
+        auto *control_point_phase_out = new llvm::GlobalVariable(
             module, hs_output_per_group_type, false, llvm::GlobalValue::InternalLinkage,
             llvm::UndefValue::get(hs_output_per_group_type), "hull_control_point_phase_out", nullptr,
             llvm::GlobalValue::NotThreadLocal, (uint32_t)air::AddressSpace::threadgroup
@@ -834,7 +834,7 @@ convert_dxbc_vertex_hull_shader(
 
     if (max_patch_constant_output_register) {
       /* all instances write to the same output (threadgroup memory) */
-      llvm::GlobalVariable *patch_constant_out = new llvm::GlobalVariable(
+      auto *patch_constant_out = new llvm::GlobalVariable(
           module, hs_pcout_per_group_type, false, llvm::GlobalValue::InternalLinkage,
           llvm::UndefValue::get(hs_pcout_per_group_type), "hull_patch_constant_out", nullptr,
           llvm::GlobalValue::NotThreadLocal, (uint32_t)air::AddressSpace::threadgroup

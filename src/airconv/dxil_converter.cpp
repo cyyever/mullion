@@ -4757,8 +4757,8 @@ convert_dxil(
         culled = ir.CreateOr(culled, ir.CreateICmpNE(ir.CreateLoad(i8, element_of(staged_culled, {p})), ir.getInt8(0)));
       for (uint32_t distance = 0; distance < cull_distances; distance++) {
         Value *out = ir.getInt8(1);
-        for (uint32_t k = 0; k < 3; k++)
-          out = ir.CreateAnd(out, ir.CreateLoad(i8, element_of(staged_distance, {corner[k], ir.getInt32(distance)})));
+        for (auto & k : corner)
+          out = ir.CreateAnd(out, ir.CreateLoad(i8, element_of(staged_distance, {k, ir.getInt32(distance)})));
         culled = ir.CreateOr(culled, ir.CreateICmpNE(out, ir.getInt8(0)));
       }
       {

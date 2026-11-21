@@ -201,7 +201,7 @@ public:
     return S_OK;
   };
 
-  ~MTLD3D12DescriptorHeapImpl() {
+  ~MTLD3D12DescriptorHeapImpl() override {
     if (!descriptors_.empty())
       VirtualFree(descriptors_.data(), 0, MEM_RELEASE);
     if (buffer_) {
@@ -238,29 +238,29 @@ public:
     return MTLD3D12Pageable::QueryInterface(riid, ppvObject);
   }
 
-  virtual D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
+  D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
   GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) {
     *__ret = desc_;
     return __ret;
   }
 
-  virtual D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
+  D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
   GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) {
     *__ret = GetShaderVisibleDescriptor(this, 0);
     return __ret;
   }
 
-  virtual D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
+  D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
   GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) {
     __ret->ptr = argument_buffer_gpu_address_;
     return __ret;
   }
 
-  virtual HRESULT
+  HRESULT
   AddShaderResourceView(
       UINT Index, Texture *Texture, TextureViewKey View, FLOAT ResourceMinLODClamp, std::array<float, 2> BorderRange,
       bool Multisample
-  ) {
+  ) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     auto &cpu_storage = descriptors_[Index];
@@ -288,8 +288,8 @@ public:
     }
     return S_OK;
   }
-    virtual HRESULT
-  AddConstantBufferView(UINT Index, UINT64 VA, UINT32 SizeInBytes) {
+    HRESULT
+  AddConstantBufferView(UINT Index, UINT64 VA, UINT32 SizeInBytes) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     auto &cpu_storage = descriptors_[Index];
@@ -304,10 +304,10 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT
+  HRESULT
   AddUnorderedAccessView(
       UINT Index, Texture *Texture, TextureViewKey View, UINT FirstWSlice, UINT WSize, bool MinMipFeedback
-  ) {
+  ) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     auto &cpu_storage = descriptors_[Index];
@@ -331,8 +331,8 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT
-  AddUnorderedAccessView(UINT Index, Buffer *UAVBuffer, BufferViewKey View, BufferSlice Slice) {
+  HRESULT
+  AddUnorderedAccessView(UINT Index, Buffer *UAVBuffer, BufferViewKey View, BufferSlice Slice) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     auto &cpu_storage = descriptors_[Index];
@@ -358,8 +358,8 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT
-  AddUnorderedAccessView(UINT Index, Buffer *UAVBuffer, BufferSlice Slice, Buffer *Counter, UINT CounterOffsetInBytes) {
+  HRESULT
+  AddUnorderedAccessView(UINT Index, Buffer *UAVBuffer, BufferSlice Slice, Buffer *Counter, UINT CounterOffsetInBytes) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     auto &cpu_storage = descriptors_[Index];
@@ -381,7 +381,7 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT AddShaderResourceView(UINT Index, Buffer *Buffer, BufferViewKey View, BufferSlice Slice) {
+  HRESULT AddShaderResourceView(UINT Index, Buffer *Buffer, BufferViewKey View, BufferSlice Slice) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     auto &cpu_storage = descriptors_[Index];
@@ -405,8 +405,8 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT
-  AddAccelerationStructureView(UINT Index, UINT64 VA) {
+  HRESULT
+  AddAccelerationStructureView(UINT Index, UINT64 VA) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     descriptors_[Index].type = ShaderVisibleDescriptorType::Null;
@@ -418,7 +418,7 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT AddShaderResourceView(UINT Index, Buffer *Buffer, BufferSlice Slice) {
+  HRESULT AddShaderResourceView(UINT Index, Buffer *Buffer, BufferSlice Slice) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     auto &cpu_storage = descriptors_[Index];
@@ -438,8 +438,8 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT
-  AddShaderResourceView(UINT Index, D3D12_SHADER_RESOURCE_VIEW_DESC const *pDesc) {
+  HRESULT
+  AddShaderResourceView(UINT Index, D3D12_SHADER_RESOURCE_VIEW_DESC const *pDesc) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     if (!pDesc)
@@ -458,8 +458,8 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT
-  AddUnorderedAccessView(UINT Index, D3D12_UNORDERED_ACCESS_VIEW_DESC const *pDesc) {
+  HRESULT
+  AddUnorderedAccessView(UINT Index, D3D12_UNORDERED_ACCESS_VIEW_DESC const *pDesc) override {
     if (Index >= descriptors_.size())
       return FAIL(E_INVALIDARG);
     if (!pDesc)
@@ -500,8 +500,8 @@ public:
     gpu_storage.SRVTexture.metadata = SM50_TEXTURE_METADATA_UNBOUND;
   }
 
-  virtual ShaderVisibleDescriptorCPUStorage const &
-  GetDescriptor(UINT Index) {
+  ShaderVisibleDescriptorCPUStorage const &
+  GetDescriptor(UINT Index) override {
     return descriptors_[Index];
   }
 
@@ -584,26 +584,26 @@ public:
     return MTLD3D12Pageable::QueryInterface(riid, ppvObject);
   }
 
-  virtual D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
+  D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
   GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) {
     *__ret = desc_;
     return __ret;
   }
 
-  virtual D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
+  D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
   GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) {
     *__ret = GetRenderTargetDescriptor(this, 0);
     return __ret;
   }
 
-  virtual D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
+  D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
   GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) {
     __ret->ptr = 0;
     return __ret;
   }
 
-  virtual HRESULT
-  AddRenderTarget(UINT Index, MTL_RENDER_TARGET_DESC const *pDesc) {
+  HRESULT
+  AddRenderTarget(UINT Index, MTL_RENDER_TARGET_DESC const *pDesc) override {
     if (Index >= render_targets_.size())
       return FAIL(E_INVALIDARG);
     if (pDesc)
@@ -613,8 +613,8 @@ public:
     return S_OK;
   }
 
-  virtual MTL_RENDER_TARGET_DESC
-  GetRenderTarget(UINT Index) {
+  MTL_RENDER_TARGET_DESC
+  GetRenderTarget(UINT Index) override {
     return render_targets_[Index];
   }
 
@@ -732,7 +732,7 @@ public:
     return S_OK;
   };
 
-  ~MTLD3D12SamplerDescriptorHeapImpl() {
+  ~MTLD3D12SamplerDescriptorHeapImpl() override {
     if (buffer_) {
       // as the descriptor heap's (~MTLD3D12DescriptorHeapImpl)
       device_->UnregisterVA(buffer_->current());
@@ -766,27 +766,27 @@ public:
     return MTLD3D12Pageable::QueryInterface(riid, ppvObject);
   }
 
-  virtual D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
+  D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
   GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) {
     *__ret = desc_;
     return __ret;
   }
 
-  virtual D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
+  D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
   GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) {
     *__ret = GetSamplerDescriptor(this, 0);
     return __ret;
   }
 
-  virtual D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
+  D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
   GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) {
     __ret->ptr = argument_buffer_gpu_address_;
     return __ret;
   }
 
 
-  virtual HRESULT
-  AddSampler(UINT Index, const D3D12_SAMPLER_DESC *pDesc) {
+  HRESULT
+  AddSampler(UINT Index, const D3D12_SAMPLER_DESC *pDesc) override {
     if (!pDesc)
       return FAIL(E_INVALIDARG);
     if (Index >= samplers_.size())

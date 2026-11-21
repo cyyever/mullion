@@ -108,9 +108,9 @@ HoistLoadsPass::run(Function &F, FunctionAnalysisManager &) {
       }
       Instruction *To = Anchor ? Anchor->getNextNode() : &*BB.getFirstInsertionPt();
       unsigned Registers = Size(I);
-      for (auto Earlier = Loads.rbegin(); Earlier != Loads.rend(); ++Earlier)
-        if ((Registers += Size(**Earlier)) > Window) {
-          if (auto *Use = FirstConsumer(*Earlier); Use && To->comesBefore(Use))
+      for (auto & Load : std::views::reverse(Loads))
+        if ((Registers += Size(*Load)) > Window) {
+          if (auto *Use = FirstConsumer(Load); Use && To->comesBefore(Use))
             To = Use;
           break;
         }

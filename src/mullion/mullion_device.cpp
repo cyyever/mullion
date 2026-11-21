@@ -9,24 +9,24 @@ namespace mullion {
 
 class DeviceImpl : public Device {
 public:
-  virtual WMT::Device
+  WMT::Device
   device() override {
     return device_;
   };
-  virtual CommandQueue &
+  CommandQueue &
   queue() override {
     return cmd_queue_;
   };
 
-  virtual WMTMetalVersion metalVersion() override {
+  WMTMetalVersion metalVersion() override {
     return metal_version_;
   };
 
-  virtual uint64_t maxObjectThreadgroups() final {
+  uint64_t maxObjectThreadgroups() final {
     return max_object_threadgroups_;
   };
 
-  virtual uint32_t maxMeshThreadgroups() final {
+  uint32_t maxMeshThreadgroups() final {
     std::call_once(mesh_grid_asked_, [&] { max_mesh_threadgroups_ = MeshGridLimit(device_); });
     return max_mesh_threadgroups_;
   };

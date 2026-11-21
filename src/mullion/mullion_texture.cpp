@@ -210,7 +210,7 @@ Texture::createView(TextureViewDescriptor const &descriptor) {
   {
     std::shared_lock<mullion::shared_mutex> lock(mutex_);
     if (auto found = viewIndices_.find(word); found != viewIndices_.end())
-      return TextureViewKey(descriptor, found->second, info_.mipmap_level_count);
+      return {descriptor, found->second, info_.mipmap_level_count};
   }
   std::unique_lock<mullion::shared_mutex> lock(mutex_);
   auto [view, added] = viewIndices_.try_emplace(word, version_);
@@ -218,7 +218,7 @@ Texture::createView(TextureViewDescriptor const &descriptor) {
     viewDescriptors_.push_back(descriptor);
     version_ = version_ + 1;
   }
-  return TextureViewKey(descriptor, view->second, info_.mipmap_level_count);
+  return {descriptor, view->second, info_.mipmap_level_count};
 }
 
 Texture::Texture(const WMTTextureInfo &descriptor, WMT::Device device, bool accurateBC) :

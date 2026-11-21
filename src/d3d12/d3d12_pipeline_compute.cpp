@@ -43,7 +43,7 @@ public:
 
   // a compile of its Metal pipeline that has not begun is dropped, and one under way finished, before the pipeline
   // goes
-  ~MTLD3D12ComputePipelineStateImpl() {
+  ~MTLD3D12ComputePipelineStateImpl() override {
     if (deferred)
       deferred->Cancel();
   }
@@ -157,7 +157,7 @@ public:
     return MTLD3D12PipelineObject::QueryInterface(riid, ppvObject);
   }
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   GetCachedBlob(ID3DBlob **blob) {
     return GetCachedPipelineBlob(blob);
   }

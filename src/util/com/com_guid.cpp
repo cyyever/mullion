@@ -37,9 +37,9 @@ struct GuidPair {
 
   IID a, b;
 
-  size_t hash() const { return size_t(a.Data1) ^ size_t(b.Data1); }
+  [[nodiscard]] size_t hash() const { return size_t(a.Data1) ^ size_t(b.Data1); }
 
-  bool eq(const GuidPair &other) const { return a == other.a && b == other.b; }
+  [[nodiscard]] bool eq(const GuidPair &other) const { return a == other.a && b == other.b; }
 };
 
 mullion::mutex g_loggedQueryInterfaceErrorMutex;

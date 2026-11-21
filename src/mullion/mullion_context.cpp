@@ -109,7 +109,7 @@ ArgumentEncodingContext::encodeVertexBuffers(uint32_t slot_mask, uint64_t offset
   };
   uint32_t max_slot = 32 - __builtin_clz(slot_mask);
 
-  VERTEX_BUFFER_ENTRY *entries = getMappedArgumentBuffer<VERTEX_BUFFER_ENTRY>(offset);
+  auto *entries = getMappedArgumentBuffer<VERTEX_BUFFER_ENTRY>(offset);
 
   for (unsigned slot = 0, index = 0; slot < max_slot; slot++) {
     if (!(slot_mask & (1 << slot)))
@@ -291,7 +291,7 @@ template void ArgumentEncodingContext::encodeConstantBuffers<PipelineStage::Pixe
 template <PipelineStage stage, PipelineKind kind>
 void
 ArgumentEncodingContext::encodeConstantBuffers(const MTL_SHADER_REFLECTION *reflection, const MTL_SM50_SHADER_ARGUMENT * constant_buffers, uint64_t offset) {
-  uint64_t *encoded_buffer = getMappedArgumentBuffer<uint64_t, stage == PipelineStage::Compute>(offset);
+  auto *encoded_buffer = getMappedArgumentBuffer<uint64_t, stage == PipelineStage::Compute>(offset);
 
   for (unsigned i = 0; i < reflection->NumConstantBuffers; i++) {
     auto &arg = constant_buffers[i];
@@ -400,7 +400,7 @@ ArgumentEncodingContext::encodeShaderResources(
 ) {
 
   auto BindingCount = reflection->NumArguments;
-  uint64_t *encoded_buffer = getMappedArgumentBuffer<uint64_t, stage == PipelineStage::Compute>(offset);
+  auto *encoded_buffer = getMappedArgumentBuffer<uint64_t, stage == PipelineStage::Compute>(offset);
   // an unbound texture's stand-in, of the type the argument names (InternalCommandLibrary::UnboundTexture)
   auto unbound = [&](const MTL_SM50_SHADER_ARGUMENT &arg, bool write) {
     auto stand_in = lib.UnboundTexture(
@@ -1134,7 +1134,7 @@ ArgumentEncodingContext::flushCommands(WMT::CommandBuffer cmdbuf, uint64_t seqId
 
   unsigned encoder_count = encoder_count_;
   unsigned encoder_index = 0;
-  EncoderData **encoders =
+  auto **encoders =
       reinterpret_cast<EncoderData **>(allocate_cpu_heap(sizeof(EncoderData *) * encoder_count, alignof(EncoderData *))
       );
 

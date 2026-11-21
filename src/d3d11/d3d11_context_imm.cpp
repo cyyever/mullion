@@ -754,7 +754,7 @@ public:
     return D3D11_DEVICE_CONTEXT_IMMEDIATE;
   }
 
-  virtual void
+  void
   WaitUntilGPUIdle() override {
     uint64_t seq = cmd_queue.CurrentSeqId();
     if(!InvalidateCurrentPass())

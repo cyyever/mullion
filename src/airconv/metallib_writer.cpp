@@ -8,7 +8,7 @@ using namespace llvm;
 namespace mullion::metallib {
 
 template <typename T> std::string_view value(const T &value) {
-  return std::string_view((const char *)(&value), sizeof(T));
+  return {(const char *)(&value), sizeof(T)};
 };
 
 struct InputAttribute {

@@ -66,7 +66,7 @@ define_mesh_varyings(SM50ShaderInternal *sm50_shader, uint32_t reg, RegisterComp
   define_varyings(sm50_shader, reg, declared, [=](unsigned c, std::string name, air::MSLScalerOrVectorType type) {
     auto index = sm50_shader->num_mesh_vertex_data++;
     sm50_shader->func_signature.DefineMeshVertexOutput(OutputMeshData{.user = std::move(name), .type = type, .index = index});
-    sm50_shader->mesh_output_handlers.push_back([=](MeshOutputContext &output) -> IREffect {
+    sm50_shader->mesh_output_handlers.emplace_back([=](MeshOutputContext &output) -> IREffect {
       return pop_mesh_output_vertex_data(reg, 1 << c, index, output.vertex_id, type);
     });
   });
@@ -84,7 +84,7 @@ void handle_signature_vs(
   auto varyings = [&](uint32_t reg, RegisterComponentType declared) {
     define_varyings(sm50_shader, reg, declared, [&](unsigned c, std::string name, air::MSLScalerOrVectorType type) {
       uint32_t assigned_index = func_signature.DefineOutput(OutputVertex{.user = std::move(name), .type = type});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         if (ctx.skip_vertex_output)
           return;
         ctx.epilogue >> pop_output_reg(reg, 1 << c, assigned_index);
@@ -101,7 +101,7 @@ void handle_signature_vs(
         return sig;
       }
     }
-    return Signature();
+    return {};
   };
   auto findOutputElement = [&](auto matcher) -> Signature {
     const D3D11_SIGNATURE_PARAMETER *parameters;
@@ -112,7 +112,7 @@ void handle_signature_vs(
         return sig;
       }
     }
-    return Signature();
+    return {};
   };
 
   switch (Inst.m_OpCode) {
@@ -123,7 +123,7 @@ void handle_signature_vs(
     auto sgv = Inst.m_InputDeclSGV.Name;
     switch (sgv) {
     case D3D10_SB_NAME_VERTEX_ID: {
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect_bind([=](struct context ctx) {
           return store_at_vec4_array_masked(
             ctx.resource.input.ptr_int4, ctx.builder.getInt32(reg),
@@ -134,7 +134,7 @@ void handle_signature_vs(
       break;
     }
     case D3D10_SB_NAME_INSTANCE_ID: {
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect_bind([=](struct context ctx) {
           return store_at_vec4_array_masked(
             ctx.resource.input.ptr_int4, ctx.builder.getInt32(reg),
@@ -165,8 +165,7 @@ void handle_signature_vs(
       });
       max_input_register = std::max(reg + 1, max_input_register);
       if (sig.mask() == 0) break;
-      signature_handlers.push_back(
-        [=, type = (InputAttributeComponentType)sig.componentType(),
+      signature_handlers.emplace_back([=, type = (InputAttributeComponentType)sig.componentType(),
          name = sig.consistentAttributeName()](SignatureContext &ctx) {
           if (ctx.ia_layout) {
             for (unsigned i = 0; i < ctx.ia_layout->num_elements; i++) {
@@ -226,7 +225,7 @@ void handle_signature_vs(
     case D3D10_SB_NAME_POSITION: {
       auto assigned_index =
         func_signature.DefineOutput(OutputPosition{.type = msl_float4});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         if (ctx.skip_vertex_output)
           return;
         ctx.epilogue >> pop_output_reg_sanitize_pos(reg, mask, assigned_index);
@@ -236,7 +235,7 @@ void handle_signature_vs(
     case D3D10_SB_NAME_RENDER_TARGET_ARRAY_INDEX: {
       auto assigned_index =
         func_signature.DefineOutput(OutputRenderTargetArrayIndex{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         if (ctx.skip_vertex_output)
           return;
         ctx.epilogue >> pop_output_reg(reg, mask, assigned_index);
@@ -246,7 +245,7 @@ void handle_signature_vs(
     case D3D10_SB_NAME_VIEWPORT_ARRAY_INDEX: {
       auto assigned_index =
         func_signature.DefineOutput(OutputViewportArrayIndex{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         if (ctx.skip_vertex_output)
           return;
         ctx.epilogue >> pop_output_reg(reg, mask, assigned_index);
@@ -303,7 +302,7 @@ void define_barycentrics(
       interpolation == Interpolation::centroid_perspective || interpolation == Interpolation::centroid_no_perspective;
   sm50_shader->shader_info.use_barycentrics = true;
   sm50_shader->ps_fine_shading |= sample || evaluated;
-  sm50_shader->signature_handlers.push_back([=](SignatureContext &ctx) {
+  sm50_shader->signature_handlers.emplace_back([=](SignatureContext &ctx) {
     bool rows = ctx.barycentric_rows, stepped = sample || centroid || evaluated;
     std::array<uint32_t, 3> coords{rows ? ~0u : ctx.func_signature.DefineInput(InputBarycentricCoord{.perspective = perspective})};
     for (uint32_t k = 0; rows && k < 3; k++)
@@ -377,7 +376,7 @@ void handle_signature_ps(
              interpolation == air::Interpolation::centroid_no_perspective ||
              interpolation == air::Interpolation::sample_no_perspective)
       sm50_shader->ps_noperspective_input_mask |= 1u << reg;
-    signature_handlers.push_back([=](SignatureContext &ctx) {
+    signature_handlers.emplace_back([=](SignatureContext &ctx) {
       bool centroid = interpolation == air::Interpolation::centroid_perspective ||
                       interpolation == air::Interpolation::centroid_no_perspective;
       bool pull_mode = (bool(ctx.pull_mode_reg_mask & (1 << reg)) || (ctx.pull_centroids && centroid)) &&
@@ -429,7 +428,7 @@ void handle_signature_ps(
         return sig;
       }
     }
-    return Signature();
+    return {};
   };
   auto findOutputElement = [&](auto matcher) -> Signature {
     const D3D11_SIGNATURE_PARAMETER *parameters;
@@ -440,7 +439,7 @@ void handle_signature_ps(
         return sig;
       }
     }
-    return Signature();
+    return {};
   };
 
   switch (Inst.m_OpCode) {
@@ -458,7 +457,7 @@ void handle_signature_ps(
     case D3D11_SB_OPERAND_TYPE_INPUT_COVERAGE_MASK: {
       auto assigned_index = func_signature.DefineInput(InputInputCoverage{});
       sm50_shader->ps_has_coverage_input = 1;
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([=](struct context ctx) {
           auto attr = ctx.function->getArg(assigned_index);
           ctx.resource.coverage_mask_arg = attr;
@@ -523,7 +522,7 @@ void handle_signature_ps(
       max_input_register = std::max(reg + 1, max_input_register);
       return;
     }
-    signature_handlers.push_back([=](SignatureContext &ctx) {
+    signature_handlers.emplace_back([=](SignatureContext &ctx) {
       ctx.prologue << init_input_reg(
         assigned_index, reg, mask, siv == D3D10_SB_NAME_POSITION, sample_index_at
       );
@@ -545,7 +544,7 @@ void handle_signature_ps(
       assigned_index = func_signature.DefineInput(InputSampleIndex{});
       sm50_shader->ps_fine_shading = true;
       // D3D's number of the sample (AIRBuilder PairedSamples)
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect_bind([=](struct context ctx) {
           auto index = ctx.air.D3DSampleIndex(ctx.function->getArg(assigned_index));
           return store_at_vec4_array_masked(ctx.resource.input.ptr_int4, ctx.builder.getInt32(reg), index, mask);
@@ -555,7 +554,7 @@ void handle_signature_ps(
       return;
     case microsoft::D3D10_SB_NAME_PRIMITIVE_ID:
       sm50_shader->ps_primitive_id = true;
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         auto index = ctx.func_signature.DefineInput(InputPrimitiveID{});
         ctx.prologue << init_input_reg(index, reg, mask);
       });
@@ -563,7 +562,7 @@ void handle_signature_ps(
       return;
     // the coarse pixel's rate, which the coarse shading variant finds (io_binding_map's shading_rate), 1x1 elsewhere
     case D3D12_SB_NAME_SHADING_RATE:
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect_bind([=](struct context ctx) {
           auto rate = ctx.resource.shading_rate ? ctx.resource.shading_rate : ctx.builder.getInt32(0);
           return store_at_vec4_array_masked(ctx.resource.input.ptr_int4, ctx.builder.getInt32(reg), rate, mask);
@@ -577,7 +576,7 @@ void handle_signature_ps(
       max_input_register = std::max(reg + 1, max_input_register);
       return;
     }
-    signature_handlers.push_back([=](SignatureContext &ctx) {
+    signature_handlers.emplace_back([=](SignatureContext &ctx) {
       ctx.prologue << init_input_reg(assigned_index, reg, mask);
     });
     max_input_register = std::max(reg + 1, max_input_register);
@@ -623,7 +622,7 @@ void handle_signature_ps(
     case D3D11_SB_OPERAND_TYPE_OUTPUT_DEPTH_LESS_EQUAL: {
       sm50_shader->ps_fine_shading = true;
       sm50_shader->ps_depth_output = true;
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([](struct context ctx) -> std::monostate {
           assert(
             ctx.resource.depth_output_reg == nullptr &&
@@ -634,7 +633,7 @@ void handle_signature_ps(
           return {};
         });
       });
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         if (ctx.disable_depth_output)
           return;
         auto assigned_index = ctx.func_signature.DefineOutput(OutputDepth{
@@ -683,7 +682,7 @@ void handle_signature_ps(
     }
     case D3D11_SB_OPERAND_TYPE_OUTPUT_STENCIL_REF: {
       sm50_shader->ps_fine_shading = true;
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([](struct context ctx) -> std::monostate {
           assert(ctx.resource.stencil_ref_reg == nullptr && "otherwise oStencil is defined twice");
           ctx.resource.stencil_ref_reg = ctx.builder.CreateAlloca(ctx.types._int);
@@ -691,7 +690,7 @@ void handle_signature_ps(
         });
       });
       auto assigned_index = func_signature.DefineOutput(OutputStencilRef{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.epilogue >> [=](pvalue v) {
           return make_irvalue([=](struct context ctx) {
             auto ostencil = ctx.builder.CreateLoad(
@@ -704,7 +703,7 @@ void handle_signature_ps(
       break;
     }
     case D3D10_SB_OPERAND_TYPE_OUTPUT_COVERAGE_MASK: {
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([](struct context ctx) -> std::monostate {
           assert(
             ctx.resource.coverage_mask_reg == nullptr &&
@@ -716,7 +715,7 @@ void handle_signature_ps(
         });
       });
       auto assigned_index = func_signature.DefineOutput(OutputCoverageMask{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.epilogue >> [=](pvalue v) {
           return make_irvalue([=](struct context ctx) {
             llvm::Value *odepth = ctx.builder.CreateLoad(
@@ -757,7 +756,7 @@ void handle_signature_ps(
         Refuse("a pixel shader output of an unknown component type");
         break;
       }
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         auto format = uint32_t(ctx.pixel_formats[reg]);
         auto type = component_type_from_pixel_format(air::MTLPixelFormat(format & 0xff));
         if (type == RegisterComponentType::Unknown)
@@ -978,7 +977,7 @@ void handle_signature_ds(
         return sig;
       }
     }
-    return Signature();
+    return {};
   };
 
   switch (Inst.m_OpCode) {
@@ -1077,21 +1076,21 @@ void handle_signature_ds(
     }
     case D3D10_SB_NAME_POSITION: {
       func_signature.DefineMeshVertexOutput(OutputPosition{.type = msl_float4});
-      mesh_output_handlers.push_back([=](MeshOutputContext& output) -> IREffect {
+      mesh_output_handlers.emplace_back([=](MeshOutputContext& output) -> IREffect {
         return pop_mesh_output_position(reg, mask, output.vertex_id);
       });
       break;
     }
     case D3D10_SB_NAME_RENDER_TARGET_ARRAY_INDEX: {
       func_signature.DefineMeshPrimitiveOutput(OutputRenderTargetArrayIndex{});
-      mesh_output_handlers.push_back([=](MeshOutputContext& output) -> IREffect {
+      mesh_output_handlers.emplace_back([=](MeshOutputContext& output) -> IREffect {
         return pop_mesh_output_render_target_array_index(reg, mask, output.primitive_id);
       });
       break;
     }
     case D3D10_SB_NAME_VIEWPORT_ARRAY_INDEX: {
       func_signature.DefineMeshPrimitiveOutput(OutputViewportArrayIndex{});
-      mesh_output_handlers.push_back([=](MeshOutputContext& output) -> IREffect {
+      mesh_output_handlers.emplace_back([=](MeshOutputContext& output) -> IREffect {
         return pop_mesh_output_viewport_array_index(reg, mask, output.primitive_id);
       });
       break;
@@ -1151,7 +1150,7 @@ void handle_signature_cs(
       sm50_shader->reads_dispatch_position = true;
       auto assigned_index =
         func_signature.DefineInput(InputThreadPositionInGrid{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([=](struct context ctx) {
           auto attr = ctx.function->getArg(assigned_index);
           ctx.resource.thread_id_arg = attr;
@@ -1164,7 +1163,7 @@ void handle_signature_cs(
       sm50_shader->reads_dispatch_position = true;
       auto assigned_index =
         func_signature.DefineInput(InputThreadgroupPositionInGrid{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([=](struct context ctx) {
           auto attr = ctx.function->getArg(assigned_index);
           ctx.resource.thread_group_id_arg = attr;
@@ -1176,7 +1175,7 @@ void handle_signature_cs(
     case D3D11_SB_OPERAND_TYPE_INPUT_THREAD_ID_IN_GROUP: {
       auto assigned_index =
         func_signature.DefineInput(InputThreadPositionInThreadgroup{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([=](struct context ctx) {
           auto attr = ctx.function->getArg(assigned_index);
           ctx.resource.thread_id_in_group_arg = attr;
@@ -1188,7 +1187,7 @@ void handle_signature_cs(
     case D3D11_SB_OPERAND_TYPE_INPUT_THREAD_ID_IN_GROUP_FLATTENED: {
       auto assigned_index =
         func_signature.DefineInput(InputThreadIndexInThreadgroup{});
-      signature_handlers.push_back([=](SignatureContext &ctx) {
+      signature_handlers.emplace_back([=](SignatureContext &ctx) {
         ctx.prologue << make_effect([=](struct context ctx) {
           auto attr = ctx.function->getArg(assigned_index);
           ctx.resource.thread_id_in_group_flat_arg = attr;
@@ -1227,7 +1226,7 @@ handle_signature_gs(
         return sig;
       }
     }
-    return Signature();
+    return {};
   };
 
   switch (Inst.m_OpCode) {
@@ -1283,7 +1282,7 @@ handle_signature_gs(
     // what the pixel shader reads as the primitive ID (D3D11.3 8.17), a primitive's from its leading vertex
     case D3D10_SB_NAME_PRIMITIVE_ID: {
       func_signature.DefineMeshPrimitiveOutput(OutputPrimitiveID{});
-      mesh_output_handlers.push_back([=](MeshOutputContext& output) -> IREffect {
+      mesh_output_handlers.emplace_back([=](MeshOutputContext& output) -> IREffect {
         return pop_mesh_output_primitive_id(reg, mask, output.primitive_id);
       });
       break;
@@ -1310,21 +1309,21 @@ handle_signature_gs(
     }
     case D3D10_SB_NAME_POSITION: {
       func_signature.DefineMeshVertexOutput(OutputPosition{.type = msl_float4});
-      mesh_output_handlers.push_back([=](MeshOutputContext& output) -> IREffect {
+      mesh_output_handlers.emplace_back([=](MeshOutputContext& output) -> IREffect {
         return pop_mesh_output_position(reg, mask, output.vertex_id);
       });
       break;
     }
     case D3D10_SB_NAME_RENDER_TARGET_ARRAY_INDEX: {
       func_signature.DefineMeshPrimitiveOutput(OutputRenderTargetArrayIndex{});
-      mesh_output_handlers.push_back([=](MeshOutputContext& output) -> IREffect {
+      mesh_output_handlers.emplace_back([=](MeshOutputContext& output) -> IREffect {
         return pop_mesh_output_render_target_array_index(reg, mask, output.primitive_id);
       });
       break;
     }
     case D3D10_SB_NAME_VIEWPORT_ARRAY_INDEX: {
       func_signature.DefineMeshPrimitiveOutput(OutputViewportArrayIndex{});
-      mesh_output_handlers.push_back([=](MeshOutputContext& output) -> IREffect {
+      mesh_output_handlers.emplace_back([=](MeshOutputContext& output) -> IREffect {
         return pop_mesh_output_viewport_array_index(reg, mask, output.primitive_id);
       });
       break;
@@ -1375,7 +1374,7 @@ void declare_dispatch_origin(SM50ShaderInternal *sm50_shader) {
       !(sm50_shader->groups_work_together || sm50_shader->device_atomics64) || !sm50_shader->reads_dispatch_position)
     return;
   auto index = sm50_shader->func_signature.DefineInput(InputStageInGridOrigin{});
-  sm50_shader->signature_handlers.push_back([=](SignatureContext &ctx) {
+  sm50_shader->signature_handlers.emplace_back([=](SignatureContext &ctx) {
     ctx.prologue << make_effect([=](struct context ctx) {
       auto origin = ctx.function->getArg(index);
       auto &res = ctx.resource;

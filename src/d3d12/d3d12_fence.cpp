@@ -36,7 +36,7 @@ public:
 
   static Watcher &
   Get() {
-    static Watcher *watcher = new Watcher;
+    static auto *watcher = new Watcher;
     return *watcher;
   }
 
@@ -150,7 +150,7 @@ public:
     completion_->listener = &device_->GetEventListener();
   }
 
-  ~MTLD3D12FenceImpl() {
+  ~MTLD3D12FenceImpl() override {
     std::scoped_lock lock(device_->fences.mutex);
     device_->fences.values.erase(completion);
   }

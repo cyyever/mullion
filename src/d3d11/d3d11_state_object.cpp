@@ -200,7 +200,7 @@ public:
       sampler_(std::move(sampler)),
       desc_(desc),
       d3d10_(this) {}
-  ~MTLD3D11SamplerState() = default;
+  ~MTLD3D11SamplerState() override = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -232,7 +232,7 @@ public:
     *pDesc = desc_;
   }
 
-  virtual Rc<Sampler> sampler() { return sampler_; }
+  Rc<Sampler> sampler() override { return sampler_; }
 
 private:
   Rc<Sampler> sampler_;
@@ -291,7 +291,7 @@ public:
         return false;
     return true;
   }
-  ~MTLD3D11BlendState() = default;
+  ~MTLD3D11BlendState() override = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -341,11 +341,11 @@ public:
     *pDesc = desc_;
   }
 
-  bool IsDualSourceBlending() { return dual_source_blending_; }
-  bool IsAlphaToCoverage() { return desc_.AlphaToCoverageEnable; }
+  bool IsDualSourceBlending() override { return dual_source_blending_; }
+  bool IsAlphaToCoverage() override { return desc_.AlphaToCoverageEnable; }
 
   std::array<SM50_SHADER_BLEND, 8>
-  SetupMetalPipelineDescriptor(WMTRenderPipelineBlendInfo *info, uint32_t num_rt, uint32_t valid_rt) {
+  SetupMetalPipelineDescriptor(WMTRenderPipelineBlendInfo *info, uint32_t num_rt, uint32_t valid_rt) override {
     /*
     D3D11.3 Spec:
     Configuration of logic op is constrained in the following way:
@@ -406,7 +406,7 @@ public:
   MTLD3D11RasterizerState(MTLD3D11Device *device,
                           const D3D11_RASTERIZER_DESC2 *desc)
       : ManagedDeviceChild<IMTLD3D11RasterizerState>(device), desc_(*desc), d3d10_(this) {}
-  ~MTLD3D11RasterizerState() = default;
+  ~MTLD3D11RasterizerState() override = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -468,7 +468,7 @@ public:
     *pDesc = desc_;
   }
 
-  void SetupRasterizerState(wmtcmd_render_setrasterizerstate& cmd) {
+  void SetupRasterizerState(wmtcmd_render_setrasterizerstate& cmd) override {
 
     cmd.fill_mode = desc_.FillMode == D3D11_FILL_SOLID ? WMTTriangleFillModeFill : WMTTriangleFillModeLines;
 
@@ -502,13 +502,13 @@ public:
     // desc_.ForcedSampleCount : handled outside
   }
 
-  bool IsScissorEnabled() { return desc_.ScissorEnable; }
+  bool IsScissorEnabled() override { return desc_.ScissorEnable; }
 
-  uint32_t ForcedSampleCount() { return desc_.ForcedSampleCount; }
+  uint32_t ForcedSampleCount() override { return desc_.ForcedSampleCount; }
 
-  bool QuadrilateralLines() { return desc_.MultisampleEnable; }
+  bool QuadrilateralLines() override { return desc_.MultisampleEnable; }
 
-  bool HasReferences() const { return m_refPrivate.load() != 0; }
+  [[nodiscard]] bool HasReferences() const { return m_refPrivate.load() != 0; }
 
 private:
   const D3D11_RASTERIZER_DESC2 desc_;
@@ -539,7 +539,7 @@ public:
         states_[planes][readonly] = device->GetMTLDevice().newDepthStencilState(effective);
       }
   }
-  ~MTLD3D11DepthStencilState() = default;
+  ~MTLD3D11DepthStencilState() override = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -573,11 +573,11 @@ public:
     *pDesc = desc_;
   }
 
-  virtual WMT::DepthStencilState GetDepthStencilState(uint32_t planar_flags, uint32_t readonly_flags) {
+  WMT::DepthStencilState GetDepthStencilState(uint32_t planar_flags, uint32_t readonly_flags) override {
     return states_[planar_flags & 3][readonly_flags & 3];
   }
 
-  virtual bool IsEnabled() {
+  bool IsEnabled() override {
     return desc_.DepthEnable || desc_.StencilEnable;
   }
 

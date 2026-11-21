@@ -176,7 +176,7 @@ SerializeVersionedRootSignatureImpl(
     return hr;
   char *OutBlob = reinterpret_cast<char *>(blob->GetBufferPointer());
 
-  DXBC_ROOT_SIGNATURE_BLOB_HEADER *pHeader = (DXBC_ROOT_SIGNATURE_BLOB_HEADER *)OutBlob;
+  auto *pHeader = (DXBC_ROOT_SIGNATURE_BLOB_HEADER *)OutBlob;
   pHeader->DXBCHeader.DXBCHeaderFourCC = microsoft::DXBC_FOURCC_NAME;
   pHeader->DXBCHeader.BlobCount = 1;
   pHeader->DXBCHeader.Version = {1, 0};
@@ -251,7 +251,7 @@ D3D12SerializeRootSignature(
 
 template <typename Base> class MTLD3D12RootSignatureDeserializer : public ComObject<Base> {
 public:
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   QueryInterface(REFIID riid, void **ppvObject) {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
@@ -264,12 +264,12 @@ public:
     return E_NOINTERFACE;
   }
 
-  virtual const D3D12_ROOT_SIGNATURE_DESC *STDMETHODCALLTYPE
+  const D3D12_ROOT_SIGNATURE_DESC *STDMETHODCALLTYPE
   GetRootSignatureDesc() {
     return &impl_.desc_1_0_.Desc_1_0;
   }
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   GetRootSignatureDescAtVersion(
       D3D_ROOT_SIGNATURE_VERSION Version, const D3D12_VERSIONED_ROOT_SIGNATURE_DESC **ppDesc
   ) {
@@ -289,7 +289,7 @@ public:
     return S_OK;
   }
 
-  virtual const D3D12_VERSIONED_ROOT_SIGNATURE_DESC *STDMETHODCALLTYPE
+  const D3D12_VERSIONED_ROOT_SIGNATURE_DESC *STDMETHODCALLTYPE
   GetUnconvertedRootSignatureDesc() {
     switch (impl_.raw_root_sig_->Version) {
     case D3D_ROOT_SIGNATURE_VERSION_1_0:
@@ -474,7 +474,7 @@ public:
     memcpy(blob_.data(), pBytecode, BytecodeLength);
   }
 
-  ~MTLD3D12RootSignatureImpl() {
+  ~MTLD3D12RootSignatureImpl() override {
     // shaders read the static samplers by the buffer's address: it stays for the work in flight (~MTLD3D12Buffer)
     if (static_samplers_buffer_)
       EndAfterWorkInFlight(device_, [device = device_, buffer = std::move(static_samplers_buffer_)] {
@@ -731,7 +731,7 @@ public:
   }
 
   UINT
-  GetBlob(const void **ppBlob) {
+  GetBlob(const void **ppBlob) override {
     *ppBlob = blob_.data();
     return blob_.size();
   }

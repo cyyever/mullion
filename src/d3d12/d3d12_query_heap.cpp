@@ -27,7 +27,7 @@ class MTLD3D12QueryHeapImpl : public MTLD3D12Pageable<MTLD3D12QueryHeap> {
 public:
   MTLD3D12QueryHeapImpl(MTLD3D12Device *pDevice) : MTLD3D12Pageable<MTLD3D12QueryHeap>(pDevice) {}
 
-  ~MTLD3D12QueryHeapImpl() {
+  ~MTLD3D12QueryHeapImpl() override {
     // stream output adds to the results by their address: they stay for the work in flight (~MTLD3D12Buffer)
     if (results && desc.Type == D3D12_QUERY_HEAP_TYPE_SO_STATISTICS)
       EndAfterWorkInFlight(this->device_, [device = this->device_, buffer = std::move(results)] {

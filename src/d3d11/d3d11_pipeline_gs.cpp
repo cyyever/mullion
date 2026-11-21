@@ -101,7 +101,7 @@ public:
     *pPipeline = {state_mesh_[0], state_mesh_[1], GeometryInstances, MeshInstances, MeshInvocations};
   }
 
-  ThreadpoolWork *RunThreadpoolWork() {
+  ThreadpoolWork *RunThreadpoolWork() override {
 
     WMT::Reference<WMT::Error> err;
     MTL_COMPILED_SHADER vs[2] = {}, gs[2] = {}, ps;
@@ -191,9 +191,9 @@ public:
     return this;
   }
 
-  bool GetIsDone() { return ready_; }
+  bool GetIsDone() override { return ready_; }
 
-  void SetIsDone(bool state) {
+  void SetIsDone(bool state) override {
     ready_.store(state);
     ready_.notify_all();
   }

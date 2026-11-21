@@ -114,7 +114,7 @@ public:
 
   // the address is another buffer's to have at once, as one placed where this was has it; the buffer itself stays for
   // the work in flight
-  ~MTLD3D12Buffer() {
+  ~MTLD3D12Buffer() override {
     if (!buffer || !buffer->current()->buffer())
       return;
     device_->UnregisterVA(buffer->current());
@@ -146,7 +146,7 @@ public:
     return MTLD3D12Pageable::QueryInterface(riid, ppvObject);
   }
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   Map(UINT Subresource, const D3D12_RANGE *pReadRange, void **ppData) {
     if (Subresource)
       return FAIL(E_INVALIDARG);
@@ -157,36 +157,36 @@ public:
     return S_OK;
   };
 
-  virtual void STDMETHODCALLTYPE Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange) {
+  void STDMETHODCALLTYPE Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange) {
     // no-op
   };
 
-  virtual D3D12_RESOURCE_DESC *STDMETHODCALLTYPE
+  D3D12_RESOURCE_DESC *STDMETHODCALLTYPE
   GetDesc(D3D12_RESOURCE_DESC *__ret) {
     *__ret = desc_;
     return __ret;
   };
 
-  virtual D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
+  D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
   GetGPUVirtualAddress() {
     return buffer->current()->gpuAddress();
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   WriteToSubresource(
       UINT DstSubresource, const D3D12_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcSlicePitch
   ) {
     return FAIL(E_INVALIDARG);
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   ReadFromSubresource(
       void *pDstData, UINT DstRowPitch, UINT DstSlicePitch, UINT SrcSubresource, const D3D12_BOX *pSrcBox
   ) {
     return FAIL(E_INVALIDARG);
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   GetHeapProperties(D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS *pFlags) {
     if (reserved_)
       return FAIL(E_INVALIDARG);
@@ -197,7 +197,7 @@ public:
     return S_OK;
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
     HRESULT hr;
     D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc;
@@ -245,7 +245,7 @@ public:
     return Heap->AddShaderResourceView(Index, buffer.ptr(), view, Slice);
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateUnorderedAccessView(
       ID3D12Resource *pCounter, const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor
   ) {
@@ -304,21 +304,21 @@ public:
     return Heap->AddUnorderedAccessView(Index, buffer.ptr(), view, Slice);
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateRenderTargetView(const D3D12_RENDER_TARGET_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
     // Metal renders to textures
     ERR("CreateRenderTargetView: a buffer cannot be a render target");
     return E_INVALIDARG;
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateDepthStencilView(const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
     // Direct3D 12 has no depth stencil view of a buffer
     return FAIL(E_INVALIDARG);
   };
 
   // a buffer's tiles are 64 KB runs of its bytes, all in its one subresource
-  virtual void STDMETHODCALLTYPE GetResourceTiling(
+  void STDMETHODCALLTYPE GetResourceTiling(
       UINT *TotalTileCount, D3D12_PACKED_MIP_INFO *PackedMipInfo, D3D12_TILE_SHAPE *StandardTileShape,
       UINT *SubresourceTilingCount, UINT FirstSubresourceTiling, D3D12_SUBRESOURCE_TILING *SubresourceTilings
   ) {

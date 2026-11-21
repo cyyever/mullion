@@ -390,7 +390,7 @@ public:
           sparse_page_size_ = page;
   }
 
-  ~MTLD3D12DeviceImpl() {
+  ~MTLD3D12DeviceImpl() override {
     heartbeat::Forget(heartbeat_);
     if (archive_opener_)
       archive_opener_->Cancel();
@@ -544,17 +544,17 @@ public:
   };
 
   uint64_t
-  GetAtomicLocks() {
+  GetAtomicLocks() override {
     return atomic_locks_address_;
   }
 
   uint64_t
-  GetNullBuffer() {
+  GetNullBuffer() override {
     return null_buffer_address_;
   }
 
   obj_handle_t
-  GetNullBufferHandle() {
+  GetNullBufferHandle() override {
     return null_buffer_.handle;
   }
 
@@ -574,7 +574,7 @@ public:
   }
 
   void
-  CheckAtomicLocks() {
+  CheckAtomicLocks() override {
     if (__atomic_exchange_n(atomic_locks_given_up_, 0u, __ATOMIC_RELAXED)) {
       ERR("A 64-bit atomic gave up waiting for its lock; removing the device");
       LoseDevice(DXGI_ERROR_DEVICE_HUNG);
@@ -582,12 +582,12 @@ public:
   }
 
   uint32_t
-  GetSIMDWidth() {
+  GetSIMDWidth() override {
     return simd_width_;
   }
 
   uint64_t
-  GroupsAtOnce(WMT::ComputePipelineState pipeline, uint64_t threads, bool kept) {
+  GroupsAtOnce(WMT::ComputePipelineState pipeline, uint64_t threads, bool kept) override {
     // MULLION_D3D12_THREADS_AT_ONCE gives the threads, for a test or to tell what a part's size does
     static const uint64_t given = strtoull(env::getEnvVar("MULLION_D3D12_THREADS_AT_ONCE").c_str(), nullptr, 10);
     if (given || !kept)
@@ -604,7 +604,7 @@ public:
   }
 
   SM50_SHADER_METAL_VERSION
-  GetMetalVersion() {
+  GetMetalVersion() override {
     static_assert(
         SM50_SHADER_METAL_400 == uint32_t(WMTMetal400)
     );
@@ -775,13 +775,13 @@ public:
   }
 
   WMT::Device
-  GetMTLDevice() {
+  GetMTLDevice() override {
     return adapter_->GetMTLDevice();
   };
 
   // the highest level the device supports, as D3D12_FEATURE_FEATURE_LEVELS answers it (the HUD shows it)
   D3D_FEATURE_LEVEL
-  GetFeatureLevel() {
+  GetFeatureLevel() override {
     static const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0,
                                                D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
     D3D12_FEATURE_DATA_FEATURE_LEVELS data{ARRAYSIZE(levels), levels, D3D_FEATURE_LEVEL_11_0};
@@ -791,7 +791,7 @@ public:
   };
 
   HRESULT
-  GetAdapter(REFIID riid, void **ppAdapter) {
+  GetAdapter(REFIID riid, void **ppAdapter) override {
     return adapter_->QueryInterface(riid, ppAdapter);
   };
 
@@ -1921,7 +1921,7 @@ public:
   }
 
   void
-  LoseDevice(HRESULT Reason) {
+  LoseDevice(HRESULT Reason) override {
     decltype(fences.values) pending;
     {
       std::scoped_lock lock(fences.mutex);
@@ -2680,18 +2680,18 @@ public:
   }
 
   WMT::ResidencySet
-  GetGlobalResidencySet() {
+  GetGlobalResidencySet() override {
     return residency_set_;
   };
 
   bool
-  NamesPasses() {
+  NamesPasses() override {
     static const bool names = diag::errors || diag::profile || trace::Heavy(trace::Pass);
     return names;
   }
 
   void
-  NamePass(const EncoderData *pass, const std::string &pipeline, obj_handle_t metal) {
+  NamePass(const EncoderData *pass, const std::string &pipeline, obj_handle_t metal) override {
     std::scoped_lock lock(pass_names_lock_);
     auto &name = pass_names_[pass];
     if (diag::profile && !name.empty())
@@ -2702,7 +2702,7 @@ public:
   }
 
   std::string
-  PassName(const EncoderData *pass, bool consume, obj_handle_t metal) {
+  PassName(const EncoderData *pass, bool consume, obj_handle_t metal) override {
     std::scoped_lock lock(pass_names_lock_);
     if (metal) {
       auto pass_name = pass_pipelines_.find(pass);
@@ -2721,7 +2721,7 @@ public:
   }
 
   void
-  PipelineMade(const std::string &name, const char *kind, std::chrono::steady_clock::time_point start) {
+  PipelineMade(const std::string &name, const char *kind, std::chrono::steady_clock::time_point start) override {
     auto end = std::chrono::steady_clock::now(), present = first_present.load();
     double ms = std::chrono::duration<double, std::milli>(end - start).count();
     // the profile's pipeline time (tools/mullion-diag), on the thread that made it
@@ -2745,7 +2745,7 @@ public:
   }
 
   void
-  ReportPipelineTotals() {
+  ReportPipelineTotals() override {
     std::scoped_lock lock(pass_names_lock_);
     Logger::info(str::format("D3D12 pipeline totals: ", late_pipelines_, " after first Present; ",
         std::setprecision(std::numeric_limits<double>::max_digits10), pipeline_ms_, " ms total; ",
@@ -2753,19 +2753,19 @@ public:
   }
 
   HRESULT
-  RegisterResidency(WMT::Allocation allocation) {
+  RegisterResidency(WMT::Allocation allocation) override {
     AddResidency(allocation);
     return S_OK;
   }
 
   HRESULT
-  UnregisterResidency(WMT::Allocation allocation) {
+  UnregisterResidency(WMT::Allocation allocation) override {
     RemoveResidency(allocation);
     return S_OK;
   }
 
   HRESULT
-  RegisterResidencyAndVA(BufferAllocation *allocation) {
+  RegisterResidencyAndVA(BufferAllocation *allocation) override {
     {
       std::unique_lock<mullion::shared_mutex> lock(va_lock_);
       interval_map_.emplace(allocation->gpuAddress(), allocation);
@@ -2781,7 +2781,7 @@ public:
   }
 
   HRESULT
-  UnregisterResidencyAndVA(BufferAllocation *allocation) {
+  UnregisterResidencyAndVA(BufferAllocation *allocation) override {
     UnregisterVA(allocation);
     if (allocation->flags().test(BufferAllocationFlag::AllocatedOnHeap))
       return S_OK;
@@ -2789,7 +2789,7 @@ public:
   }
 
   void
-  UnregisterVA(BufferAllocation *allocation) {
+  UnregisterVA(BufferAllocation *allocation) override {
     // the buffer's acceleration structures, up to the next buffer's address, end with it and after the locks: they
     // give back what they hold
     std::vector<std::shared_ptr<AccelerationStructure>> ended;
@@ -2809,7 +2809,7 @@ public:
   }
 
   BufferAllocation *
-  LookupBufferByVA(D3D12_GPU_VIRTUAL_ADDRESS VA, uint64_t *pOffset, uint64_t *pEnd) {
+  LookupBufferByVA(D3D12_GPU_VIRTUAL_ADDRESS VA, uint64_t *pOffset, uint64_t *pEnd) override {
     std::shared_lock<mullion::shared_mutex> lock(va_lock_);
     auto iter = interval_map_.upper_bound(VA);
     if (pEnd)
@@ -2831,7 +2831,7 @@ public:
   }
 
   void
-  UpdateSparseBufferMappings(BufferAllocation *buffer, const std::vector<WMTSparseBufferMapping> &ranges) {
+  UpdateSparseBufferMappings(BufferAllocation *buffer, const std::vector<WMTSparseBufferMapping> &ranges) override {
     std::unique_lock<mullion::shared_mutex> lock(va_lock_);
     auto &tiles = sparse_buffer_mappings_.at(buffer->gpuAddress());
     for (auto &range : ranges) {
@@ -2849,7 +2849,7 @@ public:
   void
   CopySparseBufferMappings(
       BufferAllocation *src, BufferAllocation *dst, const std::vector<WMTSparseBufferMappingCopy> &ranges
-  ) {
+  ) override {
     std::unique_lock<mullion::shared_mutex> lock(va_lock_);
     auto &from = sparse_buffer_mappings_.at(src->gpuAddress());
     auto &to = sparse_buffer_mappings_.at(dst->gpuAddress());
@@ -2858,13 +2858,13 @@ public:
   }
 
   bool
-  HasSparseBuffers() {
+  HasSparseBuffers() override {
     std::shared_lock<mullion::shared_mutex> lock(va_lock_);
     return !sparse_buffer_mappings_.empty();
   }
 
   std::vector<uint64_t>
-  SparseBufferMappings() {
+  SparseBufferMappings() override {
     std::shared_lock<mullion::shared_mutex> lock(va_lock_);
     if (sparse_buffer_mappings_.empty())
       return {};
@@ -2880,14 +2880,14 @@ public:
   }
 
   std::shared_ptr<AccelerationStructure>
-  LookupAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS VA) {
+  LookupAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS VA) override {
     std::unique_lock<mullion::mutex> lock(acceleration_structure_lock_);
     auto it = acceleration_structures_.find(VA);
     return it == acceleration_structures_.end() ? nullptr : it->second;
   }
 
   void
-  SetAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS VA, std::shared_ptr<AccelerationStructure> Structure) {
+  SetAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS VA, std::shared_ptr<AccelerationStructure> Structure) override {
     std::unique_lock<mullion::mutex> lock(acceleration_structure_lock_);
     // the one replaced ends after the lock: it gives back what it holds
     std::swap(acceleration_structures_[VA], Structure);
@@ -2895,7 +2895,7 @@ public:
   }
 
   void
-  AllocateCompactedSize(CompactedSize &Size) {
+  AllocateCompactedSize(CompactedSize &Size) override {
     std::unique_lock<mullion::mutex> lock(acceleration_structure_lock_);
     if (Size.value)
       return;
@@ -2913,13 +2913,13 @@ public:
   }
 
   void
-  FreeCompactedSize(const CompactedSize &Size) {
+  FreeCompactedSize(const CompactedSize &Size) override {
     std::unique_lock<mullion::mutex> lock(acceleration_structure_lock_);
     free_compacted_sizes_.push_back(Size);
   }
 
   uint32_t
-  AllocateRayFunction() {
+  AllocateRayFunction() override {
     std::unique_lock<mullion::mutex> lock(acceleration_structure_lock_);
     if (free_ray_functions_.empty())
       return next_ray_function_++;
@@ -2929,18 +2929,18 @@ public:
   }
 
   void
-  FreeRayFunction(uint32_t Slot) {
+  FreeRayFunction(uint32_t Slot) override {
     std::unique_lock<mullion::mutex> lock(acceleration_structure_lock_);
     free_ray_functions_.push_back(Slot);
   }
 
   InternalCommandLibrary &
-  GetLib() {
+  GetLib() override {
     return command_library;
   }
 
   WMTSparsePageSize
-  GetSparsePageSize() {
+  GetSparsePageSize() override {
     return sparse_page_size_;
   }
 
@@ -2980,7 +2980,7 @@ public:
     return holds;
   }
 
-  virtual FormatCapability
+  FormatCapability
   GetMTLPixelFormatCapability(WMTPixelFormat Format) final {
     auto original = WMTPixelFormat(ORIGINAL_FORMAT(Format));
     if (!format_inspector_.textureCapabilities.contains(original))

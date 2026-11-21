@@ -752,7 +752,7 @@ public:
     return S_OK;
   };
 
-  ~MTLD3D12CommandSignatureImpl() = default;
+  ~MTLD3D12CommandSignatureImpl() override = default;
 
   HRESULT
   STDMETHODCALLTYPE

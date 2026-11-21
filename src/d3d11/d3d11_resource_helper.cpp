@@ -500,7 +500,7 @@ CreateMTLTextureDescriptorInternal(
   }
   pDescOut->usage = metal_usage;
 
-  WMTResourceOptions options = (WMTResourceOptions)0;
+  auto options = (WMTResourceOptions)0;
   switch (Usage) {
   case D3D11_USAGE_DEFAULT:
     options |= WMTResourceStorageModeManaged;

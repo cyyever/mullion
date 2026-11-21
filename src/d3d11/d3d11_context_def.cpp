@@ -387,14 +387,14 @@ public:
     case D3D11_QUERY_EVENT:
     case D3D11_QUERY_TIMESTAMP_DISJOINT:
       promote_flush = true;
-      ctx_state.current_cmdlist->ended_queries.push_back(static_cast<MTLD3D11Query *>(pAsync));
+      ctx_state.current_cmdlist->ended_queries.emplace_back(static_cast<MTLD3D11Query *>(pAsync));
       break;
     case D3D11_QUERY_TIMESTAMP: {
       if (!TimestampQueriesSampled())
         break;
       auto &queries = ctx_state.current_cmdlist->regions.back().issued_timestamp_query;
       auto query_id = queries.size();
-      queries.push_back(static_cast<MTLD3D11TimestampQuery *>(pAsync));
+      queries.emplace_back(static_cast<MTLD3D11TimestampQuery *>(pAsync));
       InvalidateCurrentPass(true);
       EmitST([query_id](ArgumentEncodingContext &enc) {
         enc.sampleTimestamp(Rc(enc.deferred_timestamp_queries[query_id]));
@@ -449,7 +449,7 @@ public:
       // the copy is done once the list has run: the immediate context issues the query then
       auto query = static_cast<MTLD3D11StreamOutputQuery *>(pAsync);
       SnapshotStreamOutputStatistics(query->Snapshots(), 1);
-      ctx_state.current_cmdlist->regions.back().ended_stream_output_queries.push_back(query);
+      ctx_state.current_cmdlist->regions.back().ended_stream_output_queries.emplace_back(query);
       promote_flush = true;
       break;
     }
@@ -542,11 +542,11 @@ public:
     return false;
   }
 
-  virtual void WaitUntilGPUIdle() override{
+  void WaitUntilGPUIdle() override{
       // nop
   };
 
-  virtual void PrepareFlush() override{
+  void PrepareFlush() override{
       // nop
   };
 
@@ -601,7 +601,7 @@ class MTLD3D11CommandListPool : public MTLD3D11CommandListPoolBase {
 public:
   MTLD3D11CommandListPool(MTLD3D11Device *device) : device(device){};
 
-  ~MTLD3D11CommandListPool() = default;
+  ~MTLD3D11CommandListPool() override = default;
 
   void
   RecycleCommandList(ID3D11CommandList *cmdlist) override {

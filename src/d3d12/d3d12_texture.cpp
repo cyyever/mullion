@@ -408,7 +408,7 @@ public:
     return S_OK;
   };
 
-  ~MTLD3D12Texture() {
+  ~MTLD3D12Texture() override {
     EndAfterWorkInFlight(device_, [device = device_, texture = std::move(texture)] {
       for (auto storage = texture.ptr(); storage; storage = storage->chroma.ptr()) {
         if (storage->current() && !storage->current()->flags().test(TextureAllocationFlag::AllocatedOnHeap))
@@ -441,7 +441,7 @@ public:
     return MTLD3D12Pageable::QueryInterface(riid, ppvObject);
   }
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   Map(UINT Subresource, const D3D12_RANGE *pReadRange, void **ppData) {
     if (!IsCpuVisibleHeap(&heap_props_) || (desc_.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) ||
         desc_.SampleDesc.Count != 1)
@@ -463,20 +463,20 @@ public:
     return S_OK;
   };
 
-  virtual void STDMETHODCALLTYPE Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange) {};
+  void STDMETHODCALLTYPE Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange) {};
 
-  virtual D3D12_RESOURCE_DESC *STDMETHODCALLTYPE
+  D3D12_RESOURCE_DESC *STDMETHODCALLTYPE
   GetDesc(D3D12_RESOURCE_DESC *__ret) {
     *__ret = feedback ? WithoutMipRegion(*feedback) : desc_;
     return __ret;
   };
 
-  virtual D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
+  D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
   GetGPUVirtualAddress() {
     return 0;
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   WriteToSubresource(
       UINT DstSubresource, const D3D12_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcSlicePitch
   ) {
@@ -546,7 +546,7 @@ public:
     return S_OK;
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   ReadFromSubresource(
       void *pDstData, UINT DstRowPitch, UINT DstSlicePitch, UINT SrcSubresource, const D3D12_BOX *pSrcBox
   ) {
@@ -596,7 +596,7 @@ public:
     return S_OK;
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   GetHeapProperties(D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS *pFlags) {
     if (reserved_)
       return FAIL(E_INVALIDARG);
@@ -610,7 +610,7 @@ public:
   // whether mips [mip, mip + mips) and array slices [slice, slice + slices) are the texture's, a count of ~0u being
   // the rest. a view of others is refused: Metal has no such view to make, and the fields a view keeps them in are
   // narrower than the description's
-  bool
+  [[nodiscard]] bool
   Holds(UINT mip, UINT mips, UINT slice = 0, UINT slices = 1) const {
     const UINT levels = desc_.MipLevels,
                layers = desc_.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1 : desc_.DepthOrArraySize;
@@ -618,7 +618,7 @@ public:
            WithinSlices(slice, slices == ~0u ? layers - slice : slices, layers);
   }
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
     HRESULT hr;
     D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc;
@@ -818,7 +818,7 @@ public:
     );
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateUnorderedAccessView(
       ID3D12Resource *pCounter, const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor
   ) {
@@ -936,7 +936,7 @@ public:
     return Heap->AddUnorderedAccessView(Index, texture, View, FirstWSlice, WSize);
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateRenderTargetView(const D3D12_RENDER_TARGET_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
     HRESULT hr;
     D3D12_RENDER_TARGET_VIEW_DESC ViewDesc;
@@ -1091,7 +1091,7 @@ public:
     return Heap->AddRenderTarget(Index, &RenderTargetDesc);
   };
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   CreateDepthStencilView(const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
     if (texture->chroma)
       return FAIL(E_INVALIDARG);
@@ -1218,7 +1218,7 @@ public:
 
   // tiles as D3D12 numbers them, which the queue's mapping updates walk: each array slice's standard mips in order,
   // then its packed mips, which are Metal's mip tail. shapes and the tail are Metal's
-  virtual void STDMETHODCALLTYPE GetResourceTiling(
+  void STDMETHODCALLTYPE GetResourceTiling(
       UINT *TotalTileCount, D3D12_PACKED_MIP_INFO *PackedMipInfo, D3D12_TILE_SHAPE *StandardTileShape,
       UINT *SubresourceTilingCount, UINT FirstSubresourceTiling, D3D12_SUBRESOURCE_TILING *SubresourceTilings
   ) {

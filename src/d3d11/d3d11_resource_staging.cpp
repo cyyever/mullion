@@ -134,7 +134,7 @@ HRESULT CreateStagingTextureInternal(MTLD3D11Device *pDevice,
         }
       }
     }
-    subresources.push_back(buffer);
+    subresources.emplace_back(buffer);
   }
 
   *ppTexture = reinterpret_cast<typename tag::COM_IMPL *>(ref(

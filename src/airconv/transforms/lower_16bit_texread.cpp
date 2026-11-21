@@ -18,8 +18,8 @@ Lower16BitTexReadPass::run(Function &F, FunctionAnalysisManager &AM) {
       if (!BC)
         continue;
 
-      FixedVectorType *DestVT = dyn_cast<FixedVectorType>(BC->getType());
-      FixedVectorType *SrcVT = dyn_cast<FixedVectorType>(BC->getOperand(0)->getType());
+      auto *DestVT = dyn_cast<FixedVectorType>(BC->getType());
+      auto *SrcVT = dyn_cast<FixedVectorType>(BC->getOperand(0)->getType());
       if (!DestVT || !SrcVT)
         continue;
 
@@ -52,7 +52,7 @@ Lower16BitTexReadPass::run(Function &F, FunctionAnalysisManager &AM) {
 
       // For each extract use, replace it
       for (ExtractElementInst *EE : ExtractUses) {
-        ConstantInt *IdxC = cast<ConstantInt>(EE->getIndexOperand());
+        auto *IdxC = cast<ConstantInt>(EE->getIndexOperand());
         uint64_t idx = IdxC->getZExtValue();
         // sanity check
         if (idx >= DestVT->getNumElements())

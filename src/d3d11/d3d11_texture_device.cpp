@@ -146,11 +146,11 @@ struct TextureShare {
     delete this;
   }
 
-  HANDLE legacyHandle() const {
+  [[nodiscard]] HANDLE legacyHandle() const {
     return reinterpret_cast<HANDLE>(static_cast<uintptr_t>(data.share_id | legacy_handle_marker));
   }
 
-  const char *
+  [[nodiscard]] const char *
   mappingName() const {
     return data.mapping_name;
   }
@@ -177,7 +177,7 @@ JoinShare(const SharedTextureData &data, HANDLE carried = nullptr) {
   std::scoped_lock lock(share_registry_mutex);
   auto it = share_registry.find(data.share_id);
   if (it != share_registry.end())
-    return Rc<TextureShare>(it->second);
+    return {it->second};
   auto share = Rc<TextureShare>(new TextureShare());
   share->data = data;
   share->named_mapping = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, share->mappingName());
@@ -508,7 +508,7 @@ public:
     return S_OK;
   };
 
-  virtual HRESULT
+  HRESULT
   GetSharedHandle(HANDLE *pSharedHandle) override {
     if (pSharedHandle == nullptr || (this->desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED_NTHANDLE)) {
       return E_INVALIDARG;
@@ -527,7 +527,7 @@ public:
     return S_OK;
   }
 
-  virtual HRESULT
+  HRESULT
   CreateSharedHandle(const SECURITY_ATTRIBUTES *Attributes, DWORD Access, const WCHAR *pName, HANDLE *pNTHandle)
       override {
     if (this->wrapped_resource)

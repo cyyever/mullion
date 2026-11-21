@@ -168,7 +168,7 @@ public:
                              &native_desc_);
   }
 
-  ~MTLDXGIOutputImpl() = default;
+  ~MTLDXGIOutputImpl() override = default;
 
   const MullionGammaRamp *
   STDMETHODCALLTYPE

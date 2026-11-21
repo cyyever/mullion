@@ -38,7 +38,7 @@ public:
     sm50_common.next = nullptr;
   }
 
-  ~GeneralShaderCompileTask() = default;
+  ~GeneralShaderCompileTask() override = default;
 
   bool GetShader(MTL_COMPILED_SHADER *pShaderData) final {
     bool ret = false;
@@ -49,7 +49,7 @@ public:
   }
 
   ThreadpoolWork *
-  RunThreadpoolWork() {
+  RunThreadpoolWork() override {
     auto pool = WMT::MakeAutoreleasePool();
     WMT::Reference<WMT::Error> err;
     WMT::Reference<WMT::DispatchData> lib_data = shader_->find_cached_variant(variant_digest_);
@@ -104,9 +104,9 @@ public:
     return this;
   }
 
-  bool GetIsDone() { return ready_; }
+  bool GetIsDone() override { return ready_; }
 
-  void SetIsDone(bool state) { ready_.store(state); }
+  void SetIsDone(bool state) override { ready_.store(state); }
 
 private:
   SM50_SHADER_COMMON_DATA sm50_common;
