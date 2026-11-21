@@ -11,3 +11,6 @@
 [submodule "tests/engines/directx-shader-compiler"]
 	path = tests/engines/directx-shader-compiler
 	url = https://github.com/microsoft/DirectXShaderCompiler.git
+[submodule "external/spdlog"]
+	path = external/spdlog
+	url = https://github.com/gabime/spdlog.git
