@@ -88,7 +88,7 @@ PopulateWMTTextureInfo(MTLD3D12Device *Device, WMTTextureInfo &InfoOut, const D3
 
   // a format makes the textures its row names (Microsoft Learn, "Format support for Direct3D Feature Level 12.0
   // hardware": Texture1D, Texture2D, Texture3D)
-  D3D12_FEATURE_DATA_FORMAT_SUPPORT support{Desc.Format};
+  D3D12_FEATURE_DATA_FORMAT_SUPPORT support{.Format=Desc.Format};
   Device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support));
   if (!(support.Support1 & (Desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D   ? D3D12_FORMAT_SUPPORT1_TEXTURE1D
                             : Desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D ? D3D12_FORMAT_SUPPORT1_TEXTURE2D
@@ -117,7 +117,7 @@ PopulateWMTTextureInfo(MTLD3D12Device *Device, WMTTextureInfo &InfoOut, const D3
     InfoOut.depth = 1;
     InfoOut.array_length = Desc.DepthOrArraySize;
     if (Desc.SampleDesc.Count != 1 || Desc.SampleDesc.Quality) {
-      D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS quality{Desc.Format, Desc.SampleDesc.Count};
+      D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS quality{.Format=Desc.Format, .SampleCount=Desc.SampleDesc.Count};
       if (FAILED(Device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &quality, sizeof(quality))) ||
           !quality.NumQualityLevels ||
           (Desc.SampleDesc.Quality >= quality.NumQualityLevels &&
@@ -537,12 +537,12 @@ public:
           }
     }
     storage->current()->texture().replaceRegion(
-        {box.left, box.top, box.front}, {box.right - box.left, box.bottom - box.top, box.back - box.front}, Level,
+        {.x=box.left, .y=box.top, .z=box.front}, {.width=box.right - box.left, .height=box.bottom - box.top, .depth=box.back - box.front}, Level,
         Slice, pSrcData, SrcRowPitch, SrcSlicePitch
     );
     if (!decoded.empty())
       storage->current()->signedBC.replaceRegion(
-          {box.left, box.top, 0}, {width, height, 1}, Level, Slice, decoded.data(), width * channels * sizeof(float), 0);
+          {.x=box.left, .y=box.top, .z=0}, {.width=width, .height=height, .depth=1}, Level, Slice, decoded.data(), width * channels * sizeof(float), 0);
     return S_OK;
   };
 
@@ -590,7 +590,7 @@ public:
     }
 
     storage->current()->texture().getBytes(
-        {box.left, box.top, box.front}, {box.right - box.left, box.bottom - box.top, box.back - box.front}, Level,
+        {.x=box.left, .y=box.top, .z=box.front}, {.width=box.right - box.left, .height=box.bottom - box.top, .depth=box.back - box.front}, Level,
         Slice, pDstData, DstRowPitch, DstSlicePitch
     );
     return S_OK;
@@ -1226,19 +1226,19 @@ public:
       return NoTiling(TotalTileCount, PackedMipInfo, StandardTileShape, SubresourceTilingCount);
     UINT mips = desc_.MipLevels, slices = desc_.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1 : desc_.DepthOrArraySize;
     D3D12_TILE_SHAPE shape{};
-    D3D12_PACKED_MIP_INFO packed{UINT8(mips)};
+    D3D12_PACKED_MIP_INFO packed{.NumStandardMips=UINT8(mips)};
     UINT per_slice = 0;
     auto tiles = [&](UINT mip) {
       auto extent = [&](uint64_t size, UINT tile) { return UINT((std::max(size >> mip, uint64_t(1)) + tile - 1) / tile); };
       return D3D12_SUBRESOURCE_TILING{
-          extent(desc_.Width, shape.WidthInTexels), UINT16(extent(desc_.Height, shape.HeightInTexels)),
-          UINT16(desc_.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? extent(desc_.DepthOrArraySize, shape.DepthInTexels) : 1)
+          .WidthInTiles=extent(desc_.Width, shape.WidthInTexels), .HeightInTiles=UINT16(extent(desc_.Height, shape.HeightInTexels)),
+          .DepthInTiles=UINT16(desc_.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? extent(desc_.DepthOrArraySize, shape.DepthInTexels) : 1)
       };
     };
     auto size = device_->GetMTLDevice().sparseTileSize(
         texture->textureType(), texture->pixelFormat(), texture->sampleCount(), device_->GetSparsePageSize()
     );
-    shape = {UINT(size.width), UINT(size.height), UINT(size.depth)};
+    shape = {.WidthInTexels=UINT(size.width), .HeightInTexels=UINT(size.height), .DepthInTexels=UINT(size.depth)};
     auto [first, bytes] = dense_tiles ? dense_tail_ : texture->current()->texture().sparseTail();
     packed.NumStandardMips = UINT8(std::min<uint64_t>(first, mips));
     packed.NumPackedMips = UINT8(mips - packed.NumStandardMips);
@@ -1263,7 +1263,7 @@ public:
     for (UINT i = 0; i < count; i++) {
       UINT subresource = FirstSubresourceTiling + i, mip = subresource % mips, start = subresource / mips * per_slice;
       if (mip >= packed.NumStandardMips) {
-        SubresourceTilings[i] = {0, 0, 0, D3D12_PACKED_TILE};
+        SubresourceTilings[i] = {.WidthInTiles=0, .HeightInTiles=0, .DepthInTiles=0, .StartTileIndexInOverallResource=D3D12_PACKED_TILE};
         continue;
       }
       for (UINT m = 0; m < mip; m++) {
@@ -1331,7 +1331,7 @@ CreateReservedTexture(
     void **ppResource
 ) {
   auto texture = Com(new MTLD3D12Texture(pDevice));
-  D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_DEFAULT};
+  D3D12_HEAP_PROPERTIES heap{.Type=D3D12_HEAP_TYPE_DEFAULT};
   HRESULT hr = texture->Initialize(&heap, D3D12_HEAP_FLAG_NONE, pDesc, InitialState, nullptr, 0, true);
   if (FAILED(hr))
     return hr;

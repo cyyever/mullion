@@ -687,6 +687,6 @@ llvm::Expected<llvm::BasicBlock *> convert_basicblocks(
 template <>
 struct environment_cast<::mullion::dxbc::context, ::mullion::air::AIRBuilderContext> {
   ::mullion::air::AIRBuilderContext cast(const ::mullion::dxbc::context &src) {
-    return {src.llvm, src.module, src.builder, src.types, src.air};
+    return {.llvm=src.llvm, .module=src.module, .builder=src.builder, .types=src.types, .air=src.air};
   };
 };

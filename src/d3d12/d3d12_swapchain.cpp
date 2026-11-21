@@ -151,7 +151,7 @@ class MTLD3D12SwapChain final : public MTLDXGISubObject<IMTLDXGISwapChain, MTLD3
   ModeSetGuard modeset_guard_;
   mullion::mutex mutex_;
 
-  D3D12SwapChainBufferRefs buffer_refs_{this};
+  D3D12SwapChainBufferRefs buffer_refs_{.swapchain=this};
   std::vector<Com<MTLD3D12Resource, false>> backbuffers_;
   struct PresentQueue {
     Com<ID3D12CommandQueue> queue;
@@ -385,12 +385,12 @@ public:
       return hr;
 
     DXGI_MODE_DESC1 preferred_display_mode = {
-        desc_.Width,
-        desc_.Height,
-        fullscreen_desc_.RefreshRate,
-        desc_.Format,
-        fullscreen_desc_.ScanlineOrdering,
-        fullscreen_desc_.Scaling
+        .Width=desc_.Width,
+        .Height=desc_.Height,
+        .RefreshRate=fullscreen_desc_.RefreshRate,
+        .Format=desc_.Format,
+        .ScanlineOrdering=fullscreen_desc_.ScanlineOrdering,
+        .Scaling=fullscreen_desc_.Scaling
     };
     bool modeSwitch = (desc_.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH) != 0u;
     if (modeSwitch && FAILED(ChangeDisplayMode(output.ptr(), &preferred_display_mode))) {
@@ -468,11 +468,11 @@ public:
     if (HRESULT hr = pOutput->GetDesc(&output_desc); FAILED(hr))
       return hr;
     wsi::WsiMode wsi_mode{
-        selected_mode.Width,
-        selected_mode.Height,
-        {selected_mode.RefreshRate.Numerator, selected_mode.RefreshRate.Denominator},
-        GetMonitorFormatBpp(selected_mode.Format),
-        selected_mode.ScanlineOrdering == DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST ||
+        .width=selected_mode.Width,
+        .height=selected_mode.Height,
+        .refreshRate={.numerator=selected_mode.RefreshRate.Numerator, .denominator=selected_mode.RefreshRate.Denominator},
+        .bitsPerPixel=GetMonitorFormatBpp(selected_mode.Format),
+        .interlaced=selected_mode.ScanlineOrdering == DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST ||
             selected_mode.ScanlineOrdering == DXGI_MODE_SCANLINE_ORDER_LOWER_FIELD_FIRST
     };
     if (!wsi::setWindowMode(output_desc.Monitor, hWnd, wsi_mode))
@@ -614,7 +614,7 @@ public:
     if (ppPresentQueue && !presentation_queue_) {
       Com<ID3D12CommandQueue> queue;
       Com<ID3D12Fence> finished;
-      D3D12_COMMAND_QUEUE_DESC queue_desc{D3D12_COMMAND_LIST_TYPE_DIRECT};
+      D3D12_COMMAND_QUEUE_DESC queue_desc{.Type=D3D12_COMMAND_LIST_TYPE_DIRECT};
       if (HRESULT hr = CreateCommandQueue(device_, &queue_desc, IID_PPV_ARGS(&queue)); FAILED(hr))
         return hr;
       if (HRESULT hr = CreateFence(device_, 0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&finished)); FAILED(hr))
@@ -896,7 +896,7 @@ public:
     // the output is mono: a stereo buffer shows its left eye, or its right one when the present prefers it
     auto &shown = backbuffer->texture;
     auto eye = shown->createView(
-        {shown->pixelFormat(), WMTTextureType2D, 0, 1, PresentFlags & DXGI_PRESENT_STEREO_PREFER_RIGHT ? 1u : 0u, 1}
+        {.format=shown->pixelFormat(), .type=WMTTextureType2D, .firstMiplevel=0, .miplevelCount=1, .firstArraySlice=PresentFlags & DXGI_PRESENT_STEREO_PREFER_RIGHT ? 1u : 0u, .arraySize=1}
     );
     // full screen, the output's gamma ramp
     if (target_)

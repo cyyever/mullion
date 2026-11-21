@@ -113,7 +113,7 @@ struct D3D12_FEATURE_DATA_BARRIER_LAYOUT {
 };
 } // namespace sdk
 
-const GUID kD3D12DeviceDownlevelUUID = {0x74eaee3f, 0x2f4b, 0x476d, {0x82, 0xba, 0x2b, 0x85, 0xcb, 0x49, 0xe3, 0x10}};
+const GUID kD3D12DeviceDownlevelUUID = {.Data1=0x74eaee3f, .Data2=0x2f4b, .Data3=0x476d, .Data4={0x82, 0xba, 0x2b, 0x85, 0xcb, 0x49, 0xe3, 0x10}};
 
 HRESULT PopulateWMTTextureInfo(
     MTLD3D12Device *Device, WMTTextureInfo &InfoOut, const D3D12_RESOURCE_DESC &Desc, UINT Plane = ~0u
@@ -198,7 +198,7 @@ public:
   HRESULT STDMETHODCALLTYPE
   CreateResourceOfMetal(const D3D12_RESOURCE_DESC *desc, const MullionMetalResource *info,
                         REFIID riid, void **resource) final {
-    D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_DEFAULT};
+    D3D12_HEAP_PROPERTIES heap{.Type=D3D12_HEAP_TYPE_DEFAULT};
     return CreateCommittedTexture(device_, &heap, D3D12_HEAP_FLAG_NONE, desc, D3D12_RESOURCE_STATE_COMMON,
                                   nullptr, riid, resource, nullptr, info);
   }
@@ -444,7 +444,7 @@ public:
     // (SM50_NULL_ACCELERATION_STRUCTURE_HEADER_SIZE)
     auto locks = std::bit_ceil(total_lanes_);
     WMTBufferInfo locks_info{
-        sizeof(AccelerationStructureHeader) + sizeof(uint32_t) * (locks + 2), WMTResourceStorageModeShared
+        .length=sizeof(AccelerationStructureHeader) + sizeof(uint32_t) * (locks + 2), .options=WMTResourceStorageModeShared
     };
     atomic_locks_ = GetMTLDevice().newBuffer(locks_info);
     if (!atomic_locks_) {
@@ -459,7 +459,7 @@ public:
     atomic_locks_given_up_ = words + locks + 1;
     atomic_locks_address_ = locks_info.gpu_address + sizeof(AccelerationStructureHeader);
     RegisterResidency(atomic_locks_);
-    WMTBufferInfo null_info{D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 4 * sizeof(uint32_t), WMTResourceStorageModeShared};
+    WMTBufferInfo null_info{.length=D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 4 * sizeof(uint32_t), .options=WMTResourceStorageModeShared};
     if (!(null_buffer_ = GetMTLDevice().newBuffer(null_info))) {
       ERR("Failed to create the target of null buffer views");
       return E_FAIL;
@@ -470,13 +470,13 @@ public:
 
     // the structure of nothing has no instances: their count is the zero its header has for their address, and the
     // buffer Metal wants them in is one it then reads nothing of. it is built here, on a queue of its own
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS no_instances{D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL};
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS no_instances{.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL};
     auto none = AccelerationStructureInfo(
         this, no_instances, nullptr, false, atomic_locks_, atomic_locks_, offsetof(AccelerationStructureHeader, instances)
     );
     GetMTLDevice().accelerationStructureSizes(none);
     null_scene_ = std::make_unique<AccelerationStructure>(this, none.size, 0);
-    WMTBufferInfo scratch_info{none.build_scratch_size, WMTResourceStorageModePrivate};
+    WMTBufferInfo scratch_info{.length=none.build_scratch_size, .options=WMTResourceStorageModePrivate};
     auto scratch = GetMTLDevice().newBuffer(scratch_info);
     wmtcmd_accelerationstructure_build build{};
     build.type = WMTAccelerationStructureCommandBuild;
@@ -721,7 +721,7 @@ public:
   GetFeatureLevel() override {
     static const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0,
                                                D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
-    D3D12_FEATURE_DATA_FEATURE_LEVELS data{ARRAYSIZE(levels), levels, D3D_FEATURE_LEVEL_11_0};
+    D3D12_FEATURE_DATA_FEATURE_LEVELS data{.NumFeatureLevels=ARRAYSIZE(levels), .pFeatureLevelsRequested=levels, .MaxSupportedFeatureLevel=D3D_FEATURE_LEVEL_11_0};
     if (FAILED(CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &data, sizeof(data))))
       return D3D_FEATURE_LEVEL_11_0;
     return data.MaxSupportedFeatureLevel;
@@ -788,7 +788,7 @@ public:
 
   D3D12_DEVICE_CONFIGURATION_DESC *STDMETHODCALLTYPE
   GetDesc(D3D12_DEVICE_CONFIGURATION_DESC *desc) {
-    *desc = {D3D12_DEVICE_FLAG_NONE, 0, D3D12_SDK_VERSION, UINT(experimental_shader_models_)};
+    *desc = {.Flags=D3D12_DEVICE_FLAG_NONE, .GpuBasedValidationFlags=0, .SDKVersion=D3D12_SDK_VERSION, .NumEnabledExperimentalFeatures=UINT(experimental_shader_models_)};
     return desc;
   }
 
@@ -1157,8 +1157,8 @@ public:
       auto *out = reinterpret_cast<sdk::D3D12_FEATURE_DATA_D3D12_OPTIONS22 *>(pFeatureData);
       // DirectX-Specs, Mesh Shader, DispatchMesh API: each count must be less than 64k
       constexpr UINT mesh_limit = std::numeric_limits<UINT16>::max();
-      *out = {FALSE, FALSE, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-              mesh.MeshShaderTier ? mesh_limit : 0u};
+      *out = {.ShaderExecutionReorderingActuallyReorders=FALSE, .CreateByteOffsetViewsSupported=FALSE, .Max1DDispatchSize=D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+              .Max1DDispatchMeshSize=mesh.MeshShaderTier ? mesh_limit : 0u};
       return S_OK;
     }
     case sdk::D3D12_FEATURE_BARRIER_LAYOUT: {
@@ -1340,7 +1340,7 @@ public:
         return FAIL(E_INVALIDARG);
       // no work graphs, and command signatures have tier 1.0's arguments (no incrementing constant)
       *reinterpret_cast<sdk::D3D12_FEATURE_DATA_D3D12_OPTIONS21 *>(pFeatureData) = {
-          0, sdk::D3D12_EXECUTE_INDIRECT_TIER_1_0, FALSE, FALSE
+          .WorkGraphsTier=0, .ExecuteIndirectTier=sdk::D3D12_EXECUTE_INDIRECT_TIER_1_0, .SampleCmpGradientAndBiasSupported=FALSE, .ExtendedCommandInfoSupported=FALSE
       };
       return S_OK;
     }
@@ -1593,9 +1593,9 @@ public:
   TryCreateSampler2(const D3D12_SAMPLER_DESC2 *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) final {
     if (!pDesc)
       return E_INVALIDARG;
-    D3D12_SAMPLER_DESC desc{pDesc->Filter,         pDesc->AddressU,      pDesc->AddressV, pDesc->AddressW,
-                            pDesc->MipLODBias,     pDesc->MaxAnisotropy, pDesc->ComparisonFunc, {},
-                            pDesc->MinLOD,         pDesc->MaxLOD};
+    D3D12_SAMPLER_DESC desc{.Filter=pDesc->Filter,         .AddressU=pDesc->AddressU,      .AddressV=pDesc->AddressV, .AddressW=pDesc->AddressW,
+                            .MipLODBias=pDesc->MipLODBias,     .MaxAnisotropy=pDesc->MaxAnisotropy, .ComparisonFunc=pDesc->ComparisonFunc, .BorderColor={},
+                            .MinLOD=pDesc->MinLOD,         .MaxLOD=pDesc->MaxLOD};
     for (unsigned i = 0; i < 4; i++)
       desc.BorderColor[i] = (pDesc->Flags & D3D12_SAMPLER_FLAG_UINT_BORDER_COLOR)
                                 ? FLOAT(std::min(pDesc->UintBorderColor[i], 1u))
@@ -1782,7 +1782,7 @@ public:
       ERR("CreateReservedResource: tiled resources need placement sparse resources");
       return E_NOTIMPL;
     }
-    D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_DEFAULT};
+    D3D12_HEAP_PROPERTIES heap{.Type=D3D12_HEAP_TYPE_DEFAULT};
     if (HRESULT hr = ValidateResourceDescs(pDesc, &heap); FAILED(hr))
       return hr;
     if (HRESULT hr = ValidateResourceStates(InitialState, &heap); FAILED(hr))
@@ -2275,8 +2275,8 @@ public:
     auto info = AccelerationStructureInfo(this, *pDesc, geometries.data(), false);
     GetMTLDevice().accelerationStructureSizes(info);
     bool updates = pDesc->Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
-    *pInfo = {AccelerationStructureSize(info.size), AccelerationStructureSize(info.build_scratch_size),
-              updates ? AccelerationStructureSize(info.refit_scratch_size) : 0};
+    *pInfo = {.ResultDataMaxSizeInBytes=AccelerationStructureSize(info.size), .ScratchDataSizeInBytes=AccelerationStructureSize(info.build_scratch_size),
+              .UpdateScratchDataSizeInBytes=updates ? AccelerationStructureSize(info.refit_scratch_size) : 0};
   }
 
   D3D12_DRIVER_MATCHING_IDENTIFIER_STATUS STDMETHODCALLTYPE
@@ -2531,7 +2531,7 @@ public:
       has_msaa_resource |= desc->SampleDesc.Count > 1;
 
       if (desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
-        D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_DEFAULT};
+        D3D12_HEAP_PROPERTIES heap{.Type=D3D12_HEAP_TYPE_DEFAULT};
         if (FAILED(ValidateResourceDescs(desc, &heap)))
           goto invalid;
         if (desc->Alignment && desc->Alignment != D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT) {
@@ -2802,7 +2802,7 @@ public:
       return {};
     std::vector<uint64_t> words{sparse_buffer_mappings_.size()};
     for (auto &[address, tiles] : sparse_buffer_mappings_) {
-      SM50_SPARSE_BUFFER_MAPPING header{address, tiles.size(), interval_map_.at(address)->sparse_tile_bytes};
+      SM50_SPARSE_BUFFER_MAPPING header{.address=address, .tile_count=tiles.size(), .tile_bytes=interval_map_.at(address)->sparse_tile_bytes};
       auto first = words.size();
       words.resize(first + sizeof(header) / sizeof(words[0]));
       memcpy(&words[first], &header, sizeof(header));
@@ -2834,10 +2834,10 @@ public:
     if (free_compacted_sizes_.empty()) {
       // a block of them, to not pay a page for each
       constexpr uint64_t block = 1 << 16;
-      WMTBufferInfo info{block, WMTResourceStorageModeShared};
+      WMTBufferInfo info{.length=block, .options=WMTResourceStorageModeShared};
       auto &buffer = compacted_size_buffers_.emplace_back(GetMTLDevice().newBuffer(info));
       for (uint64_t offset = 0; offset < info.length; offset += sizeof(uint64_t))
-        free_compacted_sizes_.push_back({buffer.handle, offset, (uint64_t *)((char *)info.memory.ptr + offset)});
+        free_compacted_sizes_.push_back({.buffer=buffer.handle, .offset=offset, .value=(uint64_t *)((char *)info.memory.ptr + offset)});
     }
     Size = free_compacted_sizes_.back();
     free_compacted_sizes_.pop_back();
@@ -3118,8 +3118,8 @@ PipelineStateStream::Parse(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc) {
       depth.StencilWriteMask = subobject->data.FrontFace.StencilWriteMask;
       auto &front = subobject->data.FrontFace;
       auto &back = subobject->data.BackFace;
-      depth.FrontFace = {front.StencilFailOp, front.StencilDepthFailOp, front.StencilPassOp, front.StencilFunc};
-      depth.BackFace = {back.StencilFailOp, back.StencilDepthFailOp, back.StencilPassOp, back.StencilFunc};
+      depth.FrontFace = {.StencilFailOp=front.StencilFailOp, .StencilDepthFailOp=front.StencilDepthFailOp, .StencilPassOp=front.StencilPassOp, .StencilFunc=front.StencilFunc};
+      depth.BackFace = {.StencilFailOp=back.StencilFailOp, .StencilDepthFailOp=back.StencilDepthFailOp, .StencilPassOp=back.StencilPassOp, .StencilFunc=back.StencilFunc};
       depth_bounds = subobject->data.DepthBoundsTestEnable;
       break;
     }
@@ -3166,7 +3166,7 @@ AccelerationStructure::AccelerationStructure(MTLD3D12Device *device, uint64_t si
   device->RegisterResidency(structure);
   if (!instance_count)
     return;
-  WMTBufferInfo info{instance_count * kAccelerationStructureInstanceSize, WMTResourceStorageModePrivate};
+  WMTBufferInfo info{.length=instance_count * kAccelerationStructureInstanceSize, .options=WMTResourceStorageModePrivate};
   instances = device->GetMTLDevice().newBuffer(info);
   header.instances = info.gpu_address;
   device->RegisterResidency(instances);
@@ -3209,7 +3209,7 @@ CreateD3D12Device(IMTLDXGIAdapter *adapter, D3D_FEATURE_LEVEL MinimumFeatureLeve
   // the level is asked of a device that is not built yet: a level it does not reach builds nothing, and neither does
   // a call without ppDevice, which only tests whether the adapter supports the level (Microsoft Learn,
   // D3D12CreateDevice, ppDevice). middleware asks so for each level in turn before any device is created
-  D3D12_FEATURE_DATA_FEATURE_LEVELS levels{1, &MinimumFeatureLevel};
+  D3D12_FEATURE_DATA_FEATURE_LEVELS levels{.NumFeatureLevels=1, .pFeatureLevelsRequested=&MinimumFeatureLevel};
   if (FAILED(hr = device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &levels, sizeof(levels))))
     return hr;
   if (levels.MaxSupportedFeatureLevel != MinimumFeatureLevel) {

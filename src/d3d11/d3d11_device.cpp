@@ -37,18 +37,18 @@
 
 namespace mullion {
 
-const GUID kRenderdocUUID = {0xa7aa6116,
-                             0x9c8d,
-                             0x4bba,
-                             {0x90, 0x83, 0xb4, 0xd8, 0x16, 0xb7, 0x1b, 0x78}};
-const GUID kPixUUID = {0x9f251514,
-                       0x9d4d,
-                       0x4902,
-                       {0x9d, 0x60, 0x18, 0x98, 0x8a, 0xb7, 0xd4, 0xb5}};
-const GUID kGpaUUID = {0xccffef16,
-                       0x7b69,
-                       0x468f,
-                       {0xbc, 0xe3, 0xcd, 0x95, 0x33, 0x69, 0xa3, 0x9a}};
+const GUID kRenderdocUUID = {.Data1=0xa7aa6116,
+                             .Data2=0x9c8d,
+                             .Data3=0x4bba,
+                             .Data4={0x90, 0x83, 0xb4, 0xd8, 0x16, 0xb7, 0x1b, 0x78}};
+const GUID kPixUUID = {.Data1=0x9f251514,
+                       .Data2=0x9d4d,
+                       .Data3=0x4902,
+                       .Data4={0x9d, 0x60, 0x18, 0x98, 0x8a, 0xb7, 0xd4, 0xb5}};
+const GUID kGpaUUID = {.Data1=0xccffef16,
+                       .Data2=0x7b69,
+                       .Data3=0x468f,
+                       .Data4={0xbc, 0xe3, 0xcd, 0x95, 0x33, 0x69, 0xa3, 0x9a}};
 
 class D3D11InfoQueue final : public ID3D11InfoQueue {
   struct FilterList {
@@ -147,7 +147,7 @@ public:
         return DXGI_ERROR_MORE_DATA;
       auto data = reinterpret_cast<char *>(out + 1);
       memcpy(data, message.description.c_str(), message.description.size() + 1);
-      *out = {message.category, message.severity, message.id, data, message.description.size() + 1};
+      *out = {.Category=message.category, .Severity=message.severity, .ID=message.id, .pDescription=data, .DescriptionByteLength=message.description.size() + 1};
       return S_OK;
     }
     return E_INVALIDARG;
@@ -247,7 +247,7 @@ public:
     }
     try {
       if (limit_) {
-        messages_.push_back({category, severity, id, description});
+        messages_.push_back({.category=category, .severity=severity, .id=id, .description=description});
         if (messages_.size() > limit_) {
           messages_.pop_front();
           ++discarded_;
@@ -1702,7 +1702,7 @@ public:
       if (shared_resource) {
         hr = d3d11_device_.OpenSharedResource(shared_resource->Handle, IID_PPV_ARGS(&surface[i]));
       } else {
-        D3D11_TEXTURE2D_DESC texture_desc{desc->Width, desc->Height, 1, 1, desc->Format, desc->SampleDesc};
+        D3D11_TEXTURE2D_DESC texture_desc{.Width=desc->Width, .Height=desc->Height, .MipLevels=1, .ArraySize=1, .Format=desc->Format, .SampleDesc=desc->SampleDesc};
         texture_desc.BindFlags = (usage & DXGI_USAGE_RENDER_TARGET_OUTPUT ? D3D11_BIND_RENDER_TARGET : 0) |
                                  (usage & DXGI_USAGE_SHADER_INPUT ? D3D11_BIND_SHADER_RESOURCE : 0) |
                                  (usage & DXGI_USAGE_UNORDERED_ACCESS ? D3D11_BIND_UNORDERED_ACCESS : 0);

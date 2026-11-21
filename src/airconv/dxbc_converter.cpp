@@ -230,7 +230,7 @@ void setup_temp_register(
           ptr_int_vec, llvm::PointerType::get(llvm::ArrayType::get(types._float, numRegisters * channel_count)->getContext(), 0)
       );
       phase_temp.indexable_temp_map[idx] = {
-        ptr_int_vec, ptr_float_vec, (uint32_t)channel_count
+        .ptr_int_vec=ptr_int_vec, .ptr_float_vec=ptr_float_vec, .vec_size=(uint32_t)channel_count
       };
     }
   }
@@ -242,7 +242,7 @@ void setup_temp_register(
         ptr_int_vec, llvm::PointerType::get(llvm::ArrayType::get(types._float, numRegisters * channel_count)->getContext(), 0)
     );
     resource_map.indexable_temp_map[idx] = {
-      ptr_int_vec, ptr_float_vec, (uint32_t)channel_count
+      .ptr_int_vec=ptr_int_vec, .ptr_float_vec=ptr_float_vec, .vec_size=(uint32_t)channel_count
     };
   }
   if (shader_info->use_cmp_exch) {
@@ -907,7 +907,7 @@ llvm::Error convert_dxbc_pixel_shader(
     auto &b = pso_data->blend[rt];
     if (!(b.blend || b.logic) || !(pShaderInternal->pso_valid_output_reg_mask & (1 << rt)))
       continue;
-    held[rt] = func_signature.DefineInput(air::InputRenderTarget{rt, b.logic ? air::msl_uint4 : air::msl_float4});
+    held[rt] = func_signature.DefineInput(air::InputRenderTarget{.index=rt, .type=b.logic ? air::msl_uint4 : air::msl_float4});
     if (weighs_by_factor(b))
       factors = func_signature.DefineInput(air::ArgumentBindingBuffer{
           .location_index = SM50_BINDING_INDEX_DEPTH_RANGES,
@@ -2299,9 +2299,9 @@ static int SM50InitializeUncached(
       pRefl->GeometryShader.FixedEmits = mullion::dxbc::fixed_stream_primitives(sm50_shader).has_value();
     }
     if (sm50_shader->shader_type == microsoft::D3D10_SB_PIXEL_SHADER) {
-      pRefl->PixelShader = {sm50_shader->pso_valid_output_reg_mask, sm50_shader->ps_has_coverage_output, 0, 0,
-                            sm50_shader->ps_has_coverage_input, sm50_shader->ps_flat_input_mask,
-                            sm50_shader->ps_noperspective_input_mask, 0, 0, 0, 0, 0, 0, 0, 0};
+      pRefl->PixelShader = {.ValidRenderTargets=sm50_shader->pso_valid_output_reg_mask, .HasCoverageOutput=sm50_shader->ps_has_coverage_output, .SintRenderTargets=0, .UintRenderTargets=0,
+                            .HasCoverageInput=sm50_shader->ps_has_coverage_input, .FlatInputs=sm50_shader->ps_flat_input_mask,
+                            .NoPerspectiveInputs=sm50_shader->ps_noperspective_input_mask, .FineShading=0, .Barycentrics=0, .PrimitiveID=0, .DepthOutput=0, .EarlyTests=0, .Discards=0, .VertexValues=0, .InnerCoverage=0};
       // EvaluateAttribute* evaluates where the shader chooses, which coarse shading does not move
       pRefl->PixelShader.FineShading = sm50_shader->ps_fine_shading || sm50_shader->shader_info.pull_mode_reg_mask;
       pRefl->PixelShader.PrimitiveID = sm50_shader->ps_primitive_id;
@@ -2491,7 +2491,7 @@ AIRCONV_API int SM50Initialize(
     return 0;
   }
   initialized_by_bytecode.emplace(key, shader);
-  auto entry = std::make_unique<InitializedShader>(InitializedShader{key, reflection, 1});
+  auto entry = std::make_unique<InitializedShader>(InitializedShader{.key=key, .reflection=reflection, .references=1});
   initialized.emplace(shader, std::move(entry));
   return 0;
 }

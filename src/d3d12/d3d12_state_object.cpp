@@ -133,7 +133,7 @@ StoreRayShaders(ShaderCache &cache, const Sha1Digest &library, const RayShaderLi
   auto writer = cache.getWriter();
   if (!writer)
     return;
-  RayShaderListRecord record{{}, sizeof(SM50_RAY_SHADER_INFO), uint32_t(shaders.size())};
+  RayShaderListRecord record{.magic={}, .information_size=sizeof(SM50_RAY_SHADER_INFO), .shaders=uint32_t(shaders.size())};
   memcpy(record.magic, kRayShaderListMagic, sizeof(record.magic));
   std::string bytes((const char *)&record, sizeof(record));
   for (auto &[name, info] : shaders) {
@@ -203,7 +203,7 @@ ReadSubobjects(const D3D12_SHADER_BYTECODE &library) {
   for (uint32_t i = 0, count = word(parts[Subobjects], 0); i < count; i++) {
     auto record = parts[Subobjects].subspan(std::min<size_t>(8 + (uint64_t)i * stride, parts[Subobjects].size()));
     auto field = [&](uint32_t index) { return index * 4 < stride ? word(record, index * 4) : 0; };
-    LibrarySubobject subobject{(D3D12_STATE_SUBOBJECT_TYPE)field(0), string(field(1))};
+    LibrarySubobject subobject{.type=(D3D12_STATE_SUBOBJECT_TYPE)field(0), .name=string(field(1))};
     switch (subobject.type) {
     case D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE:
     case D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE:
@@ -355,7 +355,7 @@ RayDispatchers(
         table = true;
         continue;
       }
-      auto &shader = direct.emplace_back(SM50_RAY_DISPATCHED_SHADER{function->slot});
+      auto &shader = direct.emplace_back(SM50_RAY_DISPATCHED_SHADER{.slot=function->slot});
       name.copy(shader.name, sizeof(shader.name) - 1);
     }
     SM50ShaderBitcode bitcode;
@@ -480,7 +480,7 @@ class MTLD3D12StateObjectImpl : public MTLD3D12DeviceChild<MTLD3D12StateObject, 
     }
     std::unordered_map<std::wstring, RayShader> shaders;
     for (auto &[name, info] : listed)
-      shaders.insert({ExportName(name), {library, name, info}});
+      shaders.insert({ExportName(name), {.library=library, .function=name, .info=info}});
     Export(shaders, {desc.pExports, desc.NumExports}, shaders_);
     libraries_.push_back(library);
     if (device_->NamesPasses())
@@ -506,9 +506,9 @@ class MTLD3D12StateObjectImpl : public MTLD3D12DeviceChild<MTLD3D12StateObject, 
       microsoft::DXBCBlobHeader blob;
     } head{};
     std::vector<uint8_t> container(sizeof(head) + serialized.size());
-    head.header = {microsoft::DXBC_FOURCC_NAME, {}, {1, 0}, (uint32_t)container.size(), 1};
+    head.header = {.DXBCHeaderFourCC=microsoft::DXBC_FOURCC_NAME, .Hash={}, .Version={.Major=1, .Minor=0}, .ContainerSizeInBytes=(uint32_t)container.size(), .BlobCount=1};
     head.offset = offsetof(decltype(head), blob);
-    head.blob = {microsoft::DXBC_RootSignature, (uint32_t)serialized.size()};
+    head.blob = {.BlobFourCC=microsoft::DXBC_RootSignature, .BlobSize=(uint32_t)serialized.size()};
     memcpy(container.data(), &head, sizeof(head));
     memcpy(container.data() + sizeof(head), serialized.data(), serialized.size());
     auto hash = md5::hashDxbcBinary(container.data(), container.size());
@@ -580,7 +580,7 @@ class MTLD3D12StateObjectImpl : public MTLD3D12DeviceChild<MTLD3D12StateObject, 
       }
     if (!function->function) {
       auto blob = [](MTLD3D12RootSignature *root, SM50_SHADER_COMPILATION_ARGUMENT_TYPE type, void *next) {
-        SM50_SHADER_ROOT_SIGNATURE_DATA data{next, type};
+        SM50_SHADER_ROOT_SIGNATURE_DATA data{.next=next, .type=type};
         data.bytecode_length = root->GetBlob(&data.bytecode);
         data.static_samplers = root->StaticSamplersAddress;
         return data;
@@ -601,15 +601,15 @@ class MTLD3D12StateObjectImpl : public MTLD3D12DeviceChild<MTLD3D12StateObject, 
           if (!linkable.back())
             return unusable(*library);
         }
-      SM50_SHADER_LIBRARIES_DATA linked{nullptr, SM50_SHADER_LIBRARIES, linkable.data(), (uint32_t)linkable.size()};
-      SM50_SHADER_RAY_SHADER_DATA ray{&linked, SM50_SHADER_RAY_SHADER, shader.function.c_str()};
+      SM50_SHADER_LIBRARIES_DATA linked{.next=nullptr, .type=SM50_SHADER_LIBRARIES, .libraries=linkable.data(), .count=(uint32_t)linkable.size()};
+      SM50_SHADER_RAY_SHADER_DATA ray{.next=&linked, .type=SM50_SHADER_RAY_SHADER, .name=shader.function.c_str()};
       void *arguments = &ray;
       SM50_SHADER_ROOT_SIGNATURE_DATA local, global;
       if (local_root)
         arguments = &(local = blob(local_root, SM50_SHADER_ROOT_SIGNATURE2, arguments));
       if (global_root)
         arguments = &(global = blob(global_root, SM50_SHADER_ROOT_SIGNATURE, arguments));
-      SM50_SHADER_COMMON_DATA common{arguments, SM50_SHADER_COMMON, device_->GetMetalVersion()};
+      SM50_SHADER_COMMON_DATA common{.next=arguments, .type=SM50_SHADER_COMMON, .metal_version=device_->GetMetalVersion()};
       common.flags = device_->GetShaderFlags();
       common.simd_width = device_->GetSIMDWidth();
 
@@ -680,7 +680,7 @@ public:
                  : -1;
     };
     auto definition = [&](Subobject subobject) {
-      Association made{(SubobjectKind)kind(subobject->Type)};
+      Association made{.kind=(SubobjectKind)kind(subobject->Type)};
       if (made.kind == Global || made.kind == Local)
         made.root = ((const D3D12_GLOBAL_ROOT_SIGNATURE *)subobject->pDesc)->pGlobalRootSignature;
       else if (made.kind == ShaderConfig) {
@@ -762,7 +762,7 @@ public:
           groups[group.name] = group;
         Export(groups, {desc.pExports, desc.NumExports}, taken);
         for (auto &[name, group] : taken)
-          hit_groups.push_back({name, {group.imports[0], group.imports[1], group.imports[2]}});
+          hit_groups.push_back({.name=name, .imports={group.imports[0], group.imports[1], group.imports[2]}});
         // an association follows its export to the name it is taken under
         for (auto &association : collection->deferred_associations_) {
           if (association.name.empty() || !desc.NumExports)
@@ -783,8 +783,8 @@ public:
         auto &group = *(const D3D12_HIT_GROUP_DESC *)subobject.pDesc;
         auto name = [](const WCHAR *import) { return std::wstring(import ? import : L""); };
         hit_groups.push_back(
-            {group.HitGroupExport,
-             {name(group.ClosestHitShaderImport), name(group.AnyHitShaderImport), name(group.IntersectionShaderImport)}}
+            {.name=group.HitGroupExport,
+             .imports={name(group.ClosestHitShaderImport), name(group.AnyHitShaderImport), name(group.IntersectionShaderImport)}}
         );
         break;
       }
@@ -833,7 +833,7 @@ public:
         }
         root_signatures_.emplace_back(static_cast<MTLD3D12RootSignature *>(root.ptr()));
         library_definitions[subobject.name] = {
-            (SubobjectKind)kind(subobject.type), root.ptr(), LibraryDeclared, {}, library};
+            .kind=(SubobjectKind)kind(subobject.type), .root=root.ptr(), .strength=LibraryDeclared, .name={}, .library=library};
         break;
       }
       case D3D12_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG:
@@ -843,12 +843,12 @@ public:
       case D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG:
       case D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1:
         library_definitions[subobject.name] = {
-            (SubobjectKind)kind(subobject.type),       nullptr, LibraryDeclared, {}, library, nullptr, {},
-            {subobject.values[0], subobject.values[1]}};
+            .kind=(SubobjectKind)kind(subobject.type),       .root=nullptr, .strength=LibraryDeclared, .name={}, .library=library, .collection=nullptr, .subobject={},
+            .values={subobject.values[0], subobject.values[1]}};
         break;
       case D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP:
         // a library names any hit before closest hit
-        hit_groups.push_back({subobject.name, {subobject.names[1], subobject.names[0], subobject.names[2]}});
+        hit_groups.push_back({.name=subobject.name, .imports={subobject.names[1], subobject.names[0], subobject.names[2]}});
         break;
       default:
         break;
@@ -860,7 +860,7 @@ public:
       auto found = library_definitions.find(name);
       if (found == library_definitions.end() && library_names_.count(name))
         return;
-      auto made = found == library_definitions.end() ? Association{SubobjectKinds} : found->second;
+      auto made = found == library_definitions.end() ? Association{.kind=SubobjectKinds} : found->second;
       made.library = library;
       if (found == library_definitions.end())
         made.subobject = name;
@@ -1010,8 +1010,8 @@ public:
         return false;
       }
       auto previous = to.functions[index];
-      if (previous && same({Global, global}, {Global, previous->global.ptr()}) &&
-          same({Local, local}, {Local, previous->local.ptr()}))
+      if (previous && same({.kind=Global, .root=global}, {.kind=Global, .root=previous->global.ptr()}) &&
+          same({.kind=Local, .root=local}, {.kind=Local, .root=previous->local.ptr()}))
         return true;
       auto made = Compile(shader->second, global, local, libraries_, unresolved);
       if (!made) {
@@ -1066,7 +1066,7 @@ public:
     if (failed)
       return FAIL(E_INVALIDARG);
     if (auto &config = configurations_[PipelineConfig - ShaderConfig]; config)
-      pipeline_config_ = {config->first, (D3D12_RAYTRACING_PIPELINE_FLAGS)config->second};
+      pipeline_config_ = {.MaxTraceRecursionDepth=config->first, .Flags=(D3D12_RAYTRACING_PIPELINE_FLAGS)config->second};
 
     // "Default pipeline stack size": the deepest any chain of the shaders there are can get, with callable shaders
     // two deep
@@ -1219,9 +1219,9 @@ public:
           continue;
         }
         WMTFunctionConstant constants[] = {
-            {{&direct}, WMTDataTypeBool, kRayFCIndex_DirectCalls},
-            {{&any_hit}, WMTDataTypeBool, kRayFCIndex_AnyHitShaders},
-            {{&intersection}, WMTDataTypeBool, kRayFCIndex_IntersectionShaders},
+            {.data={&direct}, .type=WMTDataTypeBool, .index=kRayFCIndex_DirectCalls},
+            {.data={&any_hit}, .type=WMTDataTypeBool, .index=kRayFCIndex_AnyHitShaders},
+            {.data={&intersection}, .type=WMTDataTypeBool, .index=kRayFCIndex_IntersectionShaders},
         };
         auto function = [&](const char *name) {
           return library.newFunctionWithConstants(name, constants, SpecializedRays() ? std::size(constants) : 1, err);

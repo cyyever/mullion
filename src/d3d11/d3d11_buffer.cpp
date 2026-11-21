@@ -56,7 +56,7 @@ private:
         SRVBase(pDesc, pResource, pDevice) {
       buffer_ = pResource->buffer_.ptr();
       view_id_ = info.viewKey;
-      slice_ = {info.byteOffset, info.byteWidth, info.viewElementOffset, info.viewElementWidth };
+      slice_ = {.byteOffset=info.byteOffset, .byteLength=info.byteWidth, .firstElement=info.viewElementOffset, .elementCount=info.viewElementWidth };
       subset_ = ResourceSubsetState(info.byteOffset, info.byteWidth);
     }
 
@@ -74,7 +74,7 @@ private:
         UAVBase(pDesc, pResource, pDevice) {
       buffer_ = pResource->buffer_.ptr();
       view_id_ = info.viewKey;
-      slice_ = {info.byteOffset, info.byteWidth, info.viewElementOffset, info.viewElementWidth };
+      slice_ = {.byteOffset=info.byteOffset, .byteLength=info.byteWidth, .firstElement=info.viewElementOffset, .elementCount=info.viewElementWidth };
       counter_ = std::move(counter);
       subset_ = ResourceSubsetState(info.byteOffset, info.byteWidth);
     }
@@ -103,7 +103,7 @@ private:
       texture_ = attachment_.ptr();
       view_id_ = texture_->fullView;
       format_ = format.PixelFormat;
-      pass_desc_ = {0, info.sample_count, 0, info.width, info.height};
+      pass_desc_ = {.RenderTargetArrayLength=0, .SampleCount=info.sample_count, .DepthPlane=0, .Width=info.width, .Height=info.height};
       subset_ =
           ResourceSubsetState(attachment_->render_buffer_offset, pDesc->Buffer.NumElements * format.BytesPerTexel);
     }

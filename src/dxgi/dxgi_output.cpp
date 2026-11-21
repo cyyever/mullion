@@ -47,8 +47,8 @@ DXGI_MODE_DESC1 ConvertDisplayMode(const wsi::WsiMode &WsiMode) {
   DXGI_MODE_DESC1 dxgiMode = {};
   dxgiMode.Width = WsiMode.width;
   dxgiMode.Height = WsiMode.height;
-  dxgiMode.RefreshRate = DXGI_RATIONAL{WsiMode.refreshRate.numerator,
-                                       WsiMode.refreshRate.denominator};
+  dxgiMode.RefreshRate = DXGI_RATIONAL{.Numerator=WsiMode.refreshRate.numerator,
+                                       .Denominator=WsiMode.refreshRate.denominator};
   dxgiMode.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; // FIXME
   dxgiMode.ScanlineOrdering = WsiMode.interlaced
                                   ? DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST
@@ -369,8 +369,8 @@ public:
     if (gamma_control == nullptr || !monitor_state_.fullscreens)
       return FAIL(DXGI_ERROR_INVALID_CALL);
 
-    gamma_control->Scale = { 1.0f, 1.0f, 1.0f };
-    gamma_control->Offset = { 0.0f, 0.0f, 0.0f };
+    gamma_control->Scale = { .Red=1.0f, .Green=1.0f, .Blue=1.0f };
+    gamma_control->Offset = { .Red=0.0f, .Green=0.0f, .Blue=0.0f };
     for (uint32_t i = 0; i < MULLION_GAMMA_CP_COUNT; i++) {
       gamma_control->GammaCurve[i].Red = monitor_state_.gamma.red[i];
       gamma_control->GammaCurve[i].Green = monitor_state_.gamma.green[i];
@@ -504,7 +504,7 @@ public:
     DXGI_MODE_DESC1 defaultMode;
     defaultMode.Width = 0;
     defaultMode.Height = 0;
-    defaultMode.RefreshRate = {0, 0};
+    defaultMode.RefreshRate = {.Numerator=0, .Denominator=0};
     defaultMode.Format = DXGI_FORMAT_UNKNOWN;
     defaultMode.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
     defaultMode.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;

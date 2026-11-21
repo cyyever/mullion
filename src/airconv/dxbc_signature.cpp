@@ -556,7 +556,7 @@ void handle_signature_ps(
       sm50_shader->ps_primitive_id = true;
       signature_handlers.emplace_back([=](SignatureContext &ctx) {
         auto index = ctx.patch_varying ? ctx.func_signature.DefineInput(InputFragmentStageIn{
-                                             SM50_PATCH_VARYING, msl_uint, Interpolation::flat, false
+                                             .user=SM50_PATCH_VARYING, .type=msl_uint, .interpolation=Interpolation::flat, .pull_mode=false
                                          })
                                        : ctx.func_signature.DefineInput(InputPrimitiveID{});
         ctx.prologue << init_input_reg(index, reg, mask);

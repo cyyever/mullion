@@ -78,7 +78,7 @@ DispatchesOverlap(const wmtcmd_base *cmd) {
 }
 
 const GUID kD3D12CommandQueueDownlevelUUID = {
-    0x38a8c5ef, 0x7ccb, 0x4e81, {0x91, 0x4f, 0xa6, 0xe9, 0xd0, 0x72, 0xc4, 0x94}
+    .Data1=0x38a8c5ef, .Data2=0x7ccb, .Data3=0x4e81, .Data4={0x91, 0x4f, 0xa6, 0xe9, 0xd0, 0x72, 0xc4, 0x94}
 };
 
 template <bool Metal4>
@@ -729,7 +729,7 @@ private:
       return [this, res = Com(resource)](WMT::MTL4CommandQueue queue) {
         auto buffer = res->buffer->current();
         queue.updateMappings(buffer->buffer(), false, device_->SpareTile(), std::vector<WMTSparseBufferMapping>{
-            {WMTSparseMappingModeMap, buffer->sparse_tile_count, 1, 0}});
+            {.mode=WMTSparseMappingModeMap, .first_tile=buffer->sparse_tile_count, .tile_count=1, .heap_tile=0}});
       };
     auto &mapped = resource->mapped_tiles;
     auto bound = std::ranges::find(mapped, true);
@@ -738,7 +738,7 @@ private:
       return [res = Com(resource), at](WMT::MTL4CommandQueue queue) {
         auto texture = res->texture->current()->texture();
         queue.copyMappings(texture, texture, true, std::vector<WMTSparseTextureMappingCopy>{
-            {at.origin, at.size, at.level, at.slice, at.origin, at.level, at.slice}});
+            {.origin=at.origin, .size=at.size, .level=at.level, .slice=at.slice, .destination_origin=at.origin, .destination_level=at.level, .destination_slice=at.slice}});
       };
     return [this, res = Com(resource), at](WMT::MTL4CommandQueue queue) mutable {
       for (auto mode : {WMTSparseMappingModeMap, WMTSparseMappingModeUnmap}) {
@@ -978,8 +978,8 @@ private:
           else if (pass.type == EncoderType::ComputeParts) {
             // one dispatch, which the queue cuts in parts: its pipeline, the fewest parts it takes and its groups
             auto data = static_cast<const ComputePartsEncoderData *>(pass.pass);
-            auto size = data->indirect ? WMTSize{data->indirect->ThreadGroupCountX, data->indirect->ThreadGroupCountY,
-                                                 data->indirect->ThreadGroupCountZ}
+            auto size = data->indirect ? WMTSize{.width=data->indirect->ThreadGroupCountX, .height=data->indirect->ThreadGroupCountY,
+                                                 .depth=data->indirect->ThreadGroupCountZ}
                                        : data->size;
             uint64_t groups = size.width * size.height * size.depth;
             runs = str::format(name(reinterpret_cast<const wmtcmd_compute_setpso *>(data->cmd_head.next.ptr)->pso), '*',
@@ -1387,7 +1387,7 @@ public:
     // x with consecutive heap tiles. Metal applies them in order, so a tile named twice keeps the last mapping
     Tiling tiling(resource);
     D3D12_TILED_RESOURCE_COORDINATE coordinate{};
-    D3D12_TILE_REGION_SIZE size{region_start_coordinates ? 1 : tiling.total};
+    D3D12_TILE_REGION_SIZE size{.NumTiles=region_start_coordinates ? 1 : tiling.total};
     D3D12_TILE_RANGE_FLAGS range_flag = D3D12_TILE_RANGE_FLAG_NONE;
     UINT range_size = ~0u, range_offset = 0;
     std::vector<WMTSparseTextureMapping> operations;
@@ -1442,7 +1442,7 @@ public:
       // a buffer's tiles are its x
       std::vector<WMTSparseBufferMapping> ranges;
       for (auto &op : operations)
-        ranges.push_back({op.mode, op.origin.x, op.size.width, op.heap_tile});
+        ranges.push_back({.mode=op.mode, .first_tile=op.origin.x, .tile_count=op.size.width, .heap_tile=op.heap_tile});
       queue.updateMappings(res->buffer->current()->buffer(), false, heap_handle, ranges);
       settle(queue);
       device_->UpdateSparseBufferMappings(res->buffer->current(), ranges);
@@ -1471,7 +1471,7 @@ public:
       auto from_tile = source.index(*src_region_start_coordinate, *region_size, n);
       auto to_tile = destination.index(*dst_region_start_coordinate, *region_size, n);
       auto from = source.place(from_tile), to = destination.place(to_tile);
-      operations.push_back({from.origin, from.size, from.level, from.slice, to.origin, to.level, to.slice});
+      operations.push_back({.origin=from.origin, .size=from.size, .level=from.level, .slice=from.slice, .destination_origin=to.origin, .destination_level=to.level, .destination_slice=to.slice});
       if (source.texture)
         unmaps |= !(dst->mapped_tiles[to_tile] = mapped[from_tile]);
     }
@@ -1497,7 +1497,7 @@ public:
       }
       std::vector<WMTSparseBufferMappingCopy> ranges;
       for (auto &op : operations)
-        ranges.push_back({op.origin.x, 1, op.destination_origin.x});
+        ranges.push_back({.first_tile=op.origin.x, .tile_count=1, .destination_tile=op.destination_origin.x});
       queue.copyMappings(src->buffer->current()->buffer(), dst->buffer->current()->buffer(), false, ranges);
       settle(queue);
       device_->CopySparseBufferMappings(src->buffer->current(), dst->buffer->current(), ranges);
@@ -1557,7 +1557,7 @@ public:
       mappings = device_->SparseBufferMappings();
     }
     if (!mappings.empty()) {
-      WMTBufferInfo info{mappings.size() * sizeof(mappings[0]), WMTResourceStorageModeShared};
+      WMTBufferInfo info{.length=mappings.size() * sizeof(mappings[0]), .options=WMTResourceStorageModeShared};
       sparse_mappings = device_->GetMTLDevice().newBuffer(info);
       if (!sparse_mappings) {
         device_->LoseDevice();
@@ -1820,7 +1820,7 @@ public:
           Trace("waits for the timestamps of command buffer ", inflight_cmdbuf_seq_.load());
           if (scope.Settle())
             retired_.Expect(inflight_cmdbuf_seq_ - 1)->wait(false);
-          WMTBufferInfo info{data->count * sizeof(uint64_t), WMTResourceStorageModeShared};
+          WMTBufferInfo info{.length=data->count * sizeof(uint64_t), .options=WMTResourceStorageModeShared};
           auto staging = data->memory ? WMT::Reference<WMT::Buffer>{} : device_->GetMTLDevice().newBuffer(info);
           memcpy(data->memory ? static_cast<char *>(data->memory) + data->dst_offset : info.memory.ptr,
                  &data->heap->timestamps[data->start], data->count * sizeof(uint64_t));
@@ -1864,7 +1864,7 @@ public:
           auto read = [&](D3D12_GPU_VIRTUAL_ADDRESS address, uint64_t length) {
             uint64_t offset;
             auto allocation = device_->LookupBufferByVA(address, &offset);
-            WMTBufferInfo info{length, WMTResourceStorageModeShared};
+            WMTBufferInfo info{.length=length, .options=WMTResourceStorageModeShared};
             auto staging = device_->GetMTLDevice().newBuffer(info);
             if (diag::trace_encoders)
               scope.inflight->physical[WMTMetal4Blit]++;
@@ -2126,7 +2126,7 @@ public:
             for (auto omitted = pass->omitted; omitted; omitted = omitted->next)
               count += omitted->words;
           });
-          WMTBufferInfo info{count * sizeof(uint32_t), WMTResourceStorageModeShared};
+          WMTBufferInfo info{.length=count * sizeof(uint32_t), .options=WMTResourceStorageModeShared};
           auto buffer = device_->GetMTLDevice().newBuffer(info);
           if (!buffer) {
             device_->LoseDevice();
@@ -2243,8 +2243,8 @@ public:
     }
     case EncoderType::ComputeParts: {
       auto data = static_cast<ComputePartsEncoderData *>(current);
-      auto size = data->indirect ? WMTSize{data->indirect->ThreadGroupCountX, data->indirect->ThreadGroupCountY,
-                                         data->indirect->ThreadGroupCountZ} : data->size;
+      auto size = data->indirect ? WMTSize{.width=data->indirect->ThreadGroupCountX, .height=data->indirect->ThreadGroupCountY,
+                                         .depth=data->indirect->ThreadGroupCountZ} : data->size;
       const std::array<uint64_t, 3> extent{size.width, size.height, size.depth};
       auto pipeline = reinterpret_cast<const wmtcmd_compute_setpso *>(data->cmd_head.next.ptr);
       assert(pipeline->type == WMTComputeCommandSetPSO);
@@ -2274,8 +2274,8 @@ public:
         }
         wmtcmd_compute_dispatch_part part{};
         part.type = WMTComputeCommandDispatchPart;
-        part.origin = {origin[0], origin[1], origin[2]};
-        part.size = {size[0], size[1], size[2]};
+        part.origin = {.x=origin[0], .y=origin[1], .z=origin[2]};
+        part.size = {.width=size[0], .height=size[1], .depth=size[2]};
         part.threadgroup_size = pipeline->threadgroup_size;
         encoder.encodeCommands(reinterpret_cast<const wmtcmd_compute_nop *>(&part));
         wmtcmd_compute_memory_barrier barrier{};
@@ -2473,7 +2473,7 @@ public:
     memcpy(&described, read(Source + SerializedInputsOffset(pointers), sizeof(described)).data(), sizeof(described));
     bool top = described.type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
     auto bytes = read(Source, SerializedLayout(top, described.count, described.size).data);
-    desc = {Destination};
+    desc = {.DestAccelerationStructureData=Destination};
     DeserializedInputs(described, bytes.data(), Source, desc.Inputs, geometries, instances);
     return true;
   }
@@ -2482,9 +2482,9 @@ public:
   bool
   Place(D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc, const std::vector<D3D12_RAYTRACING_INSTANCE_DESC> &instances) {
     auto buffer = [&](D3D12_HEAP_TYPE heap, UINT64 size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state) {
-      D3D12_HEAP_PROPERTIES props{heap};
-      D3D12_RESOURCE_DESC of{D3D12_RESOURCE_DIMENSION_BUFFER, 0, std::max<UINT64>(size, 1), 1, 1, 1, DXGI_FORMAT_UNKNOWN,
-                             {1, 0}, D3D12_TEXTURE_LAYOUT_ROW_MAJOR, flags};
+      D3D12_HEAP_PROPERTIES props{.Type=heap};
+      D3D12_RESOURCE_DESC of{.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER, .Alignment=0, .Width=std::max<UINT64>(size, 1), .Height=1, .DepthOrArraySize=1, .MipLevels=1, .Format=DXGI_FORMAT_UNKNOWN,
+                             .SampleDesc={.Count=1, .Quality=0}, .Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR, .Flags=flags};
       device_->CreateCommittedResource(
           &props, D3D12_HEAP_FLAG_NONE, &of, state, nullptr, IID_PPV_ARGS(&own_buffers_.emplace_back())
       );
@@ -2771,7 +2771,7 @@ public:
     auto &view = resource->texture->view(resource->texture->fullView);
     wmtcmd_blit_copy_from_texture_to_buffer copy{.type = WMTBlitCommandCopyFromTextureToBuffer};
     copy.src = view.texture.handle;
-    copy.size = {uint32_t(desc.Width), desc.Height, 1};
+    copy.size = {.width=uint32_t(desc.Width), .height=desc.Height, .depth=1};
     copy.dst = buffer.handle;
     copy.bytes_per_row = footprint.Footprint.RowPitch;
     if (diag::trace_encoders)
@@ -2831,11 +2831,11 @@ public:
           wmtcmd_blit_copy_from_texture_to_texture copy{.type = WMTBlitCommandCopyFromTextureToTexture};
           copy.src = p->texture->view(p->texture->fullView).texture.handle;
           copy.src_slice = eye;
-          copy.src_origin = {uint32_t(to.left + from.x), uint32_t(to.top + from.y), 0};
-          copy.src_size = {uint32_t(to.right - to.left), uint32_t(to.bottom - to.top), 1};
+          copy.src_origin = {.x=uint32_t(to.left + from.x), .y=uint32_t(to.top + from.y), .z=0};
+          copy.src_size = {.width=uint32_t(to.right - to.left), .height=uint32_t(to.bottom - to.top), .depth=1};
           copy.dst = view.texture.handle;
           copy.dst_slice = eye;
-          copy.dst_origin = {uint32_t(to.left), uint32_t(to.top), 0};
+          copy.dst_origin = {.x=uint32_t(to.left), .y=uint32_t(to.top), .z=0};
           blit.encodeCommands((const wmtcmd_blit_nop *)&copy);
         }
       if constexpr (Metal4) {

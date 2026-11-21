@@ -26,14 +26,14 @@ public:
     }
 
     VertexShader = pDesc->VertexShader->get_shader(ShaderVariantVertex{
-        pDesc->InputLayout, pDesc->GSPassthrough, !pDesc->RasterizationEnabled, pDesc->ClipDistances != 0});
+        .input_layout_handle=pDesc->InputLayout, .gs_passthrough=pDesc->GSPassthrough, .rasterization_disabled=!pDesc->RasterizationEnabled, .clip_distance_varyings=pDesc->ClipDistances != 0});
 
     if (pDesc->PixelShader) {
       PixelShader = pDesc->PixelShader->get_pixel_shader(ShaderVariantPixel{
-          pDesc->SampleMask, pDesc->BlendState->IsDualSourceBlending(),
-          depth_stencil_format == WMTPixelFormatInvalid,
-          unorm_output_reg_mask, pDesc->PipelineStatistics, pDesc->BlendState->IsAlphaToCoverage(),
-          pDesc->CenteredSamples, pDesc->SingleRasterSample, pDesc->PairedSamples, pDesc->ClipDistances},
+          .sample_mask=pDesc->SampleMask, .dual_source_blending=pDesc->BlendState->IsDualSourceBlending(),
+          .disable_depth_output=depth_stencil_format == WMTPixelFormatInvalid,
+          .unorm_output_reg_mask=unorm_output_reg_mask, .pipeline_statistics=pDesc->PipelineStatistics, .alpha_to_coverage=pDesc->BlendState->IsAlphaToCoverage(),
+          .centered_samples=pDesc->CenteredSamples, .single_raster_sample=pDesc->SingleRasterSample, .paired_samples=pDesc->PairedSamples, .clip_distances=pDesc->ClipDistances},
           {rtv_formats, num_rtvs}, pDesc->BlendState, pDesc->PixelMinMaxFiltering);
       ps_valid_render_targets = pDesc->PixelShader->reflection().PSValidRenderTargets;
     } else {
@@ -51,7 +51,7 @@ public:
       return pipeline->GetPipeline(pPipeline);
     }
     ready_.wait(false, std::memory_order_acquire);
-    *pPipeline = {state_};
+    *pPipeline = {.PipelineState=state_};
   }
 
   ThreadpoolWork *RunThreadpoolWork() override {

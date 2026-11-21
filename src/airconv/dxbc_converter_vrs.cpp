@@ -38,7 +38,7 @@ CoarseShading::CoarseShading(air::FunctionSignatureBuilder &signature, uint32_t 
     auto &input = all[index];
     if (auto stage_in = std::get_if<air::InputFragmentStageIn>(&input);
         stage_in && !stage_in->pull_mode && stage_in->interpolation != air::Interpolation::flat)
-      inputs_.push_back({index, stage_in->interpolation == air::Interpolation::center_perspective});
+      inputs_.push_back({.index=index, .perspective=stage_in->interpolation == air::Interpolation::center_perspective});
     if (std::holds_alternative<air::InputInputCoverage>(input))
       coverage_ = index;
   }

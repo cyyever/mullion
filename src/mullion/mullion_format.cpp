@@ -1661,7 +1661,7 @@ SanitizeRTVClearColor(WMTPixelFormat format, WMTClearColor &color) {
   auto channels = RenderTargetChannels(format);
   for (unsigned i = 0; i < std::size(logical); i++)
     physical[channels[i]] = logical[i];
-  color = {physical[0], physical[1], physical[2], physical[3]};
+  color = {.r=physical[0], .g=physical[1], .b=physical[2], .a=physical[3]};
 }
 
 std::array<uint8_t, 4>
@@ -1700,7 +1700,7 @@ BorderColorRange(const MTL_DXGI_FORMAT_DESC &description) {
   if (description.Flag & MTL_DXGI_FORMAT_EMULATED_D24)
     return {0, 1};
   auto format = WMTPixelFormat(ORIGINAL_FORMAT(description.PixelFormat));
-  WMTClearColor low{-FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX}, high{FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX};
+  WMTClearColor low{.r=-FLT_MAX, .g=-FLT_MAX, .b=-FLT_MAX, .a=-FLT_MAX}, high{.r=FLT_MAX, .g=FLT_MAX, .b=FLT_MAX, .a=FLT_MAX};
   SanitizeRTVClearColor(format, low);
   SanitizeRTVClearColor(format, high);
   switch (format) {

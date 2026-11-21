@@ -28,7 +28,7 @@ public:
       return {};
     auto Pointer = GetArgument(Builder, ConstantBufferTableIndex, Iter->second.arg_index);
     auto Metadata = GetArgument(Builder, ConstantBufferTableIndex, Iter->second.arg_metadata_index);
-    return ConstantBufferDescriptor{Pointer, Metadata};
+    return ConstantBufferDescriptor{.Pointer=Pointer, .Metadata=Metadata};
   }
 
   std::optional<SamplerDescriptor>
@@ -41,7 +41,7 @@ public:
     auto Sampler = GetArgument(Builder, BindingTableIndex, Iter->second.arg_index);
     auto CubeSampler = GetArgument(Builder, BindingTableIndex, Iter->second.arg_cube_index);
     auto Metadata = GetArgument(Builder, BindingTableIndex, Iter->second.arg_metadata_index);
-    return SamplerDescriptor{Sampler, CubeSampler, Metadata};
+    return SamplerDescriptor{.SamplerHandle=Sampler, .CubeSamplerHandle=CubeSampler, .Metadata=Metadata};
   }
 
   std::optional<TextureDescirptor>
@@ -69,7 +69,7 @@ public:
     auto MemoryAccess =
         Iter->second.sampled ? Texture::MemoryAccess::access_sample : Texture::MemoryAccess::access_read;
 
-    return TextureDescirptor{Handle, Metadata, false, ResourceKind, ResourceKindLogical, MemoryAccess, SampleType};
+    return TextureDescirptor{.ResourceHandle=Handle, .Metadata=Metadata, .GlobalCoherent=false, .ResourceKind=ResourceKind, .ResourceKindLogical=ResourceKindLogical, .MemoryAccess=MemoryAccess, .SampleType=SampleType};
   }
 
   std::optional<TextureDescirptor>
@@ -99,8 +99,8 @@ public:
                                              : Texture::MemoryAccess::access_read;
 
     return TextureDescirptor{
-        Handle,  Metadata, Iter->second.global_coherent, ResourceKind, ResourceKindLogical, MemoryAccess, SampleType,
-        nullptr, true
+        .ResourceHandle=Handle,  .Metadata=Metadata, .GlobalCoherent=Iter->second.global_coherent, .ResourceKind=ResourceKind, .ResourceKindLogical=ResourceKindLogical, .MemoryAccess=MemoryAccess, .SampleType=SampleType,
+        .Range=nullptr, .IsUAV=true
     };
   }
 
@@ -115,7 +115,7 @@ public:
       return {};
     auto Handle = GetArgument(Builder, BindingTableIndex, Iter->second.arg_index);
     auto Metadata = GetArgument(Builder, BindingTableIndex, Iter->second.arg_metadata_index);
-    return BufferDescriptor{Handle, Metadata, Iter->second.structure_stride, false};
+    return BufferDescriptor{.Pointer=Handle, .Metadata=Metadata, .StructureStride=Iter->second.structure_stride, .GlobalCoherent=false};
   }
 
   std::optional<BufferDescriptor>
@@ -129,7 +129,7 @@ public:
       return {};
     auto Handle = GetArgument(Builder, BindingTableIndex, Iter->second.arg_index);
     auto Metadata = GetArgument(Builder, BindingTableIndex, Iter->second.arg_metadata_index);
-    return BufferDescriptor{Handle, Metadata, Iter->second.structure_stride, Iter->second.global_coherent};
+    return BufferDescriptor{.Pointer=Handle, .Metadata=Metadata, .StructureStride=Iter->second.structure_stride, .GlobalCoherent=Iter->second.global_coherent};
   }
   std::optional<CounterDescriptor>
   GetUAVCounter(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {

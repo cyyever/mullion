@@ -62,7 +62,7 @@ llvm::Value *
 Converter::LoadOperandIndex(const IndexByTempComponent &SrcOpIndex) {
   auto Comp = SrcOpIndex.component;
   SrcOperandTemp RelReg{
-      ._ = {{Comp, Comp, Comp, Comp}, false, false, OperandDataType::Integer},
+      ._ = {.swizzle={.x=Comp, .y=Comp, .z=Comp, .w=Comp}, .abs=false, .neg=false, .read_type=OperandDataType::Integer},
       .regid = SrcOpIndex.regid,
       .phase = SrcOpIndex.phase,
   };
@@ -74,7 +74,7 @@ llvm::Value *
 Converter::LoadOperandIndex(const IndexByIndexableTempComponent &SrcOpIndex) {
   auto Comp = SrcOpIndex.component;
   SrcOperandIndexableTemp RelReg{
-      ._ = {{Comp, Comp, Comp, Comp}, false, false, OperandDataType::Integer},
+      ._ = {.swizzle={.x=Comp, .y=Comp, .z=Comp, .w=Comp}, .abs=false, .neg=false, .read_type=OperandDataType::Integer},
       .regfile = SrcOpIndex.regfile,
       .regindex = SrcOpIndex.regid,
       .phase = SrcOpIndex.phase,
@@ -551,8 +551,8 @@ Converter::LoadBuffer(const AtomicDstOperandUAV &DstOp) {
     return {};
 
   return std::optional<AtomicBufferResourceHandle>(
-      {descriptor->Pointer, descriptor->Metadata, descriptor->StructureStride, DstOp.mask,
-       descriptor->GlobalCoherent && SupportsMemoryCoherency(), descriptor->Bounded}
+      {.Pointer=descriptor->Pointer, .Metadata=descriptor->Metadata, .StructureStride=descriptor->StructureStride, .Mask=DstOp.mask,
+       .GlobalCoherent=descriptor->GlobalCoherent && SupportsMemoryCoherency(), .Bounded=descriptor->Bounded}
   );
 }
 
@@ -564,7 +564,7 @@ Converter::LoadBuffer(const SrcOperandTGSM &SrcOp) {
 
   IntPtr = ir.CreatePointerCast(IntPtr, llvm::PointerType::get(ir.getInt32Ty()->getContext(), tgsm_h->getAddressSpace()));
 
-  return std::optional<BufferResourceHandle>({IntPtr, nullptr, stride, SrcOp.read_swizzle, false});
+  return std::optional<BufferResourceHandle>({.Pointer=IntPtr, .Metadata=nullptr, .StructureStride=stride, .Swizzle=SrcOp.read_swizzle, .GlobalCoherent=false});
 }
 std::optional<AtomicBufferResourceHandle>
 Converter::LoadBuffer(const AtomicOperandTGSM &DstOp) {
@@ -574,7 +574,7 @@ Converter::LoadBuffer(const AtomicOperandTGSM &DstOp) {
 
   IntPtr = ir.CreatePointerCast(IntPtr, llvm::PointerType::get(ir.getInt32Ty()->getContext(), tgsm_h->getAddressSpace()));
 
-  return std::optional<AtomicBufferResourceHandle>({IntPtr, nullptr, stride, DstOp.mask, false});
+  return std::optional<AtomicBufferResourceHandle>({.Pointer=IntPtr, .Metadata=nullptr, .StructureStride=stride, .Mask=DstOp.mask, .GlobalCoherent=false});
 }
 
 std::optional<UAVCounterHandle>
@@ -599,7 +599,7 @@ Converter::LoadSampler(const SrcOperandSampler &SrcOp) {
   auto Bias = DecodeSamplerBias(descriptor->Metadata);
   NoteSampler(*descriptor);
   return std::optional<SamplerHandle>(
-      {descriptor->SamplerHandle, descriptor->CubeSamplerHandle, Bias, descriptor->Metadata, descriptor->Border}
+      {.Handle=descriptor->SamplerHandle, .HandleCube=descriptor->CubeSamplerHandle, .Bias=Bias, .Metadata=descriptor->Metadata, .Border=descriptor->Border}
   );
 }
 
@@ -2932,8 +2932,8 @@ Converter::MinMaxFilter(
           for (unsigned m = 1; m < SM50_SAMPLER_ADDRESS_COUNT; m++)
             Index = ir.CreateSelect(Is(SM50_SAMPLER_ADDRESS(m)), ByMode[m], Index);
           Texels[Axis][k] = {
-              Index, k ? Weighted : ir.getTrue(),
-              ir.CreateAnd(Is(SM50_SAMPLER_ADDRESS_BORDER), ir.CreateICmpNE(Inside(I), I))
+              .Index=Index, .Kept=k ? Weighted : ir.getTrue(),
+              .Outside=ir.CreateAnd(Is(SM50_SAMPLER_ADDRESS_BORDER), ir.CreateICmpNE(Inside(I), I))
           };
         }
       }
@@ -3712,7 +3712,7 @@ Converter::LoadInterpolant(uint32_t Index) {
     return {};
 
   auto &interpolant = res.interpolant_map[Index];
-  InterpolantHandle handle{{}, interpolant.perspective};
+  InterpolantHandle handle{.Component={}, .Perspective=interpolant.perspective};
   for (unsigned i = 0; i < 4; i++)
     if (~interpolant.component[i])
       handle.Component[i] = ctx.function->getArg(interpolant.component[i]);

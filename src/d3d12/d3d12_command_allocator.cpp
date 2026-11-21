@@ -142,10 +142,10 @@ MTLD3D12CommandAllocatorImpl::RecordGPUHeap(
   auto root = &encoder_lists_.back();
   auto list = records_->head.load(std::memory_order_relaxed);
   if (!list || list->root != root) {
-    list = new GPUListRecords{root, list, {}};
+    list = new GPUListRecords{.root=root, .previous=list, .passes={}};
     records_->head.store(list, std::memory_order_release);
   }
-  list->passes[pass].push_back({static_cast<const char *>(Bytes), Kind, Length, WrittenOffset, WrittenLength});
+  list->passes[pass].push_back({.bytes=static_cast<const char *>(Bytes), .kind=Kind, .length=Length, .written_offset=WrittenOffset, .written_length=WrittenLength});
 }
 
 void
@@ -299,7 +299,7 @@ MTLD3D12CommandAllocatorImpl::NewArgumentsBuffer(size_t Length) {
   }
   // resident with the device's, as a list may use addresses in any of them, not only the one it binds
   device_->RegisterResidency(buffer);
-  recording.buffers.push_back({std::move(buffer), buffer_info.gpu_address, Length});
+  recording.buffers.push_back({.buffer=std::move(buffer), .address=buffer_info.gpu_address, .length=Length});
   return true;
 }
 
@@ -326,7 +326,7 @@ MTLD3D12CommandAllocatorImpl::ArgumentsViews(ArgumentsView (&views)[kArgumentsVi
   std::scoped_lock lock(device_->recording.mutex);
   unsigned count = 0;
   for (auto &buffer : device_->recording.buffers)
-    views[count++] = {buffer.address, buffer.length};
+    views[count++] = {.address=buffer.address, .length=buffer.length};
   return count;
 }
 
@@ -512,7 +512,7 @@ MTLD3D12CommandAllocatorImpl::EncodeComputeResolver(MTLD3D12CommandSignature *pC
   auto &cmd_setpso_res = EncodeComputeCommand<wmtcmd_compute_setpso>();
   cmd_setpso_res.type = WMTComputeCommandSetPSO;
   cmd_setpso_res.pso = pCmdSig->compute_resolver;
-  cmd_setpso_res.threadgroup_size = {pCmdSig->compute_resolver.maxTotalThreadsPerThreadgroup(), 1, 1};
+  cmd_setpso_res.threadgroup_size = {.width=pCmdSig->compute_resolver.maxTotalThreadsPerThreadgroup(), .height=1, .depth=1};
   if (device_->NamesPasses())
     device_->NamePass(encoder_current, "indirect resolver", pCmdSig->compute_resolver);
 
@@ -524,7 +524,7 @@ MTLD3D12CommandAllocatorImpl::EncodeComputeResolver(MTLD3D12CommandSignature *pC
 
   auto &cmd_dispatch_res = EncodeComputeCommand<wmtcmd_compute_dispatch>();
   cmd_dispatch_res.type = WMTComputeCommandDispatchThreads;
-  cmd_dispatch_res.size = {std::max<size_t>(MaxCount, 1), 1, 1};
+  cmd_dispatch_res.size = {.width=std::max<size_t>(MaxCount, 1), .height=1, .depth=1};
   OrderDispatches();
   return data;
 }
@@ -716,7 +716,7 @@ MTLD3D12CommandAllocatorImpl::EncodeIndirectRenderCommand(
     memset(word, 0, words * sizeof(uint32_t));
     auto render = static_cast<RenderEncoderData *>(encoder_current);
     render->omitted = new (AllocateCPUHeap(sizeof(RenderEncoderData::Omitted), alignof(RenderEncoderData::Omitted)))
-        RenderEncoderData::Omitted{gpu_heap_buffer_, offset, words, render->omitted, scratch};
+        RenderEncoderData::Omitted{.buffer=gpu_heap_buffer_, .offset=offset, .words=words, .next=render->omitted, .scratch=scratch};
     return gpu_heap_buffer_address_ + offset;
   };
   data->omitted = 0;
@@ -731,7 +731,7 @@ MTLD3D12CommandAllocatorImpl::EncodeIndirectRenderCommand(
     data->most = gpu_heap_buffer_address_ + offset;
     auto render = static_cast<RenderEncoderData *>(encoder_current);
     render->most = new (AllocateCPUHeap(sizeof(RenderEncoderData::Most), alignof(RenderEncoderData::Most)))
-        RenderEncoderData::Most{static_cast<const uint32_t *>(words), data, render->most};
+        RenderEncoderData::Most{.words=static_cast<const uint32_t *>(words), .call=data, .next=render->most};
   }
 
   // the signature's resolver writes the commands in a compute pass before the render pass, which then runs them: a
@@ -739,7 +739,7 @@ MTLD3D12CommandAllocatorImpl::EncodeIndirectRenderCommand(
   auto &cmd_setpso_res = EncodeBeforeRender<wmtcmd_compute_setpso>();
   cmd_setpso_res.type = WMTComputeCommandSetPSO;
   cmd_setpso_res.pso = pCmdSig->render_resolver;
-  cmd_setpso_res.threadgroup_size = {pCmdSig->render_resolver.maxTotalThreadsPerThreadgroup(), 1, 1};
+  cmd_setpso_res.threadgroup_size = {.width=pCmdSig->render_resolver.maxTotalThreadsPerThreadgroup(), .height=1, .depth=1};
 
   auto &cmd_argbuf_res = EncodeBeforeRender<wmtcmd_compute_setbuffer>();
   cmd_argbuf_res.type = WMTComputeCommandSetBuffer;
@@ -759,19 +759,19 @@ MTLD3D12CommandAllocatorImpl::EncodeIndirectRenderCommand(
     auto &set = EncodeBeforeRender<wmtcmd_compute_setpso>();
     set.type = WMTComputeCommandSetPSO;
     set.pso = pipeline;
-    set.threadgroup_size = {pipeline.threadExecutionWidth(), 1, 1};
+    set.threadgroup_size = {.width=pipeline.threadExecutionWidth(), .height=1, .depth=1};
     auto &scan = EncodeBeforeRender<wmtcmd_compute_dispatch>();
     scan.type = WMTComputeCommandDispatch;
-    scan.size = {MaxCount, 1, 1};
+    scan.size = {.width=MaxCount, .height=1, .depth=1};
     auto &restore = EncodeBeforeRender<wmtcmd_compute_setpso>();
     restore.type = WMTComputeCommandSetPSO;
     restore.pso = pCmdSig->render_resolver;
-    restore.threadgroup_size = {pCmdSig->render_resolver.maxTotalThreadsPerThreadgroup(), 1, 1};
+    restore.threadgroup_size = {.width=pCmdSig->render_resolver.maxTotalThreadsPerThreadgroup(), .height=1, .depth=1};
   }
 
   auto &cmd_dispatch_res = EncodeBeforeRender<wmtcmd_compute_dispatch>();
   cmd_dispatch_res.type = WMTComputeCommandDispatchThreads;
-  cmd_dispatch_res.size = {std::max<size_t>(MaxCount, 1), 1, 1};
+  cmd_dispatch_res.size = {.width=std::max<size_t>(MaxCount, 1), .height=1, .depth=1};
 
   if (draws)
     return data;
@@ -944,22 +944,22 @@ MTLD3D12CommandAllocatorImpl::RefreshSignedBC(Texture *texture, UINT level, UINT
   auto &read = EncodeBlitCommand<wmtcmd_blit_copy_from_texture_to_buffer>();
   read.type = WMTBlitCommandCopyFromTextureToBuffer;
   read.src = texture->current()->texture(); read.level = level; read.slice = slice;
-  read.origin = {}; read.size = {width, height, 1};
+  read.origin = {}; read.size = {.width=width, .height=height, .depth=1};
   read.dst = raw; read.offset = raw_offset;
   read.bytes_per_row = compressed_row; read.bytes_per_image = 0;
   ctx.endPass(); ctx.startComputePass();
-  ctx.setComputePSO(bc_snorm_pso_, {bc_snorm_pso_.threadExecutionWidth(), 1, 1});
+  ctx.setComputePSO(bc_snorm_pso_, {.width=bc_snorm_pso_.threadExecutionWidth(), .height=1, .depth=1});
   ctx.setComputeBuffer(0, raw, raw_offset); ctx.setComputeBuffer(1, decoded, decoded_offset);
-  RGB32CopyLayout layout{compressed_row, 0, decoded_row, 0};
+  RGB32CopyLayout layout{.src_row=compressed_row, .src_image=0, .dst_row=decoded_row, .dst_image=0};
   memcpy(ctx.setComputeBytes(2, sizeof(layout)), &layout, sizeof(layout));
   memcpy(ctx.setComputeBytes(3, sizeof(channels)), &channels, sizeof(channels));
-  ctx.dispatch({width, height, 1});
+  ctx.dispatch({.width=width, .height=height, .depth=1});
   ctx.endPass(); ctx.startBlitPass();
   auto &write = EncodeBlitCommand<wmtcmd_blit_copy_from_buffer_to_texture>();
   write.type = WMTBlitCommandCopyFromBufferToTexture;
   write.src = decoded; write.src_offset = decoded_offset;
   write.bytes_per_row = decoded_row; write.bytes_per_image = 0;
-  write.size = {width, height, 1}; write.dst = texture->current()->signedBC;
+  write.size = {.width=width, .height=height, .depth=1}; write.dst = texture->current()->signedBC;
   write.level = level; write.slice = slice; write.origin = {};
 }
 
@@ -977,7 +977,7 @@ MTLD3D12CommandAllocatorImpl::NormalizeBC7(
   }
   ctx.endPass();
   ctx.startComputePass();
-  ctx.setComputePSO(bc7_copy_pso_, {bc7_copy_pso_.threadExecutionWidth(), 1, 1});
+  ctx.setComputePSO(bc7_copy_pso_, {.width=bc7_copy_pso_.threadExecutionWidth(), .height=1, .depth=1});
   ctx.setComputeBuffer(0, src, src_offset);
   ctx.setComputeBuffer(1, dst, dst_offset);
   memcpy(ctx.setComputeBytes(2, sizeof(layout)), &layout, sizeof(layout));
@@ -1002,7 +1002,7 @@ MTLD3D12CommandAllocatorImpl::CopyD24(
   }
   ctx.endPass();
   ctx.startComputePass();
-  ctx.setComputePSO(pso, {pso.threadExecutionWidth(), 1, 1});
+  ctx.setComputePSO(pso, {.width=pso.threadExecutionWidth(), .height=1, .depth=1});
   ctx.setComputeBuffer(0, src, src_offset);
   ctx.setComputeBuffer(1, dst, dst_offset);
   const UINT pitches[] = {src_pitch, dst_pitch};
@@ -1181,8 +1181,8 @@ MTLD3D12CommandAllocatorImpl::FinishTessellation(RenderEncoderData *Render) {
   }
   auto words = [](size_t offset) { return uint32_t(offset / sizeof(uint32_t)); };
   *static_cast<TessellationPass *>(pass) = {
-      words(draws_offset), batch->draws, batch->patches, words(counts_offset), words(points), words(indices),
-      point_room, index_room, {0, 0, 0}, 0, 0, 0
+      .draws=words(draws_offset), .draw_count=batch->draws, .patches=batch->patches, .counts=words(counts_offset), .points=words(points), .indices=words(indices),
+      .point_room=point_room, .index_room=index_room, .emit_groups={0, 0, 0}, .need_points=0, .need_indices=0, .frames=0
   };
   tessellation_passes_.push_back(static_cast<const TessellationPass *>(pass));
 
@@ -1203,7 +1203,7 @@ MTLD3D12CommandAllocatorImpl::FinishTessellation(RenderEncoderData *Render) {
     auto &set = EncodeBeforeRender<wmtcmd_compute_setpso>();
     set.type = WMTComputeCommandSetPSO;
     set.pso = pipeline;
-    set.threadgroup_size = {threads, 1, 1};
+    set.threadgroup_size = {.width=threads, .height=1, .depth=1};
     for (auto [offset, index] : {std::pair{size_t(0), 0}, std::pair{pass_offset, 1}}) {
       auto &buffer = EncodeBeforeRender<wmtcmd_compute_setbuffer>();
       buffer.type = WMTComputeCommandSetBuffer;
@@ -1216,12 +1216,12 @@ MTLD3D12CommandAllocatorImpl::FinishTessellation(RenderEncoderData *Render) {
   kernel("tessellation_count", kTessellationThreads);
   auto &count = EncodeBeforeRender<wmtcmd_compute_dispatch>();
   count.type = WMTComputeCommandDispatchThreads;
-  count.size = {batch->patches, 1, 1};
+  count.size = {.width=batch->patches, .height=1, .depth=1};
   barrier();
   kernel("tessellation_scan", 1024);
   auto &scan = EncodeBeforeRender<wmtcmd_compute_dispatch>();
   scan.type = WMTComputeCommandDispatch;
-  scan.size = {1, 1, 1};
+  scan.size = {.width=1, .height=1, .depth=1};
   barrier();
   kernel("tessellation_emit", kTessellationThreads);
   auto &emit = EncodeBeforeRender<wmtcmd_compute_dispatch_indirect>();

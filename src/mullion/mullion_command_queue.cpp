@@ -109,18 +109,18 @@ CommandQueue::ProfilePass(EncoderData *pass, diag::ProfileBuffer *&profiled) {
   }
   const uint32_t count = pass->type == EncoderType::Render ? WMTRenderTimestampSamples : WMTTimestampSamplesPerStage;
   if (buffer.samples.empty() || count > timestamp_samples.limit - buffer.samples.back().used)
-    buffer.samples.push_back({timestamp_samples.Take(device, false)});
+    buffer.samples.push_back({.buffer=timestamp_samples.Take(device, false)});
   auto &samples = buffer.samples.back();
   uint32_t first = ~0u;
   WMTSampleBufferAttachmentInfo attachment{};
   if (samples.buffer && count <= timestamp_samples.limit - samples.used) {
     first = samples.used;
     samples.used += count;
-    attachment = {samples.buffer, first, first + count - 1};
+    attachment = {.sample_buffer=samples.buffer, .start_of_encoder_sample_index=first, .end_of_encoder_sample_index=first + count - 1};
   }
   buffer.passes.push_back(
-      {seq, diag::Now(), kind, std::move(runs), std::move(targets), uint32_t(buffer.samples.size() - 1), first, count,
-       pass->event_path ? pass->event_path : ""});
+      {.id=seq, .encoding=diag::Now(), .kind=kind, .runs=std::move(runs), .targets=std::move(targets), .buffer=uint32_t(buffer.samples.size() - 1), .first=first, .count=count,
+       .event=pass->event_path ? pass->event_path : ""});
   profiled = &buffer;
   return attachment;
 }

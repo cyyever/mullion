@@ -314,9 +314,9 @@ read_elements(const MDOperand &list) {
       auto e = cast<MDNode>(op.get());
       elements.resize(std::max<size_t>(elements.size(), md_uint(e->getOperand(0)) + 1));
       elements[md_uint(e->getOperand(0))] = {
-          (uint32_t)md_uint(e->getOperand(8)), (uint32_t)md_uint(e->getOperand(9)), (uint32_t)md_uint(e->getOperand(6)),
-          (uint32_t)md_uint(e->getOperand(7)), (uint32_t)md_uint(e->getOperand(3)), (uint32_t)md_uint(e->getOperand(5)),
-          (uint32_t)md_uint(e->getOperand(2)),
+          .row=(uint32_t)md_uint(e->getOperand(8)), .col=(uint32_t)md_uint(e->getOperand(9)), .rows=(uint32_t)md_uint(e->getOperand(6)),
+          .cols=(uint32_t)md_uint(e->getOperand(7)), .semantic=(uint32_t)md_uint(e->getOperand(3)), .interpolation=(uint32_t)md_uint(e->getOperand(5)),
+          .component=(uint32_t)md_uint(e->getOperand(2)),
       };
     }
   return elements;
@@ -333,11 +333,11 @@ read_entry(Module &M, std::string_view function = {}) {
       entry = candidate;
   auto signatures = dyn_cast_or_null<MDNode>(entry->getOperand(2).get());
   return {
-      mdconst::extract_or_null<Function>(entry->getOperand(0)),
-      signatures ? read_elements(signatures->getOperand(0)) : std::vector<Element>{},
-      signatures ? read_elements(signatures->getOperand(1)) : std::vector<Element>{},
-      signatures ? read_elements(signatures->getOperand(2)) : std::vector<Element>{},
-      dyn_cast_or_null<MDNode>(entry->getOperand(4).get()),
+      .function=mdconst::extract_or_null<Function>(entry->getOperand(0)),
+      .input=signatures ? read_elements(signatures->getOperand(0)) : std::vector<Element>{},
+      .output=signatures ? read_elements(signatures->getOperand(1)) : std::vector<Element>{},
+      .patch=signatures ? read_elements(signatures->getOperand(2)) : std::vector<Element>{},
+      .properties=dyn_cast_or_null<MDNode>(entry->getOperand(4).get()),
   };
 }
 
@@ -1112,7 +1112,7 @@ read_dxil(
       if (!f || !kind)
         continue;
       auto size = [&](uint64_t t) { return tag(properties, t) ? (uint32_t)md_uint(*tag(properties, t)) : 0; };
-      shader->ray_shaders.push_back({f->getName().str(), {(uint32_t)md_uint(*kind), size(6), size(7), ray_calls(*f)}});
+      shader->ray_shaders.push_back({.name=f->getName().str(), .info={.kind=(uint32_t)md_uint(*kind), .payload_size=size(6), .attribute_size=size(7), .calls=ray_calls(*f)}});
     }
     return Error::success();
   }
@@ -1131,10 +1131,10 @@ read_dxil(
       inst.m_InputPSDecl.InterpolationMode = (D3D10_SB_INTERPOLATION_MODE)interpolation;
       break;
     case D3D10_SB_OPCODE_DCL_INPUT_PS_SIV:
-      inst.m_InputPSDeclSIV = {name, (D3D10_SB_INTERPOLATION_MODE)interpolation};
+      inst.m_InputPSDeclSIV = {.Name=name, .InterpolationMode=(D3D10_SB_INTERPOLATION_MODE)interpolation};
       break;
     case D3D10_SB_OPCODE_DCL_INPUT_PS_SGV:
-      inst.m_InputPSDeclSGV = {name, (D3D10_SB_INTERPOLATION_MODE)interpolation};
+      inst.m_InputPSDeclSGV = {.Name=name, .InterpolationMode=(D3D10_SB_INTERPOLATION_MODE)interpolation};
       break;
     case D3D10_SB_OPCODE_DCL_INPUT_SGV:
       inst.m_InputDeclSGV.Name = name;
@@ -1427,8 +1427,8 @@ read_dxil(
   auto block = [&](const char *name) { return shader->bbs.emplace_back(std::make_unique<BasicBlock>(name)).get(); };
   auto phase = [&](BasicBlock *from, uint32_t instances, Function *function) {
     auto active = block("dxil_phase"), sync = block("dxil_phase_end");
-    from->target = BasicBlockInstanceBarrier{instances, active, sync};
-    active->target = BasicBlockDXIL{shader, function->getName().str(), sync};
+    from->target = BasicBlockInstanceBarrier{.instance_count=instances, .active=active, .sync=sync};
+    active->target = BasicBlockDXIL{.shader=shader, .function=function->getName().str(), .next=sync};
     sync->instructions.push_back(
         InstSync{
             .uav_boundary = InstSync::UAVBoundary::none,
@@ -1441,13 +1441,13 @@ read_dxil(
   auto start = block("dxil_start"), end = block("dxil_end");
   end->target = BasicBlockReturn{};
   if (!patch_constant) {
-    start->target = BasicBlockDXIL{shader, entry.function->getName().str(), end};
+    start->target = BasicBlockDXIL{.shader=shader, .function=entry.function->getName().str(), .next=end};
     return Error::success();
   }
   auto last = phase(phase(start, shader->output_control_point_count, entry.function), 1, patch_constant);
   // control points the patch-constant function reads were kept in threadgroup memory; they are copied out last
   if (info.output_control_point_read)
-    last->target = BasicBlockHullShaderWriteOutput{shader->output_control_point_count, end};
+    last->target = BasicBlockHullShaderWriteOutput{.instance_count=shader->output_control_point_count, .epilogue=end};
   else
     last->target = BasicBlockUnconditionalBranch{end};
   return Error::success();
@@ -1866,10 +1866,10 @@ convert_dxil(
     b.SetInsertPoint(&*ctx.function->getEntryBlock().getFirstInsertionPt());
     call->replaceAllUsesWith(b.getInt32(ray_queries.size()));
     ray_queries.push_back({
-        ray_query_call("allocate", ray_query_ty, {}),
-        b.CreateAlloca(b.getInt32Ty()),
-        b.CreateAlloca(b.getInt64Ty()),
-        call->getArgOperand(1),
+        .query=ray_query_call("allocate", ray_query_ty, {}),
+        .flags=b.CreateAlloca(b.getInt32Ty()),
+        .instances=b.CreateAlloca(b.getInt64Ty()),
+        .constant_flags=call->getArgOperand(1),
     });
     b.SetInsertPoint(epilogue);
     ray_query_call("deallocate", b.getVoidTy(), {ray_queries.back().query});
@@ -1892,33 +1892,33 @@ convert_dxil(
     bool matrix = false;
   };
   static constexpr RayQueryGetter ray_query_getters[] = {
-      {184, "get_committed_intersection_type"},
-      {186, "get_candidate_object_to_world_transform", 3, true},
-      {187, "get_candidate_world_to_object_transform", 3, true},
-      {188, "get_committed_object_to_world_transform", 3, true},
-      {189, "get_committed_world_to_object_transform", 3, true},
-      {190, "is_candidate_non_opaque_bounding_box"},
-      {191, "is_candidate_triangle_front_facing"},
-      {192, "is_committed_triangle_front_facing"},
-      {193, "get_candidate_triangle_barycentric_coord", 2},
-      {194, "get_committed_triangle_barycentric_coord", 2},
-      {196, "get_world_space_ray_origin", 3},
-      {197, "get_world_space_ray_direction", 3},
-      {198, "get_ray_min_distance"},
-      {199, "get_candidate_triangle_distance"},
-      {200, "get_committed_distance"},
-      {201, "get_candidate_instance_id"},
-      {202, "get_candidate_user_instance_id"},
-      {203, "get_candidate_geometry_id"},
-      {204, "get_candidate_primitive_id"},
-      {205, "get_candidate_ray_origin", 3},
-      {206, "get_candidate_ray_direction", 3},
-      {207, "get_committed_instance_id"},
-      {208, "get_committed_user_instance_id"},
-      {209, "get_committed_geometry_id"},
-      {210, "get_committed_primitive_id"},
-      {211, "get_committed_ray_origin", 3},
-      {212, "get_committed_ray_direction", 3},
+      {.op=184, .name="get_committed_intersection_type"},
+      {.op=186, .name="get_candidate_object_to_world_transform", .width=3, .matrix=true},
+      {.op=187, .name="get_candidate_world_to_object_transform", .width=3, .matrix=true},
+      {.op=188, .name="get_committed_object_to_world_transform", .width=3, .matrix=true},
+      {.op=189, .name="get_committed_world_to_object_transform", .width=3, .matrix=true},
+      {.op=190, .name="is_candidate_non_opaque_bounding_box"},
+      {.op=191, .name="is_candidate_triangle_front_facing"},
+      {.op=192, .name="is_committed_triangle_front_facing"},
+      {.op=193, .name="get_candidate_triangle_barycentric_coord", .width=2},
+      {.op=194, .name="get_committed_triangle_barycentric_coord", .width=2},
+      {.op=196, .name="get_world_space_ray_origin", .width=3},
+      {.op=197, .name="get_world_space_ray_direction", .width=3},
+      {.op=198, .name="get_ray_min_distance"},
+      {.op=199, .name="get_candidate_triangle_distance"},
+      {.op=200, .name="get_committed_distance"},
+      {.op=201, .name="get_candidate_instance_id"},
+      {.op=202, .name="get_candidate_user_instance_id"},
+      {.op=203, .name="get_candidate_geometry_id"},
+      {.op=204, .name="get_candidate_primitive_id"},
+      {.op=205, .name="get_candidate_ray_origin", .width=3},
+      {.op=206, .name="get_candidate_ray_direction", .width=3},
+      {.op=207, .name="get_committed_instance_id"},
+      {.op=208, .name="get_committed_user_instance_id"},
+      {.op=209, .name="get_committed_geometry_id"},
+      {.op=210, .name="get_committed_primitive_id"},
+      {.op=211, .name="get_committed_ray_origin", .width=3},
+      {.op=212, .name="get_committed_ray_direction", .width=3},
   };
 
   // handles first, so every consumer finds its descriptor
@@ -2241,7 +2241,7 @@ convert_dxil(
   // system inputs read the way DXBC reads them (the coverage mask honors the PSO sample mask)
   auto attribute = [&](shader::common::InputAttribute input, uint32_t component) {
     return dxbc.LoadOperand(
-        SrcOperandAttribute{._ = {swizzle_identity, false, false, OperandDataType::Integer}, .attribute = input},
+        SrcOperandAttribute{._ = {.swizzle=swizzle_identity, .abs=false, .neg=false, .read_type=OperandDataType::Integer}, .attribute = input},
         1u << component
     );
   };
@@ -2480,22 +2480,22 @@ convert_dxil(
       auto read_half = [=, &ir, &air](unsigned i) -> Value * {
         return air.CreateAtomicRMW(AtomicRMWInst::Or, half(i), ir.getInt32(0));
       };
-      return {key, llvm::air::MemFlags::Device,
-              [=, &ir] {
+      return {.key=key, .memory=llvm::air::MemFlags::Device,
+              .read=[=, &ir] {
                 return ir.CreateOr(
                     ir.CreateZExt(read_half(0), i64), ir.CreateShl(ir.CreateZExt(read_half(1), i64), 32)
                 );
               },
-              [=, &ir, &air](Value *v) {
+              .write=[=, &ir, &air](Value *v) {
                 air.CreateDeviceCoherentStore(ir.CreateTrunc(v, i32), half(0));
                 air.CreateDeviceCoherentStore(ir.CreateTrunc(ir.CreateLShr(v, 32), i32), half(1));
               },
-              ptr};
+              .halves=ptr};
     }
     for (uint32_t c = 0; c < 3; c++)
       key = ir.CreateAdd(ir.CreateMul(key, ir.getInt64(0x9e3779b97f4a7c15)), ir.CreateZExt(thread_input(GroupId, c), i64));
-    return {key, llvm::air::MemFlags::Threadgroup, [=, &ir] { return (Value *)ir.CreateLoad(i64, ptr); },
-            [=, &ir](Value *v) { ir.CreateStore(v, ptr); }};
+    return {.key=key, .memory=llvm::air::MemFlags::Threadgroup, .read=[=, &ir] { return (Value *)ir.CreateLoad(i64, ptr); },
+            .write=[=, &ir](Value *v) { ir.CreateStore(v, ptr); }};
   };
   // a 64-bit add, subtract, and, or or xor whose old value goes unused, as an atomic on each 32-bit half, without a
   // lock: a bitwise op's halves are independent, and an add carries into the high half when the low half wraps (each
@@ -3916,8 +3916,8 @@ convert_dxil(
             key = ir.CreateAdd(ir.CreateMul(key, ir.getInt64(0x9e3779b97f4a7c15)),
                                ir.CreateLShr(origin, ir.getInt32Ty()->getBitWidth()));
           }
-          return {key, llvm::air::MemFlags::Texture,
-                  [=, &ir, &air, &t]() -> Value * {
+          return {.key=key, .memory=llvm::air::MemFlags::Texture,
+                  .read=[=, &ir, &air, &t]() -> Value * {
                     auto v = air.CreateRead(t.Texture, t.Handle, address, array, nullptr, ir.getInt32(0), true).first;
                     if (float_texel)
                       return ir.CreateZExt(ir.CreateBitCast(ir.CreateExtractElement(v, (uint64_t)0), ir.getInt32Ty()), i64);
@@ -3926,7 +3926,7 @@ convert_dxil(
                         ir.CreateShl(ir.CreateZExt(ir.CreateExtractElement(v, 1), i64), 32)
                     );
                   },
-                  [=, &ir, &air, &t](Value *v) {
+                  .write=[=, &ir, &air, &t](Value *v) {
                     if (float_texel) {
                       auto bits = ir.CreateBitCast(ir.CreateTrunc(v, ir.getInt32Ty()), ir.getFloatTy());
                       air.CreateWrite(t.Texture, t.Handle, address, array, nullptr, ir.getInt32(0),
@@ -4934,9 +4934,9 @@ convert_dxil_mesh_stage(
   if (mesh) {
     auto triangles = conservative ? link->triangles : 0;
     func_signature.DefineInput(air::InputMesh{
-        conservative ? 3 * triangles : pShaderInternal->mesh_max_vertices,
-        conservative ? triangles : pShaderInternal->mesh_max_primitives,
-        pShaderInternal->mesh_lines ? air::MeshOutputTopology::Line : air::MeshOutputTopology::Triangle
+        .vertex_count=conservative ? 3 * triangles : pShaderInternal->mesh_max_vertices,
+        .primitive_count=conservative ? triangles : pShaderInternal->mesh_max_primitives,
+        .topology=pShaderInternal->mesh_lines ? air::MeshOutputTopology::Line : air::MeshOutputTopology::Triangle
     });
     uint32_t clip_distances = 0, cull_distances = 0;
     bool culled = false;
@@ -4987,7 +4987,7 @@ convert_dxil_mesh_stage(
               continue;
             uint32_t first = std::countr_zero(uint32_t(p.Mask));
             for (uint32_t c = 0; c < e.cols && (p.Mask >> (first + c) & 1); c++) {
-              air::OutputMeshData attribute{varying_name(p.Register, first + c), varying_type(e.type), attributes};
+              air::OutputMeshData attribute{.user=varying_name(p.Register, first + c), .type=varying_type(e.type), .index=attributes};
               if (primitive)
                 func_signature.DefineMeshPrimitiveOutput(attribute);
               else

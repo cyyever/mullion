@@ -711,16 +711,16 @@ public:
     // (D3D11_SAMPLER_DESC): linear filters, clamped addresses, no comparison and every LOD
     if (!samplers_.empty()) {
       const D3D12_SAMPLER_DESC unwritten{
-          D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-          D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-          D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-          D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-          0.0f,
-          1,
-          D3D12_COMPARISON_FUNC_NEVER,
-          {1.0f, 1.0f, 1.0f, 1.0f},
-          -D3D12_FLOAT32_MAX,
-          D3D12_FLOAT32_MAX
+          .Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+          .AddressU=D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+          .AddressV=D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+          .AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+          .MipLODBias=0.0f,
+          .MaxAnisotropy=1,
+          .ComparisonFunc=D3D12_COMPARISON_FUNC_NEVER,
+          .BorderColor={1.0f, 1.0f, 1.0f, 1.0f},
+          .MinLOD=-D3D12_FLOAT32_MAX,
+          .MaxLOD=D3D12_FLOAT32_MAX
       };
       HRESULT hr = AddSampler(0, &unwritten);
       if (FAILED(hr))
@@ -809,7 +809,7 @@ public:
       gpu_storage.sampler = sampler->sampler_state_handle;
       gpu_storage.cube_sampler = sampler->sampler_state_cube_handle;
       gpu_storage.metadata = sampler->metadata;
-      SM50_SAMPLER_BORDER border{sampler->sampler_state_white_handle};
+      SM50_SAMPLER_BORDER border{.white_sampler=sampler->sampler_state_white_handle};
       std::copy_n(sampler->border_color, 4, border.color);
       SetBorder(Index, border);
     }

@@ -270,7 +270,7 @@ public:
     if (pFullscreenDesc) {
       fsDesc = *pFullscreenDesc;
     } else {
-      fsDesc.RefreshRate = {0, 0};
+      fsDesc.RefreshRate = {.Numerator=0, .Denominator=0};
       fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
       fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
       fsDesc.Windowed = TRUE;
@@ -398,23 +398,23 @@ public:
 
   HRESULT STDMETHODCALLTYPE RegisterOcclusionStatusWindow(
       HWND WindowHandle, UINT wMsg, DWORD *pdwCookie) final {
-    return StatusNotifications::add(true, {nullptr, WindowHandle, wMsg}, pdwCookie);
+    return StatusNotifications::add(true, {.event=nullptr, .window=WindowHandle, .message=wMsg}, pdwCookie);
   }
 
   HRESULT STDMETHODCALLTYPE RegisterStereoStatusEvent(HANDLE hEvent,
                                                       DWORD *pdwCookie) final {
-    return StatusNotifications::add(false, {hEvent, nullptr, 0}, pdwCookie);
+    return StatusNotifications::add(false, {.event=hEvent, .window=nullptr, .message=0}, pdwCookie);
   }
 
   HRESULT STDMETHODCALLTYPE RegisterStereoStatusWindow(HWND WindowHandle,
                                                        UINT wMsg,
                                                        DWORD *pdwCookie) final {
-    return StatusNotifications::add(false, {nullptr, WindowHandle, wMsg}, pdwCookie);
+    return StatusNotifications::add(false, {.event=nullptr, .window=WindowHandle, .message=wMsg}, pdwCookie);
   }
 
   HRESULT STDMETHODCALLTYPE
   RegisterOcclusionStatusEvent(HANDLE hEvent, DWORD *pdwCookie) final {
-    return StatusNotifications::add(true, {hEvent, nullptr, 0}, pdwCookie);
+    return StatusNotifications::add(true, {.event=hEvent, .window=nullptr, .message=0}, pdwCookie);
   }
 
   void STDMETHODCALLTYPE UnregisterStereoStatus(DWORD dwCookie) final {

@@ -230,7 +230,7 @@ SrcOperand readSrcOperand(
 
     if (O.m_NumComponents == D3D10_SB_OPERAND_4_COMPONENT) {
       return SrcOperandImmediate32{
-        ._ = {swizzle_identity, false, false, read_type},
+        ._ = {.swizzle=swizzle_identity, .abs=false, .neg=false, .read_type=read_type},
         .uvalue =
           {
             O.m_Value[0],
@@ -241,7 +241,7 @@ SrcOperand readSrcOperand(
       };
     } else {
       return SrcOperandImmediate32{
-        ._ = {swizzle_identity, false, false, read_type},
+        ._ = {.swizzle=swizzle_identity, .abs=false, .neg=false, .read_type=read_type},
         .uvalue =
           {
             O.m_Value[0],
@@ -753,7 +753,7 @@ Instruction readInstruction(
       .src_sampler = readSrcOperandSampler(Inst.m_Operands[3 + sparse], phase),
       .offset =
         SrcOperandImmediate32{
-          ._ = {swizzle_identity, false, false, OperandDataType::Integer},
+          ._ = {.swizzle=swizzle_identity, .abs=false, .neg=false, .read_type=OperandDataType::Integer},
           .ivalue = {Inst.m_TexelOffset[0], Inst.m_TexelOffset[1], 0, 0},
         },
       .feedback = sparse ? readDstOperand(Inst.m_Operands[sparse], phase, OperandDataType::Integer)
@@ -773,7 +773,7 @@ Instruction readInstruction(
       .src_reference = readSrcOperand(Inst.m_Operands[4 + sparse], phase, OperandDataType::Float),
       .offset =
         SrcOperandImmediate32{
-          ._ = {swizzle_identity, false, false, OperandDataType::Integer},
+          ._ = {.swizzle=swizzle_identity, .abs=false, .neg=false, .read_type=OperandDataType::Integer},
           .ivalue = {Inst.m_TexelOffset[0], Inst.m_TexelOffset[1], 0, 0},
         },
       .feedback = sparse ? readDstOperand(Inst.m_Operands[sparse], phase, OperandDataType::Integer)
@@ -1358,7 +1358,7 @@ Instruction readInstruction(
       .cmp = IntegerComparison::NotEqual,
       .dst = readDstOperand(Inst.m_Operands[0], phase, OperandDataType::Integer),
       .src0 = readSrcOperand(Inst.m_Operands[1], phase, OperandDataType::Integer),
-      .src1 = SrcOperandImmediate32{._ = {swizzle_identity, false, false, OperandDataType::Integer}, .uvalue = {}},
+      .src1 = SrcOperandImmediate32{._ = {.swizzle=swizzle_identity, .abs=false, .neg=false, .read_type=OperandDataType::Integer}, .uvalue = {}},
     };
   };
   case microsoft::D3D10_SB_OPCODE_INE: {

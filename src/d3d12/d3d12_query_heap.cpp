@@ -41,14 +41,14 @@ public:
     auto metal = this->device_->GetMTLDevice();
     switch (pDesc->Type) {
     case D3D12_QUERY_HEAP_TYPE_OCCLUSION: {
-      WMTBufferInfo info{pDesc->Count * sizeof(uint64_t), WMTResourceStorageModePrivate};
+      WMTBufferInfo info{.length=pDesc->Count * sizeof(uint64_t), .options=WMTResourceStorageModePrivate};
       results = metal.newBuffer(info);
       return results ? S_OK : FAIL(E_OUTOFMEMORY);
     }
     // stream output's last pass adds to these by address (dxbc_converter_gs.cpp)
     case D3D12_QUERY_HEAP_TYPE_SO_STATISTICS: {
       result_size = sizeof(D3D12_QUERY_DATA_SO_STATISTICS);
-      WMTBufferInfo info{pDesc->Count * result_size, WMTResourceStorageModePrivate};
+      WMTBufferInfo info{.length=pDesc->Count * result_size, .options=WMTResourceStorageModePrivate};
       results = metal.newBuffer(info);
       if (!results)
         return FAIL(E_OUTOFMEMORY);
@@ -68,7 +68,7 @@ public:
                                                                              : sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS1);
       if (pDesc->Count > std::numeric_limits<size_t>::max() / result_size)
         return FAIL(E_OUTOFMEMORY);
-      WMTBufferInfo info{uint64_t(pDesc->Count) * result_size, WMTResourceStorageModeShared};
+      WMTBufferInfo info{.length=uint64_t(pDesc->Count) * result_size, .options=WMTResourceStorageModeShared};
       results = metal.newBuffer(info);
       return results ? S_OK : FAIL(E_OUTOFMEMORY);
     }

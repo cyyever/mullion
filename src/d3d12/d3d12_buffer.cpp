@@ -230,11 +230,11 @@ public:
       ERR("D3D12Buffer::CreateShaderResourceView: not an ordinary or packed format: ", ViewDesc.Format);
       return E_FAIL;
     }
-    D3D12_FEATURE_DATA_FORMAT_SUPPORT support{ViewDesc.Format};
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT support{.Format=ViewDesc.Format};
     if (FAILED(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))) ||
         !(support.Support1 & D3D12_FORMAT_SUPPORT1_BUFFER))
       return FAIL(E_INVALIDARG);
-    BufferViewDescriptor view_descriptor{Format.BufferPixelFormat};
+    BufferViewDescriptor view_descriptor{.format=Format.BufferPixelFormat};
     Slice.firstElement = ViewDesc.Buffer.FirstElement * (Format.BytesPerTexel / MTLGetTexelSize(Format.BufferPixelFormat));
     Slice.elementCount = ViewDesc.Buffer.NumElements |
                          (Format.Flag & MTL_DXGI_FORMAT_EMULATED_RGB32 ? SM50_TEXEL_BUFFER_METADATA_RGB32 : 0);
@@ -289,12 +289,12 @@ public:
     // R32G32B32 has no typed unordered access (Format support for Direct3D Feature Level 11.0 hardware)
     if (Format.Flag & MTL_DXGI_FORMAT_EMULATED_RGB32)
       return FAIL(E_INVALIDARG);
-    D3D12_FEATURE_DATA_FORMAT_SUPPORT support{ViewDesc.Format};
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT support{.Format=ViewDesc.Format};
     if (FAILED(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))) ||
         !(support.Support1 & D3D12_FORMAT_SUPPORT1_BUFFER) ||
         !(support.Support1 & D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW))
       return FAIL(E_INVALIDARG);
-    BufferViewDescriptor view_descriptor{Format.BufferPixelFormat, true};
+    BufferViewDescriptor view_descriptor{.format=Format.BufferPixelFormat, .write=true};
     Slice.firstElement = ViewDesc.Buffer.FirstElement;
     Slice.elementCount = ViewDesc.Buffer.NumElements;
     Slice.byteOffset = ViewDesc.Buffer.FirstElement * Format.BytesPerTexel;
@@ -331,12 +331,12 @@ public:
     if (PackedMipInfo)
       *PackedMipInfo = {};
     if (StandardTileShape)
-      *StandardTileShape = {tile, 1, 1};
+      *StandardTileShape = {.WidthInTexels=tile, .HeightInTexels=1, .DepthInTexels=1};
     if (!SubresourceTilingCount)
       return;
     *SubresourceTilingCount = *SubresourceTilingCount && !FirstSubresourceTiling;
     if (*SubresourceTilingCount)
-      SubresourceTilings[0] = {tiles, 1, 1, 0};
+      SubresourceTilings[0] = {.WidthInTiles=tiles, .HeightInTiles=1, .DepthInTiles=1, .StartTileIndexInOverallResource=0};
   };
 };
 
@@ -360,7 +360,7 @@ CreateReservedBuffer(
     MTLD3D12Device *pDevice, const D3D12_RESOURCE_DESC *pDesc, REFIID riid, void **ppResource
 ) {
   auto buffer = Com(new MTLD3D12Buffer(pDevice));
-  D3D12_HEAP_PROPERTIES heap{D3D12_HEAP_TYPE_DEFAULT};
+  D3D12_HEAP_PROPERTIES heap{.Type=D3D12_HEAP_TYPE_DEFAULT};
   HRESULT hr = buffer->Initialize(&heap, D3D12_HEAP_FLAG_NONE, pDesc, nullptr, nullptr, 0, true);
   if (FAILED(hr))
     return hr;

@@ -59,10 +59,10 @@ public:
     GetTessellationShaders();
     if (pDesc->PixelShader) {
       PixelShader = pDesc->PixelShader->get_pixel_shader(ShaderVariantPixel{
-          pDesc->SampleMask, pDesc->BlendState->IsDualSourceBlending(),
-          depth_stencil_format == WMTPixelFormatInvalid,
-          unorm_output_reg_mask, pDesc->PipelineStatistics, pDesc->BlendState->IsAlphaToCoverage(),
-          pDesc->CenteredSamples, pDesc->SingleRasterSample, pDesc->PairedSamples, pDesc->ClipDistances},
+          .sample_mask=pDesc->SampleMask, .dual_source_blending=pDesc->BlendState->IsDualSourceBlending(),
+          .disable_depth_output=depth_stencil_format == WMTPixelFormatInvalid,
+          .unorm_output_reg_mask=unorm_output_reg_mask, .pipeline_statistics=pDesc->PipelineStatistics, .alpha_to_coverage=pDesc->BlendState->IsAlphaToCoverage(),
+          .centered_samples=pDesc->CenteredSamples, .single_raster_sample=pDesc->SingleRasterSample, .paired_samples=pDesc->PairedSamples, .clip_distances=pDesc->ClipDistances},
           {rtv_formats, num_rtvs}, pDesc->BlendState, pDesc->PixelMinMaxFiltering);
       ps_valid_render_targets = pDesc->PixelShader->reflection().PSValidRenderTargets;
     } else {
@@ -92,11 +92,11 @@ public:
                 max_mesh_threadgroups
     ).parts;
     VertexHullShader = desc.HullShader->get_shader(ShaderVariantTessellationVertexHull{
-        desc.InputLayout, desc.VertexShader, desc.IndexBufferFormat, max_potential_factor, mesh_vertex_size,
-        desc.GeometryShader, max_mesh_threadgroups});
+        .input_layout_handle=desc.InputLayout, .vertex_shader_handle=desc.VertexShader, .index_buffer_format=desc.IndexBufferFormat, .max_potential_tess_factor=max_potential_factor, .mesh_vertex_size=mesh_vertex_size,
+        .geometry_shader_handle=desc.GeometryShader, .max_mesh_threadgroups=max_mesh_threadgroups});
     DomainShader = desc.DomainShader->get_shader(ShaderVariantTessellationDomain{
-        desc.HullShader, max_potential_factor, mesh_vertex_size, !desc.RasterizationEnabled, desc.GeometryShader,
-        max_mesh_threadgroups, desc.ClipDistances != 0});
+        .hull_shader_handle=desc.HullShader, .max_potential_tess_factor=max_potential_factor, .mesh_vertex_size=mesh_vertex_size, .rasterization_disabled=!desc.RasterizationEnabled, .geometry_shader_handle=desc.GeometryShader,
+        .max_mesh_threadgroups=max_mesh_threadgroups, .clip_distance_varyings=desc.ClipDistances != 0});
   }
 
   void GetPipeline(MTL_COMPILED_TESSELLATION_MESH_PIPELINE *pPipeline, bool statistics) final {
@@ -108,8 +108,8 @@ public:
       return pipeline->GetPipeline(pPipeline);
     }
     ready_.wait(false, std::memory_order_acquire);
-    *pPipeline = {state_rasterization_, hull_reflection.NumOutputElement,
-                  hull_reflection.ThreadsPerPatch, parts};
+    *pPipeline = {.PipelineState=state_rasterization_, .NumControlPointOutputElement=hull_reflection.NumOutputElement,
+                  .ThreadsPerPatch=hull_reflection.ThreadsPerPatch, .Parts=parts};
   }
 
   ThreadpoolWork *RunThreadpoolWork() override {

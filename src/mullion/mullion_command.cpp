@@ -212,7 +212,7 @@ InternalCommandLibrary::UnboundTexture(WMTTextureType type, SM50_SAMPLE_TYPE sam
     info.options = WMTResourceStorageModePrivate | WMTResourceHazardTrackingModeUntracked;
     if (type == WMTTextureTypeTextureBuffer) {
       auto bytes = device_.minimumLinearTextureAlignmentForPixelFormat(info.pixel_format);
-      WMTBufferInfo backing{bytes, info.options};
+      WMTBufferInfo backing{.length=bytes, .options=info.options};
       unbound.backing = device_.newBuffer(backing);
       unbound.texture = unbound.backing.newTexture(info, 0, bytes);
     } else {
@@ -222,7 +222,7 @@ InternalCommandLibrary::UnboundTexture(WMTTextureType type, SM50_SAMPLE_TYPE sam
       ERR("Failed to create the stand-in of an unbound texture of type ", type);
     unbound.id = info.gpu_resource_id;
   }
-  return {unbound.texture, unbound.id, unbound.backing, fresh};
+  return {.texture=unbound.texture, .id=unbound.id, .backing=unbound.backing, .fresh=fresh};
 }
 
 void
@@ -383,7 +383,7 @@ DepthStencilBlitContext::copyFromBuffer(
 
   auto &setvp = ctx_.encodeRenderCommand<wmtcmd_render_setviewport>();
   setvp.type = WMTRenderCommandSetViewport;
-  setvp.viewport = {0.0, 0.0, (double)width, (double)height, 0.0, 1.0};
+  setvp.viewport = {.originX=0.0, .originY=0.0, .width=(double)width, .height=(double)height, .znear=0.0, .zfar=1.0};
 
   auto &setdsso = ctx_.encodeRenderCommand<wmtcmd_render_setdsso>();
   setdsso.type = WMTRenderCommandSetDSSO;
@@ -396,7 +396,7 @@ DepthStencilBlitContext::copyFromBuffer(
   setbuf.index = kCustomBufferArgumentIndex0;
   setbuf.offset = src_offset + src_sub_offset;
 
-  linear_texture_desc desc{bytes_per_row, bytes_per_image};
+  linear_texture_desc desc{.bytes_per_row=bytes_per_row, .bytes_per_image=bytes_per_image};
   auto &setdesc = ctx_.encodeRenderCommand<wmtcmd_render_setbytes>();
   setdesc.type = WMTRenderCommandSetFragmentBytes;
   void *temp = ctx_.allocate_cpu_heap(sizeof(desc), 16);
@@ -454,7 +454,7 @@ DepthStencilBlitContext::copyFromTexture(
   auto &setpso = ctx_.encodeComputeCommand<wmtcmd_compute_setpso>();
   setpso.type = WMTComputeCommandSetPSO;
   setpso.pso = to_d24s8 ? pso_copy_to_buffer_d24s8_ : pso_copy_to_buffer_d32s8_;
-  setpso.threadgroup_size = {8, 4, 1};
+  setpso.threadgroup_size = {.width=8, .height=4, .depth=1};
 
   auto &setdepth = ctx_.encodeComputeCommand<wmtcmd_compute_settexture>();
   setdepth.type = WMTComputeCommandSetTexture;
@@ -472,7 +472,7 @@ DepthStencilBlitContext::copyFromTexture(
   setbuf.index = 0;
   setbuf.offset = dst_offset + dst_sub_offset;
 
-  linear_texture_desc desc{bytes_per_row, bytes_per_image};
+  linear_texture_desc desc{.bytes_per_row=bytes_per_row, .bytes_per_image=bytes_per_image};
   auto &setdesc = ctx_.encodeComputeCommand<wmtcmd_compute_setbytes>();
   setdesc.type = WMTComputeCommandSetBytes;
   void *temp = ctx_.allocate_cpu_heap(sizeof(desc), 16);
@@ -485,7 +485,7 @@ DepthStencilBlitContext::copyFromTexture(
   auto height = depth_stencil->height(depth_view);
   auto &dispatch = ctx_.encodeComputeCommand<wmtcmd_compute_dispatch>();
   dispatch.type = WMTComputeCommandDispatchThreads;
-  dispatch.size = {width, height, 1};
+  dispatch.size = {.width=width, .height=height, .depth=1};
 
   ctx_.endPass();
 }
@@ -521,7 +521,7 @@ MTLFXMVScaleContext::dispatch(
   auto &setpso = ctx_.encodeComputeCommand<wmtcmd_compute_setpso>();
   setpso.type = WMTComputeCommandSetPSO;
   setpso.pso = pso_downscale_dilated_mv_;
-  setpso.threadgroup_size = {8, 4, 1};
+  setpso.threadgroup_size = {.width=8, .height=4, .depth=1};
 
   auto &setdepth = ctx_.encodeComputeCommand<wmtcmd_compute_settexture>();
   setdepth.type = WMTComputeCommandSetTexture;
@@ -533,7 +533,7 @@ MTLFXMVScaleContext::dispatch(
   setstencil.texture = tex_downscaled;
   setstencil.index = 1;
 
-  downscale_dilated_mv_desc desc{mv_scale_x, mv_scale_y};
+  downscale_dilated_mv_desc desc{.scale_x=mv_scale_x, .scale_y=mv_scale_y};
   auto &setdesc = ctx_.encodeComputeCommand<wmtcmd_compute_setbytes>();
   setdesc.type = WMTComputeCommandSetBytes;
   void *temp = ctx_.allocate_cpu_heap(sizeof(desc), 16);
@@ -546,7 +546,7 @@ MTLFXMVScaleContext::dispatch(
   auto height = downscaled->height(view_downscaled);
   auto &dispatch = ctx_.encodeComputeCommand<wmtcmd_compute_dispatch>();
   dispatch.type = WMTComputeCommandDispatchThreads;
-  dispatch.size = {width, height, 1};
+  dispatch.size = {.width=width, .height=height, .depth=1};
 
   ctx_.endPass();
 }

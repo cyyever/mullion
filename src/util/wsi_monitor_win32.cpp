@@ -22,7 +22,7 @@
 namespace mullion::wsi {
 
 HMONITOR getDefaultMonitor() {
-  return ::MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY);
+  return ::MonitorFromPoint({.x=0, .y=0}, MONITOR_DEFAULTTOPRIMARY);
 }
 
 struct MonitorEnumInfo {
@@ -84,7 +84,7 @@ bool getDesktopCoordinates(HMONITOR hMonitor, RECT *pRect) {
 static inline void convertMode(const DEVMODEW &mode, WsiMode *pMode) {
   pMode->width = mode.dmPelsWidth;
   pMode->height = mode.dmPelsHeight;
-  pMode->refreshRate = WsiRational{mode.dmDisplayFrequency * 1000, 1000};
+  pMode->refreshRate = WsiRational{.numerator=mode.dmDisplayFrequency * 1000, .denominator=1000};
   pMode->bitsPerPixel = mode.dmBitsPerPel;
   pMode->interlaced = mode.dmDisplayFlags & DM_INTERLACED;
 }
