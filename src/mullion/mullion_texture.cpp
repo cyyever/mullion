@@ -40,17 +40,51 @@ TextureView::decRef() {
     delete this;
 };
 
+static WMTPixelFormat
+SignedBCFormat(WMTPixelFormat format) {
+  return format == WMTPixelFormatBC4_RSnorm ? WMTPixelFormatR32Float
+       : format == WMTPixelFormatBC5_RGSnorm ? WMTPixelFormatRG32Float : WMTPixelFormatInvalid;
+}
+
+void TextureAllocation::createSignedBC() {
+  if (!descriptor->accurateBC || !obj_)
+    return;
+  auto info = descriptor->info();
+  bool two = info.pixel_format == WMTPixelFormatBC5_RGSnorm || info.pixel_format == WMTPixelFormatBC5_RGUnorm;
+  info.pixel_format = two ? WMTPixelFormatRG32Float : WMTPixelFormatR32Float;
+  info.options = (flags_.test(TextureAllocationFlag::CpuInvisible) ? WMTResourceStorageModePrivate
+                                                                  : WMTResourceStorageModeShared) |
+                 WMTResourceHazardTrackingModeUntracked;
+  info.usage = WMTTextureUsageShaderRead | WMTTextureUsagePixelFormatView;
+  info.placement_sparse_page_size = WMTSparsePageSize(0);
+  info.mach_port = 0;
+  signedBC = descriptor->device_.newTexture(info);
+  signedBCResourceID = info.gpu_resource_id;
+  if (!signedBC)
+    obj_ = {};
+}
+
 TextureView::TextureView(TextureAllocation *allocation) :
     texture(allocation->texture()),
     gpuResourceID(allocation->gpuResourceID),
     allocation(allocation),
-    key(allocation->descriptor->fullView) {}
+    key(allocation->descriptor->fullView) {
+  if (allocation->signedBC && SignedBCFormat(allocation->descriptor->pixelFormat()) != WMTPixelFormatInvalid) {
+    texture = allocation->signedBC;
+    gpuResourceID = allocation->signedBCResourceID;
+  }
+}
 
 TextureView::TextureView(TextureAllocation *allocation, unsigned index, TextureViewDescriptor descriptor) :
     gpuResourceID(0),
     allocation(allocation),
     key(descriptor, index, allocation->descriptor->miplevelCount()) {
   auto parent = allocation->texture();
+  auto decoded = SignedBCFormat(descriptor.format);
+  if (allocation->signedBC && decoded != WMTPixelFormatInvalid) {
+    parent = allocation->signedBC;
+    descriptor.format = decoded;
+  }
   texture = parent.newTextureView(
       descriptor.format, descriptor.type, descriptor.firstMiplevel, descriptor.miplevelCount,
       descriptor.firstArraySlice, descriptor.arraySize,
@@ -82,6 +116,7 @@ TextureAllocation::TextureAllocation(
   fenceTrackers.resize(
       flags.test(TextureAllocationFlag::ShaderReadonly) ? 1 : descriptor->arrayLength() * descriptor->miplevelCount()
   );
+  createSignedBC();
 };
 
 TextureAllocation::TextureAllocation(
@@ -103,6 +138,7 @@ TextureAllocation::TextureAllocation(
   fenceTrackers.resize(
       flags.test(TextureAllocationFlag::ShaderReadonly) ? 1 : descriptor->arrayLength() * descriptor->miplevelCount()
   );
+  createSignedBC();
 };
 
 void
@@ -185,7 +221,8 @@ Texture::createView(TextureViewDescriptor const &descriptor) {
   return TextureViewKey(descriptor, view->second, info_.mipmap_level_count);
 }
 
-Texture::Texture(const WMTTextureInfo &descriptor, WMT::Device device) :
+Texture::Texture(const WMTTextureInfo &descriptor, WMT::Device device, bool accurateBC) :
+    accurateBC(accurateBC),
     info_(descriptor),
     device_(device) {
 

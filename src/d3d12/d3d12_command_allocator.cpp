@@ -908,6 +908,69 @@ SimpleCommandContext<MTLD3D12CommandAllocatorImpl>::setComputeBytes(uint32_t ind
   return temp;
 }
 
+void
+MTLD3D12CommandAllocatorImpl::RefreshSignedBC(Texture *texture, UINT level, UINT slice) {
+  if (!texture->current()->signedBC)
+    return;
+  SimpleCommandContext<MTLD3D12CommandAllocatorImpl> ctx{*this};
+  if (!bc_snorm_pso_)
+    bc_snorm_pso_ = ctx.getComputePipeline("cs_decode_bc_snorm");
+  if (!bc_snorm_pso_) { exhausted_ = true; return; }
+  UINT channels = texture->pixelFormat() == WMTPixelFormatBC5_RGUnorm ||
+                  texture->pixelFormat() == WMTPixelFormatBC5_RGSnorm ? 2 : 1;
+  UINT width = std::max(texture->width() >> level, 1u), height = std::max(texture->height() >> level, 1u);
+  uint64_t compressed_row = align((width + 3) / 4 * channels * 8, 256);
+  uint64_t decoded_row = align(width * channels * 4, 256);
+  auto [raw, raw_offset] = AllocateTempBuffer(compressed_row * ((height + 3) / 4), 256);
+  auto [decoded, decoded_offset] = AllocateTempBuffer(decoded_row * height, 256);
+  if (!raw || !decoded) { exhausted_ = true; return; }
+  ctx.endPass(); ctx.startBlitPass();
+  auto &read = EncodeBlitCommand<wmtcmd_blit_copy_from_texture_to_buffer>();
+  read.type = WMTBlitCommandCopyFromTextureToBuffer;
+  read.src = texture->current()->texture(); read.level = level; read.slice = slice;
+  read.origin = {}; read.size = {width, height, 1};
+  read.dst = raw; read.offset = raw_offset;
+  read.bytes_per_row = compressed_row; read.bytes_per_image = 0;
+  ctx.endPass(); ctx.startComputePass();
+  ctx.setComputePSO(bc_snorm_pso_, {bc_snorm_pso_.threadExecutionWidth(), 1, 1});
+  ctx.setComputeBuffer(0, raw, raw_offset); ctx.setComputeBuffer(1, decoded, decoded_offset);
+  RGB32CopyLayout layout{compressed_row, 0, decoded_row, 0};
+  memcpy(ctx.setComputeBytes(2, sizeof(layout)), &layout, sizeof(layout));
+  memcpy(ctx.setComputeBytes(3, sizeof(channels)), &channels, sizeof(channels));
+  ctx.dispatch({width, height, 1});
+  ctx.endPass(); ctx.startBlitPass();
+  auto &write = EncodeBlitCommand<wmtcmd_blit_copy_from_buffer_to_texture>();
+  write.type = WMTBlitCommandCopyFromBufferToTexture;
+  write.src = decoded; write.src_offset = decoded_offset;
+  write.bytes_per_row = decoded_row; write.bytes_per_image = 0;
+  write.size = {width, height, 1}; write.dst = texture->current()->signedBC;
+  write.level = level; write.slice = slice; write.origin = {};
+}
+
+bool
+MTLD3D12CommandAllocatorImpl::NormalizeBC7(
+    WMT::Buffer src, uint64_t src_offset, WMT::Buffer dst, uint64_t dst_offset,
+    RGB32CopyLayout layout, WMTSize blocks
+) {
+  SimpleCommandContext<MTLD3D12CommandAllocatorImpl> ctx{*this};
+  if (!bc7_copy_pso_)
+    bc7_copy_pso_ = ctx.getComputePipeline("cs_normalize_bc7");
+  if (!bc7_copy_pso_ || !src || !dst) {
+    exhausted_ = true;
+    return false;
+  }
+  ctx.endPass();
+  ctx.startComputePass();
+  ctx.setComputePSO(bc7_copy_pso_, {bc7_copy_pso_.threadExecutionWidth(), 1, 1});
+  ctx.setComputeBuffer(0, src, src_offset);
+  ctx.setComputeBuffer(1, dst, dst_offset);
+  memcpy(ctx.setComputeBytes(2, sizeof(layout)), &layout, sizeof(layout));
+  ctx.dispatch(blocks);
+  ctx.endPass();
+  ctx.startBlitPass();
+  return true;
+}
+
 bool
 MTLD3D12CommandAllocatorImpl::CopyD24(
     bool to_float, WMT::Buffer src, uint64_t src_offset, UINT src_pitch, WMT::Buffer dst,

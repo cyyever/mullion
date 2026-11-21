@@ -264,6 +264,8 @@ private:
   std::vector<std::shared_ptr<const AccelerationStructureInputs>> acceleration_structure_inputs_;
 
   WMT::Reference<WMT::ComputePipelineState> d24_copy_pso_[2];
+  WMT::Reference<WMT::ComputePipelineState> bc7_copy_pso_;
+  WMT::Reference<WMT::ComputePipelineState> bc_snorm_pso_;
   RGB32Copy<MTLD3D12CommandAllocatorImpl> rgb32_copy_{*this};
   ClearUAV<MTLD3D12CommandAllocatorImpl> clear_uav_;
   // a UAV clear joins the open compute pass, behind and before memory barriers, instead of a pass of its own
@@ -284,6 +286,12 @@ private:
   uint64_t temp_offset_ = 0, temp_used_ = 0;
 
 public:
+  void RefreshSignedBC(Texture *texture, UINT level, UINT slice);
+
+  bool
+  NormalizeBC7(WMT::Buffer src, uint64_t src_offset, WMT::Buffer dst, uint64_t dst_offset,
+               RGB32CopyLayout layout, WMTSize blocks);
+
   bool
   CopyD24(bool to_float, WMT::Buffer src, uint64_t src_offset, UINT src_pitch, WMT::Buffer dst,
           uint64_t dst_offset, UINT dst_pitch, WMTSize size);

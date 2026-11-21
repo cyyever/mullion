@@ -151,6 +151,9 @@ public:
     return flags_;
   }
 
+  WMT::Reference<WMT::Texture> signedBC;
+  uint64_t signedBCResourceID = 0;
+
   Texture *descriptor;
   void *mappedMemory;
   uint64_t gpuResourceID;
@@ -169,6 +172,7 @@ private:
       Flags<TextureAllocationFlag> flags
   );
 
+  void createSignedBC();
   void free();
 
   TextureAllocation(const TextureAllocation &) = delete;
@@ -300,6 +304,7 @@ public:
     return info_.mipmap_level_count;
   }
 
+  bool accurateBC = false;
   TextureViewKey fullView;
   Rc<Texture> chroma;
   Rc<Buffer> render_buffer;
@@ -343,11 +348,12 @@ public:
   Rc<TextureAllocation> rename(Rc<TextureAllocation> &&newAllocation);
   Rc<TextureAllocation> rename(Rc<TextureAllocation> &&newAllocation, std::vector<TextureViewRef> &retiredViews);
 
-  Texture(const WMTTextureInfo &info, WMT::Device device);
+  Texture(const WMTTextureInfo &info, WMT::Device device, bool accurateBC = false);
 
   Texture(unsigned bytes_per_image, unsigned bytes_per_row, const WMTTextureInfo &info, WMT::Device device);
 
 private:
+  friend class TextureAllocation;
   void prepareAllocationViews(TextureAllocation* allocation);
   // a view in another layout than the texture's own, not its sRGB twin, needs Metal's format view
   bool castsLayout(WMTPixelFormat format) const;

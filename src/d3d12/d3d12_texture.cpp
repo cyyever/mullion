@@ -21,6 +21,7 @@
 #include <bit>
 #include <cmath>
 #include "mullion_format.hpp"
+#include "mullion_bc_snorm.hpp"
 #include "com/com_pointer.hpp"
 
 namespace mullion {
@@ -382,7 +383,9 @@ public:
           return E_INVALIDARG;
         texture_info = pTexture->texture_info;
       }
-      Rc<Texture> storage = new Texture(texture_info, device_->GetMTLDevice());
+      bool accurate_bc = desc_.Format == DXGI_FORMAT_BC4_SNORM || desc_.Format == DXGI_FORMAT_BC5_SNORM ||
+                         desc_.Format == DXGI_FORMAT_BC4_TYPELESS || desc_.Format == DXGI_FORMAT_BC5_TYPELESS;
+      Rc<Texture> storage = new Texture(texture_info, device_->GetMTLDevice(), accurate_bc);
       WMT::Texture adopted;
       adopted.handle = pTexture ? pTexture->texture : NULL_OBJECT_HANDLE;
       storage->rename(pTexture ? storage->wrap(WMT::Reference<WMT::Texture>(adopted), texture_info, pTexture->flags)
@@ -391,6 +394,8 @@ public:
         return FAIL(E_OUTOFMEMORY);
       if (!pHeap)
         device_->RegisterResidency(storage->current()->texture());
+      if (storage->current()->signedBC)
+        device_->RegisterResidency(storage->current()->signedBC);
       storage->centered = desc_.SampleDesc.Quality == DXGI_CENTER_MULTISAMPLE_QUALITY_PATTERN;
       storage->paired = texture_info.sample_count < desc_.SampleDesc.Count;
       if (plane)
@@ -405,9 +410,12 @@ public:
 
   ~MTLD3D12Texture() {
     EndAfterWorkInFlight(device_, [device = device_, texture = std::move(texture)] {
-      for (auto storage = texture.ptr(); storage; storage = storage->chroma.ptr())
+      for (auto storage = texture.ptr(); storage; storage = storage->chroma.ptr()) {
         if (storage->current() && !storage->current()->flags().test(TextureAllocationFlag::AllocatedOnHeap))
           device->UnregisterResidency(storage->current()->texture());
+        if (storage->current() && storage->current()->signedBC)
+          device->UnregisterResidency(storage->current()->signedBC);
+      }
     });
   }
 
@@ -511,10 +519,30 @@ public:
       box.bottom = std::min(box.bottom, std::max(1u, storage->height() >> Level));
     }
 
+    std::vector<float> decoded;
+    UINT channels = storage->pixelFormat() == WMTPixelFormatBC5_RGUnorm ||
+                    storage->pixelFormat() == WMTPixelFormatBC5_RGSnorm ? 2 : 1;
+    UINT width = box.right - box.left, height = box.bottom - box.top;
+    if (storage->current()->signedBC) {
+      try { decoded.resize(size_t(width) * height * channels); }
+      catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
+      auto src = static_cast<const uint8_t *>(pSrcData);
+      for (UINT y = 0; y < height; y++)
+        for (UINT x = 0; x < width; x++)
+          for (UINT channel = 0; channel < channels; channel++) {
+            uint32_t words[2];
+            memcpy(words, src + size_t(y / 4) * SrcRowPitch + size_t(x / 4) * channels * 8 + channel * 8, 8);
+            auto value = decodeBCSnorm(words[0], words[1], (y % 4) * 4 + x % 4);
+            decoded[(size_t(y) * width + x) * channels + channel] = float(value.numerator) / value.denominator;
+          }
+    }
     storage->current()->texture().replaceRegion(
         {box.left, box.top, box.front}, {box.right - box.left, box.bottom - box.top, box.back - box.front}, Level,
         Slice, pSrcData, SrcRowPitch, SrcSlicePitch
     );
+    if (!decoded.empty())
+      storage->current()->signedBC.replaceRegion(
+          {box.left, box.top, 0}, {width, height, 1}, Level, Slice, decoded.data(), width * channels * sizeof(float), 0);
     return S_OK;
   };
 

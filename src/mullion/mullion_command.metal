@@ -24,6 +24,7 @@
 #include <metal_stdlib>
 #include "../airconv/airconv_ray.h"
 #include "mullion_command_constants.hpp"
+#include "mullion_bc_snorm.hpp"
 
 using namespace metal;
 using namespace mullion;
@@ -1584,6 +1585,31 @@ static void ray_trace(thread MullionRayContext &parent, thread SM50_RAY_TRACE &t
   for (uint i = 0; i < 3; i++)
     c.index[i] = index[i];
   ray_shader(c, kRayGeneration, record, record->function[0], nullptr, nullptr);
+}
+
+[[kernel]] void cs_decode_bc_snorm(
+    device const uchar *src [[buffer(0)]], device uchar *dst [[buffer(1)]],
+    constant RGB32CopyLayout &layout [[buffer(2)]], constant uint &channels [[buffer(3)]],
+    uint2 pos [[thread_position_in_grid]]) {
+  uint texel = (pos.y % 4) * 4 + pos.x % 4;
+  for (uint channel = 0; channel < channels; channel++) {
+    auto p = src + (pos.y / 4) * layout.src_row + (pos.x / 4) * channels * 8 + channel * 8;
+    auto words = *(device const packed_uint2 *)p;
+    auto value = decodeBCSnorm(words.x, words.y, texel);
+    *(device float *)(dst + pos.y * layout.dst_row + (pos.x * channels + channel) * 4) =
+        precise::divide(float(value.numerator), float(value.denominator));
+  }
+}
+
+// D3D11.3 19.5.14.4: reserved BC7 mode 8 decodes to transparent black.
+// Apple's decoder supplies alpha 1 for that mode; legal mode 6 with zero endpoints supplies RGBA zero.
+[[kernel]] void cs_normalize_bc7(
+    device const uchar *src [[buffer(0)]], device uchar *dst [[buffer(1)]],
+    constant RGB32CopyLayout &layout [[buffer(2)]], uint3 pos [[thread_position_in_grid]]) {
+  auto block = *(device const packed_uint4 *)(src + pos.z * layout.src_image + pos.y * layout.src_row + pos.x * 16);
+  if ((block.x & 0xffu) == 0)
+    block = packed_uint4(0x40u, 0u, 0u, 0u);
+  *(device packed_uint4 *)(dst + pos.z * layout.dst_image + pos.y * layout.dst_row + pos.x * 16) = block;
 }
 
 [[kernel]] void cs_expand_rgb32(
