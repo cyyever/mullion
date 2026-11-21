@@ -181,7 +181,7 @@ CommandQueue::Shutdown() {
     chunk_ongoing.wait(ongoing, std::memory_order_acquire);
   if (stopped.exchange(true))
     return;
-  TRACE("Destructing command queue");
+
   ready_for_encode++;
   ready_for_encode.notify_one();
   ready_for_commit++;
@@ -195,7 +195,7 @@ CommandQueue::Shutdown() {
     chunk.reset();
   };
   event_listener_thread.join();
-  TRACE("Destructed command queue");
+
 }
 
 void
@@ -281,7 +281,7 @@ CommandQueue::EncodingThread() {
       break;
     internal_seq++;
   }
-  TRACE("encoder thread gracefully terminates");
+
 #endif
   return 0;
 }
@@ -371,7 +371,7 @@ CommandQueue::WaitForFinishThread() {
 
     internal_seq++;
   }
-  TRACE("finishing thread gracefully terminates");
+
   return 0;
 }
 

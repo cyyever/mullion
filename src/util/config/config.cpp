@@ -325,15 +325,8 @@ namespace mullion {
     if (!config)
       config = findProfile(g_profiles, appName);
 
-    if (config) {
-      // Inform the user that we loaded a default config
-      Logger::info(str::format("Found built-in config:"));
-
-      for (auto& pair : config->m_options)
-        Logger::info(str::format("  ", pair.first, " = ", pair.second));
-
+    if (config)
       return *config;
-    }
 
     return Config();
   }
@@ -373,10 +366,6 @@ namespace mullion {
     }
 
     if (!confLine.empty()) {
-      // Inform the user that we parsing config from environment, might
-      // help when debugging configuration issues
-      Logger::info(str::format("Found config env: ", confLine));
-
       // the environment applies to this executable, whichever section the file ended in
       ctx.active = true;
       for(auto l : str::split(confLine, ";"))
@@ -393,7 +382,7 @@ namespace mullion {
   }
 
   void Config::logOptions() const {
-    if (!m_options.empty()) {
+    if (!m_options.empty() && Logger::enabled(LogLevel::Info)) {
       Logger::info("Effective configuration:");
 
       for (auto& pair : m_options)

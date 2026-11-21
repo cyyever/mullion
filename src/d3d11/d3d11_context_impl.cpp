@@ -3831,13 +3831,13 @@ public:
 
   void STDMETHODCALLTYPE
   SetHardwareProtectionState(WINBOOL enable) override {
-    WARN("SetHardwareProtectionState: stub");
+    if (enable)
+      WARN("Hardware-protected contexts are not supported");
   }
 
   void STDMETHODCALLTYPE
   GetHardwareProtectionState(WINBOOL *enable) override {
     *enable = false;
-    WARN("GetHardwareProtectionState: stub");
   }
 
 #pragma endregion

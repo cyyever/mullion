@@ -324,12 +324,12 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   TakeOwnership(IUnknown *device, BOOL exclusive) final {
-    WARN("TakeOwnership: Stub");
+
     return S_OK;
   }
 
   void STDMETHODCALLTYPE ReleaseOwnership() final {
-    WARN("ReleaseOwnership: Stub");
+
   }
 
   HRESULT
