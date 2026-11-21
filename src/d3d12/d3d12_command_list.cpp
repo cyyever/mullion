@@ -34,7 +34,7 @@
 
 namespace mullion {
 
-enum class DirtyState {
+enum class DirtyState : uint8_t {
   VertexBuffer,
   GraphicsRootArguments,
   GraphicsRootSignature,
@@ -49,7 +49,7 @@ enum class DirtyState {
   ComputePipelineState,
 };
 
-enum class DrawCallStatus {
+enum class DrawCallStatus : uint8_t {
   Invalid,
   Ordinary,
 };

@@ -62,7 +62,7 @@ namespace llvm {
 namespace airbitcode {
 
 // Generates an enum to use as an index in the Abbrev array of Metadata record.
-enum MetadataAbbrev : unsigned {
+enum MetadataAbbrev : uint8_t {
 #define HANDLE_MDNODE_LEAF(CLASS) CLASS##AbbrevID,
 #include "llvm/IR/Metadata.def"
   LastPlusOne
@@ -73,7 +73,7 @@ class DXILBitcodeWriter {
   /// These are manifest constants used by the bitcode writer. They do not need
   /// to be kept in sync with the reader, but need to be consistent within this
   /// file.
-  enum {
+  enum : uint8_t {
     // VALUE_SYMTAB_BLOCK abbrev id's.
     VST_ENTRY_8_ABBREV = bitc::FIRST_APPLICATION_ABBREV,
     VST_ENTRY_7_ABBREV,
@@ -408,7 +408,7 @@ void airbitcode::WriteDXILToFile(const Module &M, raw_ostream &Out,
 
   // If this is darwin or another generic macho target, reserve space for the
   // header.
-  Triple TT(M.getTargetTriple());
+  const Triple &TT = M.getTargetTriple();
   if (TT.isOSDarwin() || TT.isOSBinFormatMachO())
     Buffer.insert(Buffer.begin(), BWH_HeaderSize, 0);
 

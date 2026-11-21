@@ -15,13 +15,13 @@ namespace mullion {
 
 namespace {
 
-enum class NextAction {
+enum class NextAction : uint8_t {
   StartCapture,
   StopCapture,
   Nothing,
 };
 
-enum class State {
+enum class State : uint8_t {
   Idle,
   WillCapture,
   Capturing,

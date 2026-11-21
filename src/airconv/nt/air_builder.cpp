@@ -1120,7 +1120,7 @@ AIRBuilder::CreateTextureQuery(const Texture &Texture, Value *Handle, Texture::Q
 
   std::string FnName = "air.";
   FnName += QUERIES[Query];
-  FnName += "_";
+  FnName += '_';
   FnName += TexInfo.air_symbol_suffix;
 
   auto Fn = getModule()->getOrInsertFunction(FnName, FunctionType::get(getIntTy(), Tys, false), Attrs);

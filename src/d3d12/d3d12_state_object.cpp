@@ -177,7 +177,7 @@ ReadSubobjects(const D3D12_SHADER_BYTECODE &library) {
       memcpy(&value, from.data() + at, sizeof(value));
     return value;
   };
-  enum { Strings = 1, Indices = 2, RawBytes = 5, Subobjects = 6, Parts };
+  enum : uint8_t { Strings = 1, Indices = 2, RawBytes = 5, Subobjects = 6, Parts };
   std::span<const uint8_t> parts[Parts];
   if (data.size() < 8 || word(data, 4) > (data.size() - 8) / sizeof(uint32_t))
     return {};
@@ -255,9 +255,9 @@ struct HitGroup {
 // how an association of a subobject with exports was made, the weakest first ("Subobject association behavior"):
 // what the state object says overrides what its libraries say, and of each, an association that names exports comes
 // before one that names none, and that before a subobject no association of its scope gives exports
-enum Strength { LibraryDeclared, LibraryDefault, LibraryExplicit, Declared, Default, Explicit };
+enum Strength : uint8_t { LibraryDeclared, LibraryDefault, LibraryExplicit, Declared, Default, Explicit };
 
-enum SubobjectKind { Global, Local, ShaderConfig, PipelineConfig, SubobjectKinds };
+enum SubobjectKind : uint8_t { Global, Local, ShaderConfig, PipelineConfig, SubobjectKinds };
 
 struct Association {
   SubobjectKind kind;

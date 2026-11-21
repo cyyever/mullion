@@ -83,7 +83,7 @@ tessellation_groups() {
 
 // One layout description for size selection and the LLVM type emitted below. All
 // control-point arrays contain int4s, so the complete structure is 16-byte aligned.
-enum class TessellationPayloadKind { Mesh, Native };
+enum class TessellationPayloadKind : uint8_t { Mesh, Native };
 
 struct TessellationPayloadLayout {
   uint32_t patches, registers, control_points, constants, workloads;
