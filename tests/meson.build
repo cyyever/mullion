@@ -72,3 +72,15 @@ if get_option('build_airconv_for_windows')
        dependencies : [cpp.find_library('d3dcompiler_47')]),
        args : [airconv_windows.full_path()], suite : 'converter', timeout : 120)
 endif
+
+if mullion_crossbuild
+  logger_test = executable('logger_test', 'logger.cpp', dependencies: util_dep)
+  foreach level : ['info', 'warn', 'none']
+    test('logger_' + level, logger_test, args: [level],
+         env: ['MULLION_LOG_LEVEL=' + level], timeout: 30)
+  endforeach
+  test('logger_default', logger_test, args: ['warn'],
+       env: ['MULLION_LOG_LEVEL='], timeout: 30)
+  test('logger_trace', logger_test, args: ['trace'],
+       env: ['MULLION_LOG_LEVEL=none', 'MULLION_TRACE_API=1'], timeout: 30)
+endif
