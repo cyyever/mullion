@@ -5012,7 +5012,8 @@ acceleration_structure_descriptor(const struct WMTAccelerationStructureInfo *inf
       triangles.triangleCount = g->count;
       triangles.transformationMatrixBuffer = (id<MTLBuffer>)g->transform_buffer;
       triangles.transformationMatrixBufferOffset = g->transform_offset;
-      triangles.transformationMatrixLayout = g->transform_column_major ? MTLMatrixLayoutColumnMajor : MTLMatrixLayoutRowMajor;
+      if (g->transform_buffer && !g->transform_column_major)
+        triangles.transformationMatrixLayout = MTLMatrixLayoutRowMajor;
       geometry = triangles;
     }
     geometry.opaque = g->opaque;
@@ -7301,7 +7302,8 @@ API_AVAILABLE(macos(26.0)) metal4_structure_descriptor(
       triangles.indexType = (MTLIndexType)g->index_type;
       triangles.triangleCount = g->count;
       triangles.transformationMatrixBuffer = metal4_range(state, g->transform_buffer, g->transform_offset);
-      triangles.transformationMatrixLayout = g->transform_column_major ? MTLMatrixLayoutColumnMajor : MTLMatrixLayoutRowMajor;
+      if (g->transform_buffer && !g->transform_column_major)
+        triangles.transformationMatrixLayout = MTLMatrixLayoutRowMajor;
       geometry = triangles;
     }
     geometry.opaque = g->opaque;
