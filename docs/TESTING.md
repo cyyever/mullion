@@ -236,3 +236,8 @@ and steady execution are measured separately. A run excluded from the result sta
 
 A pull request reports the evidence [CONTRIBUTING.md 3](../CONTRIBUTING.md#3-showing-that-it-works) asks for, as the
 runner printed it: the command, the line of every test that did not pass, and the counts the run ended with.
+### Compile changed HLSL fixtures
+
+The fork's **HLSL compiler checks** workflow runs the Windows SDK's FXC and DXC on push and pull requests. For each changed D3D11 or D3D12 test source it compiles named raw string arrays used in direct `compile(source, "entry", "stage")` calls, including literal macro lists. D3D11 bare stages use shader model 5.0. D3D12 bare stages use the test's registered DXIL (6.0) and DXBC (5.1) front ends in the Meson test table. Explicit profiles select the corresponding compiler, with warnings treated as errors. Changes to a shared test header check its direct callers. Changes to the common test helpers or Meson registrations run the sample fixtures. Changes to the pinned DXC corpus or its adapter also compile all four Microsoft integer cases used by `d3d12_dxc_official`.
+
+On Windows with both compilers on PATH, run `python tests/lint_hlsl.py --base <commit>` or pass individual fixture paths. With no arguments it runs two sample fixtures and the pinned XML cases. Generated C++ strings, compile calls with runtime arguments, transitive includes and dynamically configured shared shaders such as `shader_groups.hpp` and `buffer_loads.hpp`, standalone files without profile metadata, and Unity's submodule shaders fall outside this check. The log reports unresolved direct calls. Compilation checks syntax and types; GPU results are covered by the normal test runner.

@@ -1,0 +1,53 @@
+name: HLSL compiler checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: &inputs
+      - 'tests/*.hpp'
+      - 'tests/d3d11/**'
+      - 'tests/d3d12/**'
+      - 'tests/engines/directx-shader-compiler'
+      - 'tests/dxc_cases.py'
+      - 'tests/lint_hlsl.py'
+      - '.github/workflows/hlsl.yml'
+  pull_request:
+    paths: *inputs
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Locate the x64 Windows SDK shader compilers
+        shell: pwsh
+        run: |
+          $bin = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Directory |
+            Where-Object { $_.Name -match '^10\.0\.\d+\.\d+$' -and
+              (Test-Path "$($_.FullName)\x64\fxc.exe") -and (Test-Path "$($_.FullName)\x64\dxc.exe") } |
+            Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (!$bin) { throw 'Windows SDK shader compilers are missing' }
+          Write-Host "Using Windows SDK $($bin.Name)"
+          "$($bin.FullName)\x64" >> $env:GITHUB_PATH
+      - name: Compile changed fixtures
+        shell: pwsh
+        env:
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if ($env:PR_BASE) {
+            $base = git merge-base $env:PR_BASE HEAD
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          } elseif ($env:BEFORE -and $env:BEFORE -notmatch '^0+$') {
+            $base = $env:BEFORE
+          }
+          if ($base) { python tests/lint_hlsl.py --base $base }
+          else { python tests/lint_hlsl.py }
+          exit $LASTEXITCODE
