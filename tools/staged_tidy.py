@@ -141,6 +141,7 @@ def main():
                 result = subprocess.run([str(tidy), '-p', str(temp), '--experimental-custom-checks',
                                          '--config-file=' + str(config), '--vfsoverlay=' + str(overlay),
                                          '--header-filter=^' + str(ROOT) + '/(src|tests)/',
+                                         '--line-filter=' + json.dumps([{'name': str(file.relative_to(ROOT))} for file in sorted(changed)]),
                                          '--warnings-as-errors=*', str(path)], cwd=ROOT, timeout=180)
                 failed |= result.returncode != 0
             except subprocess.TimeoutExpired:
