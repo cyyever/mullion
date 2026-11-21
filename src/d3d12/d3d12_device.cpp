@@ -1946,7 +1946,7 @@ public:
       for (unsigned i = 0; i < SubresourceCount; i++) {
         auto Subresource = FirstSubresource + i;
         auto Plane = 0u, MipLevel = 0u;
-        DecomposeSubresource(*pDesc, Subresource, &MipLevel, NULL, &Plane);
+        DecomposeSubresource(*pDesc, Subresource, &MipLevel, nullptr, &Plane);
         auto Extent = GetResourceExtent(*pDesc, MipLevel);
         auto Width = align(Extent.right, BlockWidth) / SubsampleWidth[Plane];
         auto Height = align(Extent.bottom, BlockWidth) / SubsampleHeight[Plane];
@@ -1977,7 +1977,7 @@ public:
       if (pTotalBytes)
         *pTotalBytes = TotalBytes;
       return;
-    } while (0);
+    } while (false);
     for (unsigned i = 0; i < SubresourceCount; i++) {
       if (pLayouts) {
         pLayouts[i].Offset = ~0ull;

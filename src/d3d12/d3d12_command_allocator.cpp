@@ -819,7 +819,7 @@ SimpleCommandContext<MTLD3D12CommandAllocatorImpl>::startComputePass() {
   auto compute = ctx.AllocatePass<ComputeEncoderData>();
   compute->type = EncoderType::Compute;
   compute->cmd_head.type = WMTComputeCommandNop;
-  compute->cmd_head.next.set(0);
+  compute->cmd_head.next.set(nullptr);
   compute->cmd_tail = (wmtcmd_base *)&compute->cmd_head;
 }
 
@@ -839,7 +839,7 @@ SimpleCommandContext<MTLD3D12CommandAllocatorImpl>::startBlitPass() {
   auto blit = ctx.AllocatePass<BlitEncoderData>();
   blit->type = EncoderType::Blit;
   blit->cmd_head.type = WMTBlitCommandNop;
-  blit->cmd_head.next.set(0);
+  blit->cmd_head.next.set(nullptr);
   blit->cmd_tail = (wmtcmd_base *)&blit->cmd_head;
 }
 

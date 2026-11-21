@@ -2322,7 +2322,7 @@ public:
                                        : allocator_->AllocatePass<ComputeEncoderData>();
     compute->type = EncoderType::Compute;
     compute->cmd_head.type = WMTComputeCommandNop;
-    compute->cmd_head.next.set(0);
+    compute->cmd_head.next.set(nullptr);
     compute->cmd_tail = (wmtcmd_base *)&compute->cmd_head;
     dirty_state_.set(DirtyState::ComputeRootArguments, DirtyState::ComputeRootSignature);
     dirty_state_.set(DirtyState::ComputePipelineState);
@@ -2448,7 +2448,7 @@ public:
       auto render = allocator_->AllocatePass<BlitEncoderData>();
       render->type = EncoderType::Blit;
       render->cmd_head.type = WMTBlitCommandNop;
-      render->cmd_head.next.set(0);
+      render->cmd_head.next.set(nullptr);
       render->cmd_tail = (wmtcmd_base *)&render->cmd_head;
     }
     return true;
@@ -2493,7 +2493,7 @@ public:
       hoisted_ = allocator_->AllocatePass<BlitEncoderData>();
       hoisted_->type = EncoderType::Blit;
       hoisted_->cmd_head.type = WMTBlitCommandNop;
-      hoisted_->cmd_head.next.set(0);
+      hoisted_->cmd_head.next.set(nullptr);
       hoisted_->cmd_tail = (wmtcmd_base *)&hoisted_->cmd_head;
       allocator_->InvalidateCurrentPass();
       hoisted_for_ = render;
@@ -5050,7 +5050,7 @@ public:
     auto pass = allocator_->AllocatePass<AccelerationStructureEncoderData>();
     pass->type = EncoderType::AccelerationStructure;
     pass->cmd_head.type = WMTAccelerationStructureCommandNop;
-    pass->cmd_head.next.set(0);
+    pass->cmd_head.next.set(nullptr);
     pass->cmd_tail = (wmtcmd_base *)&pass->cmd_head;
     pass->filled = nullptr;
     pass->filled_tail = &pass->filled;

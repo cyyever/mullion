@@ -90,7 +90,7 @@ ResourceInitializer::initWithZero(BufferAllocation *buffer, uint64_t offset, uin
     fill->length = length;
     fill->value = 0;
 
-  } while (0);
+  } while (false);
 
   return current_seq_id_;
 }
@@ -127,7 +127,7 @@ ResourceInitializer::initDepthStencilWithZero(
       info->stencil.level = level;
     }
 
-  } while (0);
+  } while (false);
 
   return current_seq_id_;
 }
@@ -154,7 +154,7 @@ ResourceInitializer::initRenderTargetWithZero(
     info->colors[0].slice = slice;
     info->colors[0].level = level;
 
-  } while (0);
+  } while (false);
 
   return current_seq_id_;
 }
@@ -222,7 +222,7 @@ ResourceInitializer::initWithZero(
     copy->level = level;
     copy->origin = {0, 0, 0};
 
-  } while (0);
+  } while (false);
 
   return current_seq_id_;
 }
@@ -317,7 +317,7 @@ ResourceInitializer::initWithData(
     copy->level = level;
     copy->origin = {0, 0, 0};
 
-  } while (0);
+  } while (false);
 
   return current_seq_id_;
 }
@@ -387,7 +387,7 @@ ResourceInitializer::initDepthStencilWithData(
     stencil_copy->origin = {0, 0, 0};
     stencil_copy->options = WMTBlitOptionStencilFromDepthStencil;
 
-  } while (0);
+  } while (false);
 
   return current_seq_id_;
 }

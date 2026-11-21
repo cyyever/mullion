@@ -3583,7 +3583,7 @@ convert_dxbc_vertex_for_geometry_shader(
   auto valid_vertex_result = builder.CreateLoad(types._int, valid_vertex_mask);
 
   for (unsigned primitive_id = 0; primitive_id < warp_primitive_count; primitive_id++) {
-    pvalue primitive_valid_result = builder.getInt1(1);
+    pvalue primitive_valid_result = builder.getInt1(true);
     uint32_t primitive_vertices_mask = 0;
     // TODO: check primitive is valid
     if (strip && !assembled) {

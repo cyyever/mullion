@@ -600,7 +600,7 @@ public:
   void
   STDMETHODCALLTYPE
   Flush() override {
-    Flush1(D3D11_CONTEXT_TYPE_ALL, NULL);
+    Flush1(D3D11_CONTEXT_TYPE_ALL, nullptr);
   }
 
   void

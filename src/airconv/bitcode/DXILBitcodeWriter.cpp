@@ -58,8 +58,8 @@
 #include "llvm/Support/SHA1.h"
 #include "llvm/TargetParser/Triple.h"
 
-namespace llvm {
-namespace airbitcode {
+
+namespace llvm::airbitcode {
 
 // Generates an enum to use as an index in the Abbrev array of Metadata record.
 enum MetadataAbbrev : uint8_t {
@@ -377,8 +377,8 @@ private:
   unsigned getGlobalObjectValueTypeID(Type *T, const GlobalObject *G);
 };
 
-} // namespace airbitcode
-} // namespace llvm
+} // namespace llvm::airbitcode
+
 
 using namespace llvm;
 using namespace llvm::airbitcode;
