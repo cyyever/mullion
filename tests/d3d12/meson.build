@@ -1,4 +1,4 @@
-d3d12_test_deps = [ cpp.find_library('d3d12'), cpp.find_library('d3dcompiler_47'), cpp.find_library('dxgi'), cpp.find_library('psapi') ]
+d3d12_test_deps = [ cpp.find_library('d3d12'), cpp.find_library('d3dcompiler_47'), cpp.find_library('dxgi'), cpp.find_library('psapi'), cpp.find_library('stdc++exp') ]
 # 'window' tests present to a real window: through a Metal view where winemac.drv exports it, through GDI elsewhere
 # a test runs through both shader front ends, or the one its third field names when the other cannot express it
 # the sources a test has beside its own

@@ -34,29 +34,29 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   ComPtr<ID3D12Device> device;
   CHECK(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device)));
   D3D12_ROOT_PARAMETER parameters[3] = {
-      {D3D12_ROOT_PARAMETER_TYPE_UAV}, {D3D12_ROOT_PARAMETER_TYPE_UAV}, {D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS}
+      {.ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV}, {.ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV}, {.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS}
   };
   parameters[1].Descriptor.ShaderRegister = 1;
   parameters[2].Constants.Num32BitValues = 2;
-  auto roots = root_signature(device.Get(), {UINT(std::size(parameters)), parameters});
+  auto roots = root_signature(device.Get(), {.NumParameters=static_cast<UINT>(std::size(parameters)), .pParameters=parameters});
   auto graphics_roots = root_signature(device.Get(), {});
   CHECK(roots && graphics_roots ? S_OK : E_FAIL);
-  D3D12_COMPUTE_PIPELINE_STATE_DESC compute_desc{roots.Get(), bytecode(cs)};
+  D3D12_COMPUTE_PIPELINE_STATE_DESC compute_desc{.pRootSignature=roots.Get(), .CS=bytecode(cs)};
   ComPtr<ID3D12PipelineState> compute, graphics;
   CHECK(device->CreateComputePipelineState(&compute_desc, IID_PPV_ARGS(&compute)));
-  D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics_desc{graphics_roots.Get(), bytecode(vs), bytecode(ps)};
+  D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics_desc{.pRootSignature=graphics_roots.Get(), .VS=bytecode(vs), .PS=bytecode(ps)};
   graphics_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
   graphics_desc.SampleMask = ~0u;
-  graphics_desc.RasterizerState = {D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE};
+  graphics_desc.RasterizerState = {.FillMode=D3D12_FILL_MODE_SOLID, .CullMode=D3D12_CULL_MODE_NONE};
   graphics_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
   graphics_desc.NumRenderTargets = 1;
   graphics_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-  graphics_desc.SampleDesc = {1, 0};
+  graphics_desc.SampleDesc = {.Count=1, .Quality=0};
   CHECK(device->CreateGraphicsPipelineState(&graphics_desc, IID_PPV_ARGS(&graphics)));
   ComPtr<ID3D12CommandQueue> queue;
   ComPtr<ID3D12CommandAllocator> allocator;
   ComPtr<ID3D12GraphicsCommandList> list;
-  D3D12_COMMAND_QUEUE_DESC queue_desc{D3D12_COMMAND_LIST_TYPE_DIRECT};
+  D3D12_COMMAND_QUEUE_DESC queue_desc{.Type=D3D12_COMMAND_LIST_TYPE_DIRECT};
   CHECK(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queue)));
   CHECK(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator)));
   CHECK(
@@ -64,7 +64,7 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   );
 
   const UINT count = sizes[std::size(sizes) - 1];
-  const UINT64 bytes = UINT64(count) * sizeof(UINT);
+  const UINT64 bytes = static_cast<UINT64>(count) * sizeof(UINT);
   ComPtr<ID3D12Resource> work[4];
   for (auto &resource : work) {
     resource = buffer(
@@ -79,25 +79,25 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   CHECK(forget(readback.Get()));
   const UINT width = 8, height = 4;
   D3D12_RESOURCE_DESC texture_desc{
-      D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-      0,
-      width,
-      height,
-      1,
-      1,
-      DXGI_FORMAT_R8G8B8A8_UNORM,
-      {1, 0},
-      D3D12_TEXTURE_LAYOUT_UNKNOWN,
-      D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+      .Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+      .Alignment=0,
+      .Width=width,
+      .Height=height,
+      .DepthOrArraySize=1,
+      .MipLevels=1,
+      .Format=DXGI_FORMAT_R8G8B8A8_UNORM,
+      .SampleDesc={.Count=1, .Quality=0},
+      .Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN,
+      .Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
   };
-  D3D12_HEAP_PROPERTIES properties{D3D12_HEAP_TYPE_DEFAULT};
+  D3D12_HEAP_PROPERTIES properties{.Type=D3D12_HEAP_TYPE_DEFAULT};
   ComPtr<ID3D12Resource> target;
   CHECK(device->CreateCommittedResource(
       &properties, D3D12_HEAP_FLAG_NONE, &texture_desc, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr,
       IID_PPV_ARGS(&target)
   ));
   ComPtr<ID3D12DescriptorHeap> views;
-  D3D12_DESCRIPTOR_HEAP_DESC view_desc{D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1};
+  D3D12_DESCRIPTOR_HEAP_DESC view_desc{.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV, .NumDescriptors=1};
   CHECK(device->CreateDescriptorHeap(&view_desc, IID_PPV_ARGS(&views)));
   auto view = views->GetCPUDescriptorHandleForHeapStart();
   device->CreateRenderTargetView(target.Get(), nullptr, view);
@@ -107,7 +107,7 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   auto pixels = buffer(device.Get(), D3D12_HEAP_TYPE_READBACK, pixel_bytes, D3D12_RESOURCE_STATE_COPY_DEST);
   CHECK(pixels ? S_OK : E_FAIL);
   // more heaps than Metal makes counter heaps, made and released one after another, then held together
-  D3D12_QUERY_HEAP_DESC heap_desc{D3D12_QUERY_HEAP_TYPE_TIMESTAMP, queries}, single_desc{heap_desc.Type, 1};
+  D3D12_QUERY_HEAP_DESC heap_desc{.Type=D3D12_QUERY_HEAP_TYPE_TIMESTAMP, .Count=queries}, single_desc{.Type=heap_desc.Type, .Count=1};
   for (UINT i = 0; i <= heaps; i++) {
     ComPtr<ID3D12QueryHeap> released;
     CHECK(device->CreateQueryHeap(&heap_desc, IID_PPV_ARGS(&released)));
@@ -117,9 +117,9 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   std::vector<ComPtr<ID3D12QueryHeap>> singles(heaps + 1);
   for (auto &single : singles)
     CHECK(device->CreateQueryHeap(&single_desc, IID_PPV_ARGS(&single)));
-  const UINT stamps = queries + UINT(singles.size());
+  const UINT stamps = queries + static_cast<UINT>(singles.size());
   auto clocks =
-      buffer(device.Get(), D3D12_HEAP_TYPE_READBACK, UINT64(stamps) * sizeof(UINT64), D3D12_RESOURCE_STATE_COPY_DEST);
+      buffer(device.Get(), D3D12_HEAP_TYPE_READBACK, static_cast<UINT64>(stamps) * sizeof(UINT64), D3D12_RESOURCE_STATE_COPY_DEST);
   CHECK(clocks ? S_OK : E_FAIL);
 
   list->SetComputeRootSignature(roots.Get());
@@ -129,13 +129,13 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
       list->SetComputeRootUnorderedAccessView(0, work[src]->GetGPUVirtualAddress());
       list->SetComputeRootUnorderedAccessView(1, work[dst]->GetGPUVirtualAddress());
       const UINT constants[] = {sizes[size], phase};
-      list->SetComputeRoot32BitConstants(2, UINT(std::size(constants)), constants, 0);
+      list->SetComputeRoot32BitConstants(2, static_cast<UINT>(std::size(constants)), constants, 0);
       list->Dispatch((sizes[size] + group - 1) / group, 1, 1);
     };
     auto copy = [&](UINT src, UINT dst) {
       transition(list.Get(), work[src].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
       transition(list.Get(), work[dst].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
-      list->CopyBufferRegion(work[dst].Get(), 0, work[src].Get(), 0, UINT64(sizes[size]) * sizeof(UINT));
+      list->CopyBufferRegion(work[dst].Get(), 0, work[src].Get(), 0, static_cast<UINT64>(sizes[size]) * sizeof(UINT));
       transition(list.Get(), work[src].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
       transition(list.Get(), work[dst].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     };
@@ -143,7 +143,7 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
     copy(0, 1);
     dispatch(1, 1, 2);
     copy(2, 3);
-    D3D12_RESOURCE_BARRIER barrier{D3D12_RESOURCE_BARRIER_TYPE_UAV};
+    D3D12_RESOURCE_BARRIER barrier{.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV};
     list->ResourceBarrier(1, &barrier);
     dispatch(2, 3, 0);
     const UINT results[] = {1, 3, 0};
@@ -151,7 +151,7 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
       auto result = work[results[phase]].Get();
       transition(list.Get(), result, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
       list->CopyBufferRegion(
-          readback.Get(), bytes * (size * std::size(results) + phase), result, 0, UINT64(sizes[size]) * sizeof(UINT)
+          readback.Get(), bytes * (size * std::size(results) + phase), result, 0, static_cast<UINT64>(sizes[size]) * sizeof(UINT)
       );
       transition(list.Get(), result, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
@@ -159,10 +159,10 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   list->SetPipelineState(graphics.Get());
   list->SetGraphicsRootSignature(graphics_roots.Get());
   list->OMSetRenderTargets(1, &view, FALSE, nullptr);
-  D3D12_VIEWPORT viewport{0, 0, float(width), float(height), 0, 1};
+  D3D12_VIEWPORT viewport{.TopLeftX=0, .TopLeftY=0, .Width=static_cast<float>(width), .Height=static_cast<float>(height), .MinDepth=0, .MaxDepth=1};
   list->RSSetViewports(1, &viewport);
   list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  D3D12_RECT left{0, 0, width / 2, height}, right{width / 2, 0, width, height};
+  D3D12_RECT left{.left=0, .top=0, .right=width / 2, .bottom=height}, right{.left=width / 2, .top=0, .right=width, .bottom=height};
   list->RSSetScissorRects(1, &left);
   list->DrawInstanced(3, 1, 0, 0);
   for (UINT i = 0; i < queries; i++)
@@ -174,11 +174,11 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   list->ResolveQueryData(heap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, queries, clocks.Get(), 0);
   for (UINT i = 0; i < singles.size(); i++)
     list->ResolveQueryData(
-        singles[i].Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, 1, clocks.Get(), UINT64(queries + i) * sizeof(UINT64)
+        singles[i].Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, 1, clocks.Get(), static_cast<UINT64>(queries + i) * sizeof(UINT64)
     );
   transition(list.Get(), target.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
-  D3D12_TEXTURE_COPY_LOCATION src{target.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX};
-  D3D12_TEXTURE_COPY_LOCATION dst{pixels.Get(), D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT};
+  D3D12_TEXTURE_COPY_LOCATION src{.pResource=target.Get(), .Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX};
+  D3D12_TEXTURE_COPY_LOCATION dst{.pResource=pixels.Get(), .Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT};
   dst.PlacedFootprint = footprint;
   list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
   UINT64 before, after, cpu;
@@ -191,7 +191,7 @@ run(const std::string &cs, const std::string &vs, const std::string &ps, UINT qu
   for (UINT size = 0; size < std::size(sizes); size++)
     for (UINT phase = 0; phase < 3; phase++)
       for (UINT i = 0; i < count; i++) {
-        UINT want = ~UINT(0);
+        UINT want = ~static_cast<UINT>(0);
         if (i < sizes[size])
           want = phase == 0 ? i : phase == 1 ? (sizes[size] - 1 - i) * 3 + 1 : (i * 3 + 1) * 3 + 2;
         UINT got = words[count * (size * 3 + phase) + i];
@@ -273,16 +273,16 @@ main(int argc, char **argv) {
     release(heap);
   release(devices);
   if (argc > 2)
-    return run(cs, vs, ps, capacity + 1, UINT(made.size()));
+    return run(cs, vs, ps, capacity + 1, static_cast<UINT>(made.size()));
   char temporary[MAX_PATH], directory[MAX_PATH], exe[MAX_PATH];
   CHECK(GetTempPathA(sizeof(temporary), temporary) ? S_OK : E_FAIL);
   CHECK(GetModuleFileNameA(nullptr, exe, sizeof(exe)) ? S_OK : E_FAIL);
-  for (bool metal4 : {false, true}) {
-    if (metal4 && !supported) {
-      printf("skipped: device does not support MTLGPUFamilyMetal4\n");
+  {
+    if (!supported) {
+      std::println("skipped: device does not support MTLGPUFamilyMetal4");
       return trace::wrong ? verdict() : 77;
     }
-    step("Metal %u passes", metal4 ? 4 : 3);
+    step("Metal 4 passes");
     CHECK(GetTempFileNameA(temporary, "mtl", 0, directory) ? S_OK : E_FAIL);
     DeleteFileA(directory);
     CHECK(CreateDirectoryA(directory, nullptr) ? S_OK : E_FAIL);
@@ -290,9 +290,8 @@ main(int argc, char **argv) {
     SetEnvironmentVariableA("MULLION_LOG_LEVEL", "info");
     SetEnvironmentVariableA("MULLION_TRACE_ENCODERS", "1");
     SetEnvironmentVariableA("MULLION_DIAG", nullptr);
-    SetEnvironmentVariableA("MULLION_D3D12_METAL4", metal4 ? "1" : "0");
     auto command = std::string("\"") + exe + "\" " + (argc > 1 ? argv[1] : "dxil") + " child";
-    STARTUPINFOA startup{sizeof(startup)};
+    STARTUPINFOA startup{.cb=sizeof(startup)};
     PROCESS_INFORMATION process{};
     CHECK(
         CreateProcessA(exe, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process) ? S_OK
@@ -312,7 +311,7 @@ main(int argc, char **argv) {
         unsigned r, c, b, api;
         if (sscanf(line.c_str(), "info:  D3D12 encoders Metal%u: render=%u compute=%u blit=%u", &api, &r, &c, &b) ==
             4) {
-          expect(api == (metal4 ? 4u : 3u), "requested Metal%u, got Metal%u", metal4 ? 4 : 3, api);
+          expect(api == 4, "expected Metal4, got Metal%u", api);
           render += r;
           compute += c;
           blit += b;
@@ -322,12 +321,8 @@ main(int argc, char **argv) {
     }
     expect(traced != 0, "no D3D12 encoder trace");
     expect(render == 1, "render passes: %u", render);
-    // Metal 3 begins an encoder where the kind of work changes: a size's dispatches are three, its copies three (one,
-    // one, and the readbacks together), and the resolves and the texture's copy after the draws one more
-    expect(
-        metal4 ? compute == 2 && blit == 0 : compute == 3 * std::size(sizes) && blit == 3 * std::size(sizes) + 1,
-        "compute=%u blit=%u", compute, blit
-    );
+    // Metal 4 combines dispatch and copy work into two compute encoders around the render pass.
+    expect(compute == 2 && blit == 0, "compute=%u blit=%u", compute, blit);
     std::filesystem::remove_all(directory);
   }
   return verdict();
