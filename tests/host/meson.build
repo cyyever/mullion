@@ -30,6 +30,9 @@ test('host_parse_shared',
      executable('host_parse_shared', 'parse_shared.cpp', dependencies : airconv_dep_darwin,
                 cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
      suite : 'host', timeout : 120)
+# Run manually with six distinct DXBC files. File I/O is outside the measured rounds.
+executable('bench_shader_init', 'bench_shader_init.cpp', include_directories : llvm_include_path_darwin,
+           dependencies : airconv_dep_darwin, native : true, build_by_default : false)
 test('host_pixel_input_declarations',
      executable('host_pixel_input_declarations', 'pixel_input_declarations.cpp',
                 include_directories : llvm_include_path_darwin,
