@@ -71,14 +71,14 @@ What Direct3D 12 reports to a game:
 
 | Feature | Reported | |
 |---|---|---|
-| Feature level | 12_2 | 12_0 and above need macOS 26.4 or later, for Metal's placement sparse resources. On earlier versions Direct3D 12 reports 11_1. |
+| Feature level | 12_2 on M3 or later, up to 12_1 on M1 and M2 | 12_0 and above need macOS 26.4 or later, for Metal's placement sparse resources. On earlier versions Direct3D 12 reports 11_1. |
 | Shader model | 6.7 | Its advanced texture operations are not done yet. |
 | Resource binding | Tier 3 | |
 | Resource heaps | Tier 2 | |
 | Tiled and reserved resources | Tier 3 | macOS 26.4 or later. |
 | Conservative rasterization | Tier 3 | |
 | Variable rate shading | Tier 2 | |
-| Ray tracing | Tier 1.1 | `MULLION_D3D12_RAYTRACING=0` reports none, for games that fail with it. |
+| Ray tracing | Tier 1.1 on M3 or later | `MULLION_D3D12_RAYTRACING=0` reports none, for games that fail with it. |
 | Mesh and amplification shaders | Tier 1 | |
 | Sampler feedback | Tier 1.0 | |
 | Programmable sample positions | Tier 1 | |
