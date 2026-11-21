@@ -225,8 +225,8 @@ bool restoreDisplayMode(HMONITOR hMonitor) {
         current_mode.dmDisplayFrequency != registry_mode.dmDisplayFrequency)
       break;
     return true;
-  } while (0);
-  LONG ret = ChangeDisplaySettingsExW(device_name, NULL, NULL, 0, NULL);
+  } while (false);
+  LONG ret = ChangeDisplaySettingsExW(device_name, nullptr, nullptr, 0, nullptr);
   return ret == DISP_CHANGE_SUCCESSFUL;
 }
 

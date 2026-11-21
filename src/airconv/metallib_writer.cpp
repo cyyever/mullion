@@ -154,7 +154,7 @@ llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
               .attribute = vattr.attribute,
               .__ = 0,
               .usage = 0,
-              .active = 1,
+              .active = true,
             });
           }
           auto vatt_written = fn_public_metadata_stream.tell() - lenOffset;

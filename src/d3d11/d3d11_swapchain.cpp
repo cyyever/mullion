@@ -113,7 +113,7 @@ public:
       MTLDXGISubObject(pDevice),
       factory_(pFactory),
       dxgi_device_(pDXGIDevice),
-      presentation_count_(0),
+      
       desc_(*pDesc),
       device_context_(pDevice->GetImmediateContextPrivate()),
       hWnd(hWnd),
@@ -716,7 +716,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetLastPresentCount(UINT *last_present_count) final {
-    if (last_present_count == NULL) {
+    if (last_present_count == nullptr) {
       return E_POINTER;
     }
     std::unique_lock<d3d11_device_mutex> lock(device_->mutex);
@@ -727,7 +727,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetDesc1(DXGI_SWAP_CHAIN_DESC1 *pDesc) final {
-    if (pDesc == NULL) {
+    if (pDesc == nullptr) {
       return E_POINTER;
     }
     *pDesc = desc_;
@@ -737,7 +737,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetFullscreenDesc(DXGI_SWAP_CHAIN_FULLSCREEN_DESC *pDesc) final {
-    if (pDesc == NULL) {
+    if (pDesc == nullptr) {
       return E_POINTER;
     }
     *pDesc = fullscreen_desc_;
@@ -747,7 +747,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetHwnd(HWND *pHwnd) final {
-    if (pHwnd == NULL) {
+    if (pHwnd == nullptr) {
       return E_POINTER;
     }
     *pHwnd = hWnd;
@@ -1147,7 +1147,7 @@ private:
   WMT::Object native_view_;
   WindowFollower follower_;
   WMT::MetalLayer layer_weak_;
-  ULONG presentation_count_;
+  ULONG presentation_count_{0};
   DXGI_SWAP_CHAIN_DESC1 desc_;
   trace::Presents presents_;
   SwapChainSettings settings_;
@@ -1173,8 +1173,8 @@ private:
   bool handle_alt_tab_;
   Com<IUnknown> window_reservation_;
 
-  std::conditional<EnableMetalFX, Rc<SpatialScaler>, std::monostate>::type metalfx_scaler;
-  std::conditional<EnableMetalFX, Com<D3D11ResourceCommon>, std::monostate>::type upscaled_backbuffer_;
+  std::conditional_t<EnableMetalFX, Rc<SpatialScaler>, std::monostate>metalfx_scaler;
+  std::conditional_t<EnableMetalFX, Com<D3D11ResourceCommon>, std::monostate>upscaled_backbuffer_;
   float scale_factor = 1.0;
 };
 
@@ -1183,9 +1183,9 @@ CreateSwapChain(
     IDXGIFactory1 *pFactory, MTLD3D11Device *pDevice, HWND hWnd, const DXGI_SWAP_CHAIN_DESC1 *pDesc,
     const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *pFullscreenDesc, IDXGISwapChain1 **ppSwapChain
 ) {
-  if (pDesc == NULL)
+  if (pDesc == nullptr)
     return DXGI_ERROR_INVALID_CALL;
-  if (ppSwapChain == NULL)
+  if (ppSwapChain == nullptr)
     return DXGI_ERROR_INVALID_CALL;
   InitReturnPtr(ppSwapChain);
 

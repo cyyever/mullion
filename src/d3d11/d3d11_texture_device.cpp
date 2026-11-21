@@ -515,7 +515,7 @@ public:
     }
 
     if (!(this->desc.MiscFlags & (D3D11_RESOURCE_MISC_SHARED | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX))) {
-      *pSharedHandle = NULL;
+      *pSharedHandle = nullptr;
       return S_OK;
     }
 

@@ -816,7 +816,7 @@ ArgumentEncodingContext::startRenderPass(
   encoder_info->fence_wait = {};
   encoder_info->fence_update = {encoder_info->id};
   encoder_info->cmd_head.type = WMTRenderCommandNop;
-  encoder_info->cmd_head.next.set(0);
+  encoder_info->cmd_head.next.set(nullptr);
   encoder_info->cmd_tail = (wmtcmd_base *)&encoder_info->cmd_head;
   encoder_info->dsv_planar_flags = dsv_planar_flags;
   encoder_info->dsv_readonly_flags = dsv_readonly_flags;
@@ -843,7 +843,7 @@ ArgumentEncodingContext::startComputePass(uint64_t encoder_argbuf_size) {
   encoder_info->fence_wait = {};
   encoder_info->fence_update = {encoder_info->id};
   encoder_info->cmd_head.type = WMTComputeCommandNop;
-  encoder_info->cmd_head.next.set(0);
+  encoder_info->cmd_head.next.set(nullptr);
   encoder_info->cmd_tail = (wmtcmd_base *)&encoder_info->cmd_head;
   auto [gpu_buffer_contents, gpu_buffer_, offset] = queue_.AllocateArgumentBuffer(seq_id_, encoder_argbuf_size);
   encoder_info->allocated_argbuf = gpu_buffer_;
@@ -865,7 +865,7 @@ ArgumentEncodingContext::startBlitPass() {
   encoder_info->fence_wait = {};
   encoder_info->fence_update = {encoder_info->id};
   encoder_info->cmd_head.type = WMTBlitCommandNop;
-  encoder_info->cmd_head.next.set(0);
+  encoder_info->cmd_head.next.set(nullptr);
   encoder_info->cmd_tail = (wmtcmd_base *)&encoder_info->cmd_head;
   encoder_current = encoder_info;
 

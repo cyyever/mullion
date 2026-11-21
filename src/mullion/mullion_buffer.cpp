@@ -261,7 +261,7 @@ Buffer::allocate(Flags<BufferAllocationFlag> flags, WMT::Heap heap, uint64_t hea
     options |= WMTResourceStorageModeManaged;
   }
   WMTBufferInfo info;
-  info.memory.set(0);
+  info.memory.set(nullptr);
   info.length = length_;
   info.options = options;
   flags.set(BufferAllocationFlag::AllocatedOnHeap);
@@ -271,7 +271,7 @@ Buffer::allocate(Flags<BufferAllocationFlag> flags, WMT::Heap heap, uint64_t hea
 Rc<BufferAllocation>
 Buffer::allocate(Flags<BufferAllocationFlag> flags, WMTSparsePageSize page_size) {
   WMTBufferInfo info;
-  info.memory.set(0);
+  info.memory.set(nullptr);
   info.length = length_;
   info.options = WMTResourceHazardTrackingModeUntracked | WMTResourceStorageModePrivate;
   flags.set(BufferAllocationFlag::CpuInvisible);

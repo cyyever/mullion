@@ -110,7 +110,7 @@ Directory() {
       return given;
     // Wine's processes have the Unix home as WINEHOMEDIR, \??\Z: and the path, not HOME
     auto home = env::getEnvVar("WINEHOMEDIR");
-    if (home.rfind("\\??\\Z:", 0) == 0) {
+    if (home.starts_with("\\??\\Z:")) {
       home = home.substr(6);
       std::ranges::replace(home, '\\', '/');
     } else

@@ -15,6 +15,7 @@
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/WithColor.h"
+#include <memory>
 #include <system_error>
 
 #ifdef __WIN32
@@ -276,7 +277,7 @@ int main(int argc, char **argv) {
   data.metal_version = MetalVersion;
   data.flags = NoCustomBorder ? SM50_SHADER_FLAG_NO_CUSTOM_BORDER : SM50_SHADER_FLAG{};
   data.simd_width = 0; // no device to ask; a vertex shader's wave has no lane count here
-  data.next = 0;
+  data.next = nullptr;
   data.type = SM50_SHADER_COMMON;
   SM50_SHADER_PSO_TESSELLATOR_DATA tessellator{};
   if (TessellatorVertexSize) {
@@ -464,10 +465,10 @@ int main(int argc, char **argv) {
   mullion::linkTessellation(M);
 
   std::error_code EC;
-  std::unique_ptr<ToolOutputFile> Out(new ToolOutputFile(
+  std::unique_ptr<ToolOutputFile> Out = std::make_unique<ToolOutputFile>(
     OutputFilename, EC,
     (EmitLLVM || EmitMetallib) ? sys::fs::OF_TextWithCRLF : sys::fs::OF_None
-  ));
+  );
   if (EC) {
     errs() << EC.message() << '\n';
     return 1;

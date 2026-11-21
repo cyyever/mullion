@@ -805,7 +805,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetLastPresentCount(UINT *last_present_count) final {
-    if (last_present_count == NULL) {
+    if (last_present_count == nullptr) {
       return FAIL(E_POINTER);
     }
     *last_present_count = presentation_count_;
@@ -815,7 +815,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetDesc1(DXGI_SWAP_CHAIN_DESC1 *pDesc) final {
-    if (pDesc == NULL) {
+    if (pDesc == nullptr) {
       return FAIL(E_POINTER);
     }
     *pDesc = desc_;
@@ -825,7 +825,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetFullscreenDesc(DXGI_SWAP_CHAIN_FULLSCREEN_DESC *pDesc) final {
-    if (pDesc == NULL) {
+    if (pDesc == nullptr) {
       return FAIL(E_POINTER);
     }
     *pDesc = fullscreen_desc_;
@@ -835,7 +835,7 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   GetHwnd(HWND *pHwnd) final {
-    if (pHwnd == NULL) {
+    if (pHwnd == nullptr) {
       return FAIL(E_POINTER);
     }
     *pHwnd = hWnd;
