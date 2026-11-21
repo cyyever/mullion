@@ -40,7 +40,8 @@ else
 endif
 
 util_lib = static_library('util', util_src,
-  include_directories : [ mullion_include_path ],
+  include_directories : [ mullion_include_path, include_directories('../../external/spdlog/include', is_system: true) ],
+  cpp_args : ['-DSPDLOG_USE_STD_FORMAT'] + (mullion_crossbuild ? ['-DSPDLOG_WCHAR_FILENAMES'] : []),
 )
 
 util_dep = declare_dependency(

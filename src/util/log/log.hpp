@@ -10,15 +10,17 @@
 
 #pragma once
 
-#include <fstream>
+#include <memory>
 #include <string>
 
 #include "../thread.hpp"
 #include "../util_string.hpp"
 
+namespace spdlog { class logger; }
+
 namespace mullion {
 
-enum class LogLevel : uint32_t {
+enum class LogLevel : uint8_t {
   Trace = 0,
   Debug = 1,
   Info = 2,
@@ -38,7 +40,7 @@ using PFN_wineLogOutput = int(__cdecl *)(const char *);
 class Logger {
 
 public:
-  Logger(const std::string &file_name);
+  explicit Logger(std::string file_name);
   ~Logger();
 
   static void trace(const std::string &message);
@@ -47,6 +49,8 @@ public:
   static void warn(const std::string &message);
   static void err(const std::string &message);
   static void log(LogLevel level, const std::string &message);
+
+  static bool enabled(LogLevel level);
 
   static LogLevel logLevel() { return s_instance.m_minLevel; }
 
@@ -65,7 +69,7 @@ private:
   const std::string m_fileName;
 
   mullion::mutex m_mutex;
-  std::ofstream m_fileStream;
+  std::unique_ptr<spdlog::logger> m_backend;
 
   bool m_initialized = false;
   PFN_wineLogOutput m_wineLogOutput = nullptr;
@@ -80,13 +84,29 @@ private:
 } // namespace mullion
 
 
-#define TRACE(...) Logger::trace(str::format(__VA_ARGS__))
+#define TRACE(...) \
+  do { \
+    if (Logger::enabled(::mullion::LogLevel::Trace)) \
+      Logger::trace(str::format(__VA_ARGS__)); \
+  } while (false)
 
-#define DEBUG(...) Logger::debug(str::format(__VA_ARGS__))
+#define DEBUG(...) \
+  do { \
+    if (Logger::enabled(::mullion::LogLevel::Debug)) \
+      Logger::debug(str::format(__VA_ARGS__)); \
+  } while (false)
 
-#define WARN(...) Logger::warn(str::format(__VA_ARGS__))
+#define WARN(...) \
+  do { \
+    if (Logger::enabled(::mullion::LogLevel::Warn)) \
+      Logger::warn(str::format(__VA_ARGS__)); \
+  } while (false)
 
-#define ERR(...) Logger::err(str::format(__VA_ARGS__))
+#define ERR(...) \
+  do { \
+    if (Logger::enabled(::mullion::LogLevel::Error)) \
+      Logger::err(str::format(__VA_ARGS__)); \
+  } while (false)
 
 #define FAIL(code) Logger::fail(code, #code, __func__, __FILE_NAME__, __LINE__)
 
