@@ -1500,7 +1500,7 @@ convert_dxbc_geometry_shader(
   };
   // a completed primitive of stream `s`, whose vertex j's element k is value(j, k): the second pass writes it, in
   // order after every one before it, unless it would not fit in all the stream's buffers
-  auto so_primitive = [&](uint32_t s, std::function<pvalue(uint32_t, uint32_t)> value) {
+  auto so_primitive = [&](uint32_t s, const std::function<pvalue(uint32_t, uint32_t)> &value) {
     auto index = builder.CreateLoad(types._int, so_count[s]);
     builder.CreateStore(builder.CreateAdd(index, one_const), so_count[s]);
     if (so->counting)

@@ -2015,7 +2015,7 @@ ArgumentEncodingContext::isResolveSignatureMatched(RenderEncoderData *render, Re
 
 template <>
 WMT::Reference<WMT::ComputePipelineState>
-SimpleCommandContext<ArgumentEncodingContext>::getComputePipeline(std::string name) {
+SimpleCommandContext<ArgumentEncodingContext>::getComputePipeline(const std::string &name) {
   return ctx.lib.ComputePipeline(name);
 }
 

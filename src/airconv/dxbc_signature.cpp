@@ -65,7 +65,7 @@ static void
 define_mesh_varyings(SM50ShaderInternal *sm50_shader, uint32_t reg, RegisterComponentType declared) {
   define_varyings(sm50_shader, reg, declared, [=](unsigned c, std::string name, air::MSLScalerOrVectorType type) {
     auto index = sm50_shader->num_mesh_vertex_data++;
-    sm50_shader->func_signature.DefineMeshVertexOutput(OutputMeshData{.user = name, .type = type, .index = index});
+    sm50_shader->func_signature.DefineMeshVertexOutput(OutputMeshData{.user = std::move(name), .type = type, .index = index});
     sm50_shader->mesh_output_handlers.push_back([=](MeshOutputContext &output) -> IREffect {
       return pop_mesh_output_vertex_data(reg, 1 << c, index, output.vertex_id, type);
     });
@@ -83,7 +83,7 @@ void handle_signature_vs(
   auto &func_signature = sm50_shader->func_signature;
   auto varyings = [&](uint32_t reg, RegisterComponentType declared) {
     define_varyings(sm50_shader, reg, declared, [&](unsigned c, std::string name, air::MSLScalerOrVectorType type) {
-      uint32_t assigned_index = func_signature.DefineOutput(OutputVertex{.user = name, .type = type});
+      uint32_t assigned_index = func_signature.DefineOutput(OutputVertex{.user = std::move(name), .type = type});
       signature_handlers.push_back([=](SignatureContext &ctx) {
         if (ctx.skip_vertex_output)
           return;
@@ -271,7 +271,7 @@ void handle_signature_vs(
       // normal output register
       auto reg = Inst.m_Operands[0].m_Index[0].m_RegIndex;
       auto mask = Inst.m_Operands[0].m_WriteMask >> 4;
-      auto sig = findOutputElement([=](Signature sig) {
+      auto sig = findOutputElement([=](const Signature &sig) {
         return (sig.reg() == reg) && ((sig.mask() & mask) != 0);
       });
       max_output_register = std::max(reg + 1, max_output_register);
@@ -591,7 +591,7 @@ void handle_signature_ps(
     auto mask = Inst.m_Operands[0].m_WriteMask >> 4;
     auto interpolation =
       to_air_interpolation(Inst.m_InputPSDecl.InterpolationMode);
-    auto sig = findInputElement([=](Signature sig) {
+    auto sig = findInputElement([=](const Signature &sig) {
       return (sig.reg() == reg) && ((sig.mask() & mask) != 0);
     });
     max_input_register = std::max(reg + 1, max_input_register);
@@ -748,7 +748,7 @@ void handle_signature_ps(
       // normal output register
       auto reg = Inst.m_Operands[0].m_Index[0].m_RegIndex;
       auto mask = Inst.m_Operands[0].m_WriteMask >> 4;
-      auto sig = findOutputElement([=](Signature sig) {
+      auto sig = findOutputElement([=](const Signature &sig) {
         return (sig.reg() == reg) && ((sig.mask() & mask) != 0);
       });
       max_output_register = std::max(reg + 1, max_output_register);
@@ -1113,7 +1113,7 @@ void handle_signature_ds(
       // normal output register
       auto reg = Inst.m_Operands[0].m_Index[0].m_RegIndex;
       auto mask = Inst.m_Operands[0].m_WriteMask >> 4;
-      auto sig = findOutputElement([=](Signature sig) {
+      auto sig = findOutputElement([=](const Signature &sig) {
         return (sig.reg() == reg) && ((sig.mask() & mask) != 0);
       });
       max_output_register = std::max(reg + 1, max_output_register);
@@ -1350,7 +1350,7 @@ handle_signature_gs(
       // normal output register
       auto reg = Inst.m_Operands[0].m_Index[0].m_RegIndex;
       auto mask = Inst.m_Operands[0].m_WriteMask >> 4;
-      auto sig = findOutputElement([=](Signature sig) {
+      auto sig = findOutputElement([=](const Signature &sig) {
         return (sig.reg() == reg) && ((sig.mask() & mask) != 0);
       });
       max_output_register = std::max(reg + 1, max_output_register);

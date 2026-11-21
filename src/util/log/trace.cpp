@@ -31,7 +31,7 @@ constexpr std::array<std::pair<const char *, Category>, 9> kCategories = {{
 }};
 
 std::string
-Trimmed(std::string text) {
+Trimmed(const std::string &text) {
   auto first = text.find_first_not_of(" \t");
   auto last = text.find_last_not_of(" \t");
   return first == std::string::npos ? std::string() : text.substr(first, last - first + 1);

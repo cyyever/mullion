@@ -1793,7 +1793,7 @@ bool CheckGSBBIsPassThrough(mullion::dxbc::BasicBlock *bb) {
       [](mullion::dxbc::BasicBlockUnconditionalBranch uncond) {
         return CheckGSBBIsPassThrough(uncond.target);
       },
-      [](auto) { return false; }
+      [](const auto &) { return false; }
     },
     bb->target
   );

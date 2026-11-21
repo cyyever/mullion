@@ -804,7 +804,7 @@ MTLD3D12CommandAllocatorImpl::EncodeIndirectRenderCommand(
 
 template <>
 WMT::Reference<WMT::ComputePipelineState>
-SimpleCommandContext<MTLD3D12CommandAllocatorImpl>::getComputePipeline(std::string name) {
+SimpleCommandContext<MTLD3D12CommandAllocatorImpl>::getComputePipeline(const std::string &name) {
   return ctx.device_->GetLib().ComputePipeline(name);
 }
 

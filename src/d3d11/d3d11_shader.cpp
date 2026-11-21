@@ -29,7 +29,7 @@ class GeneralShaderCompileTask : public CompiledShader {
 public:
   GeneralShaderCompileTask(MTLD3D11Device *pDevice, ManagedShader shader,
                            Proc &&proc, std::string func_name, const Sha1Digest& variant_digest)
-      : CompiledShader(), proc(std::forward<Proc>(proc)), func_name(func_name), device_(pDevice),
+      : CompiledShader(), proc(std::forward<Proc>(proc)), func_name(std::move(func_name)), device_(pDevice),
         shader_(shader), variant_digest_(variant_digest) {
     sm50_common.type = SM50_SHADER_COMMON;
     sm50_common.metal_version = (SM50_SHADER_METAL_VERSION)pDevice->GetMullionDevice().metalVersion();

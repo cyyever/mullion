@@ -1385,7 +1385,7 @@ void DXILBitcodeWriter::writeDILocation(const DILocation *N,
   Record.clear();
 }
 
-static uint64_t rotateSign(APInt Val) {
+static uint64_t rotateSign(const APInt &Val) {
   int64_t I = Val.getSExtValue();
   uint64_t U = I;
   return I < 0 ? ~(U << 1) : U << 1;

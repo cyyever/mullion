@@ -722,7 +722,7 @@ read_control_flow(
                 [&](BasicBlockConditionalBranch cond) -> BasicBlockTarget {
                   return BasicBlockConditionalBranch{cond.cond, clone(cond.true_branch), clone(cond.false_branch)};
                 },
-                [&](BasicBlockSwitch swc) -> BasicBlockTarget {
+                [&](const BasicBlockSwitch &swc) -> BasicBlockTarget {
                   BasicBlockSwitch new_swc;
                   new_swc.value = swc.value;
                   new_swc.case_default = clone(swc.case_default);
@@ -744,7 +744,7 @@ read_control_flow(
                     return BasicBlockUnconditionalBranch{clone(call.return_point)};
                   return BasicBlockCall{call.func_id, clone(call.return_point)};
                 },
-                [&](BasicBlockDXIL dxil) -> BasicBlockTarget {
+                [&](const BasicBlockDXIL &dxil) -> BasicBlockTarget {
                   return BasicBlockDXIL{dxil.shader, dxil.function, clone(dxil.next)};
                 },
             },
@@ -753,7 +753,7 @@ read_control_flow(
         std::visit(
             patterns{
                 [&](BasicBlockCall &call) { new_call_targets.push_back({cloned, &call}); },
-                [](auto) {},
+                [](const auto &) {},
             },
             cloned->target
         );
