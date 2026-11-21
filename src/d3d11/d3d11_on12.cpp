@@ -262,7 +262,7 @@ D3D11On12Device::CreateWrappedResource(
   }
 
   auto common = GetResourceCommon(resource11.ptr());
-  common->wrapped_resource = resource12;
+  common->wrapped_resource = std::move(resource12);
   if (FAILED(hr = ShareResourceState(common, desc12, cpu_access != 0)))
     return hr;
   // a wrapped resource is created acquired: D3D11 sees what the queue's work so far left in it
