@@ -60,7 +60,7 @@ makeOwnerToken() {
 // counts as alive
 static bool
 ownerProcessAlive(uint64_t token) {
-  DWORD pid = DWORD(token >> 32);
+  auto pid = DWORD(token >> 32);
   if (!pid)
     return false;
   HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
@@ -239,12 +239,12 @@ KeyedMutex::acquire(KeyedMutexAcquire &&func_acquire, uint64_t key, uint32_t mil
   };
   for (;;) {
     LONG64 owner = InterlockedCompareExchange64(&state_->owner, 0, 0);
-    if (owner == static_cast<LONG64>(token_))
+    if (std::cmp_equal(owner ,token_))
       return done(DXGI_ERROR_INVALID_CALL);
     // WAIT_ABANDONED is sticky and grants no ownership: "abandoned mutex released without ownership"
     if (InterlockedCompareExchange(&state_->abandoned, 0, 0))
       return done(WAIT_ABANDONED);
-    if (owner && uint64_t(owner) != watched) {
+    if (owner && std::cmp_not_equal(owner, watched)) {
       watched = uint64_t(owner);
       if (owner_process)
         CloseHandle(std::exchange(owner_process, nullptr));

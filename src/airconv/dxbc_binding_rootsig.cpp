@@ -120,7 +120,7 @@ public:
     );
   };
 
-  virtual std::optional<ConstantBufferDescriptor>
+  std::optional<ConstantBufferDescriptor>
   GetConstantBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
@@ -166,7 +166,7 @@ public:
     return {Field(TySampleHandler, 0), Field(TySampleHandler, 1), Field(TyInt64, 2), Field(TyInt64, 3)};
   }
 
-  virtual std::optional<SamplerDescriptor>
+  std::optional<SamplerDescriptor>
   GetSampler(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     auto Iter = Samplers.find(Range);
     if (Iter == Samplers.end()) {
@@ -227,7 +227,7 @@ public:
     };
   }
 
-  virtual std::optional<TextureDescirptor>
+  std::optional<TextureDescirptor>
   GetSRVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
@@ -258,7 +258,7 @@ public:
                              MemoryAccess, SampleType, FormatRange};
   }
 
-  virtual std::optional<TextureDescirptor>
+  std::optional<TextureDescirptor>
   GetUAVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
@@ -292,7 +292,7 @@ public:
     };
   }
 
-  virtual std::optional<BufferDescriptor>
+  std::optional<BufferDescriptor>
   GetSRVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
@@ -316,7 +316,7 @@ public:
     };
   }
 
-  virtual std::optional<BufferDescriptor>
+  std::optional<BufferDescriptor>
   GetUAVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
@@ -343,7 +343,7 @@ public:
     };
   }
 
-  virtual std::optional<CounterDescriptor>
+  std::optional<CounterDescriptor>
   GetUAVCounter(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~RootSignatureArgumentIndex == 0)
       return {};
@@ -585,7 +585,7 @@ setup_binding_rootsig(
       for (unsigned x = 1; x < qwords; x++) {
         builder.DefineInteger64("root_constant" + std::to_string(i) + "_" + std::to_string(x), inc_attribute_index++);
       }
-      constants_fields.push_back({first, constants.Num32BitValues});
+      constants_fields.emplace_back(first, constants.Num32BitValues);
       if (!check_visibility(Parameter.ShaderVisibility))
         break;
       for (auto &[_, cbuf] : shader_info->cbufferMap) {

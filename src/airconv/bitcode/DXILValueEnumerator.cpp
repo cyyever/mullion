@@ -61,15 +61,15 @@ struct OrderMap {
 
   OrderMap() = default;
 
-  bool isGlobalConstant(unsigned ID) const {
+  [[nodiscard]] bool isGlobalConstant(unsigned ID) const {
     return ID <= LastGlobalConstantID;
   }
 
-  bool isGlobalValue(unsigned ID) const {
+  [[nodiscard]] bool isGlobalValue(unsigned ID) const {
     return ID <= LastGlobalValueID && !isGlobalConstant(ID);
   }
 
-  unsigned size() const { return IDs.size(); }
+  [[nodiscard]] unsigned size() const { return IDs.size(); }
   std::pair<unsigned, bool> &operator[](const Value *V) { return IDs[V]; }
 
   std::pair<unsigned, bool> lookup(const Value *V) const {
@@ -89,7 +89,7 @@ static void orderValue(const Value *V, OrderMap &OM) {
   if (OM.lookup(V).first)
     return;
 
-  if (const Constant *C = dyn_cast<Constant>(V)) {
+  if (const auto *C = dyn_cast<Constant>(V)) {
     if (C->getNumOperands() && !isa<GlobalValue>(C)) {
       for (const Value *Op : C->operands())
         if (!isa<BasicBlock>(Op) && !isa<GlobalValue>(Op))
@@ -303,7 +303,7 @@ static void predictValueUseListOrder(const Value *V, const Function *F,
     predictValueUseListOrderImpl(V, F, IDPair.first, OM, Stack);
 
   // Recursive descent into constants.
-  if (const Constant *C = dyn_cast<Constant>(V)) {
+  if (const auto *C = dyn_cast<Constant>(V)) {
     if (C->getNumOperands()) { // Visit GlobalValues.
       for (const Value *Op : C->operands())
         if (isa<Constant>(Op)) // Visit GlobalValues.
@@ -511,8 +511,8 @@ ValueEnumerator::ValueEnumerator(const Module &M, Type *PrefixType,
         // Enumerate metadata attached with this instruction.
         MDs.clear();
         I.getAllMetadataOtherThanDebugLoc(MDs);
-        for (unsigned i = 0, e = MDs.size(); i != e; ++i)
-          EnumerateMetadata(&F, MDs[i].second);
+        for (auto & MD : MDs)
+          EnumerateMetadata(&F, MD.second);
 
         // Don't enumerate the location directly -- it has a special record
         // type -- but enumerate its operands.
@@ -606,9 +606,8 @@ void ValueEnumerator::print(raw_ostream &OS, const MetadataMapType &Map,
 /// EnumerateValueSymbolTable - Insert all of the values in the specified symbol
 /// table into the values table.
 void ValueEnumerator::EnumerateValueSymbolTable(const ValueSymbolTable &VST) {
-  for (ValueSymbolTable::const_iterator VI = VST.begin(), VE = VST.end();
-       VI != VE; ++VI) {
-    const Value *V = VI->getValue();
+  for (const auto & VI : VST) {
+    const Value *V = VI.getValue();
     EnumerateValue(&getDXILValue(*V));
   }
 }
@@ -956,7 +955,7 @@ void ValueEnumerator::EnumerateValue(const Value *V) {
   // Enumerate the type of this value.
   EnumerateType(V->getType());
 
-  if (const Constant *C = dyn_cast<Constant>(V)) {
+  if (const auto *C = dyn_cast<Constant>(V)) {
     // LLVM 23 stores numeric vector splats as scalar constant classes. AIR
     // predates that encoding, so enumerate their scalar for an aggregate.
     if (C->getType()->isVectorTy() && isa<ConstantInt, ConstantFP, ConstantByte>(C)) {
@@ -989,14 +988,14 @@ void ValueEnumerator::EnumerateValue(const Value *V) {
 
       // Finally, add the value.  Doing this could make the ValueID reference be
       // dangling, don't reuse it.
-      Values.push_back(std::make_pair(V, 1U));
+      Values.emplace_back(V, 1U);
       ValueMap[V] = Values.size();
       return;
     }
   }
 
   // Add the value.
-  Values.push_back(std::make_pair(V, 1U));
+  Values.emplace_back(V, 1U);
   ValueID = Values.size();
 }
 
@@ -1010,7 +1009,7 @@ void ValueEnumerator::EnumerateType(Type *Ty) {
   // If it is a non-anonymous struct, mark the type as being visited so that we
   // don't recursively visit it.  This is safe because we allow forward
   // references of these in the bitcode reader.
-  if (StructType *STy = dyn_cast<StructType>(Ty))
+  if (auto *STy = dyn_cast<StructType>(Ty))
     if (!STy->isLiteral())
       *TypeID = ~0U;
 
@@ -1043,7 +1042,7 @@ void ValueEnumerator::EnumerateOperandType(const Value *V) {
 
   assert(!isa<MetadataAsValue>(V) && "Unexpected metadata operand");
 
-  const Constant *C = dyn_cast<Constant>(V);
+  const auto *C = dyn_cast<Constant>(V);
   if (!C)
     return;
 
@@ -1176,12 +1175,12 @@ void ValueEnumerator::incorporateFunction(const Function &F) {
   }
 
   // Add all of the function-local metadata.
-  for (unsigned i = 0, e = FnLocalMDVector.size(); i != e; ++i) {
+  for (auto & i : FnLocalMDVector) {
     // At this point, every local values have been incorporated, we shouldn't
     // have a metadata operand that references a value that hasn't been seen.
-    assert(ValueMap.count(FnLocalMDVector[i]->getValue()) &&
+    assert(ValueMap.count(i->getValue()) &&
            "Missing value for metadata operand");
-    EnumerateFunctionLocalMetadata(F, FnLocalMDVector[i]);
+    EnumerateFunctionLocalMetadata(F, i);
   }
   // DIArgList entries must come after function-local metadata, as it is not
   // possible to forward-reference them.

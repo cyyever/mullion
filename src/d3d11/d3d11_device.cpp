@@ -56,8 +56,8 @@ class D3D11InfoQueue final : public ID3D11InfoQueue {
     std::vector<D3D11_MESSAGE_SEVERITY> severities;
     std::vector<D3D11_MESSAGE_ID> ids;
 
-    bool empty() const { return categories.empty() && severities.empty() && ids.empty(); }
-    bool matches(D3D11_MESSAGE_CATEGORY category, D3D11_MESSAGE_SEVERITY severity, D3D11_MESSAGE_ID id) const {
+    [[nodiscard]] bool empty() const { return categories.empty() && severities.empty() && ids.empty(); }
+    [[nodiscard]] bool matches(D3D11_MESSAGE_CATEGORY category, D3D11_MESSAGE_SEVERITY severity, D3D11_MESSAGE_ID id) const {
       return std::ranges::find(categories, category) != categories.end() ||
              std::ranges::find(severities, severity) != severities.end() ||
              std::ranges::find(ids, id) != ids.end();
@@ -76,7 +76,7 @@ class D3D11InfoQueue final : public ID3D11InfoQueue {
       append(ids, desc.NumIDs, desc.pIDList);
       return true;
     }
-    SIZE_T bytes() const {
+    [[nodiscard]] SIZE_T bytes() const {
       return categories.size() * sizeof(D3D11_MESSAGE_CATEGORY) + severities.size() * sizeof(D3D11_MESSAGE_SEVERITY) +
              ids.size() * sizeof(D3D11_MESSAGE_ID);
     }
@@ -95,7 +95,7 @@ class D3D11InfoQueue final : public ID3D11InfoQueue {
   };
   struct Filter {
     FilterList allow, deny;
-    bool accepts(D3D11_MESSAGE_CATEGORY category, D3D11_MESSAGE_SEVERITY severity, D3D11_MESSAGE_ID id) const {
+    [[nodiscard]] bool accepts(D3D11_MESSAGE_CATEGORY category, D3D11_MESSAGE_SEVERITY severity, D3D11_MESSAGE_ID id) const {
       return (allow.empty() || allow.matches(category, severity, id)) && !deny.matches(category, severity, id);
     }
     bool add(const D3D11_INFO_QUEUE_FILTER &filter) { return allow.add(filter.AllowList) && deny.add(filter.DenyList); }
@@ -1444,7 +1444,7 @@ public:
     return S_OK;
   };
 
-  virtual HRESULT
+  HRESULT
   CreateGeometryPipeline(MTL_GRAPHICS_PIPELINE_DESC *pDesc,
                          MTLCompiledGeometryPipeline **ppPipeline) override {
     pipeline_cache_->GetGeometryPipeline(pDesc, ppPipeline);
@@ -1464,11 +1464,11 @@ public:
     commandlist_pool_->CreateCommandList(pCommandList);
   };
 
-  virtual void STDMETHODCALLTYPE SetShaderExtensionSlot(UINT Slot) final {
+  void STDMETHODCALLTYPE SetShaderExtensionSlot(UINT Slot) final {
     // TODO
   };
 
-  virtual FormatCapability
+  FormatCapability
   GetMTLPixelFormatCapability(WMTPixelFormat Format) final {
     auto original = WMTPixelFormat(ORIGINAL_FORMAT(Format));
     if (!format_inspector_.textureCapabilities.contains(original))
@@ -1480,30 +1480,30 @@ public:
     return capability;
   };
 
-  virtual IMTLD3D11DeviceContext *GetImmediateContextPrivate() final {
+  IMTLD3D11DeviceContext *GetImmediateContextPrivate() final {
     return context_.get();
   };
 
-  virtual unsigned int GetDirectXVersion() final {
+  unsigned int GetDirectXVersion() final {
     return feature_flags_ & 0x80000000 ? 10 : 11;
   };
 
-  virtual HRESULT STDMETHODCALLTYPE RegisterDeviceRemovedEvent(HANDLE Event,
+  HRESULT STDMETHODCALLTYPE RegisterDeviceRemovedEvent(HANDLE Event,
                                                                DWORD *pCookie) final {
     // no device to remove
     return S_OK;
   };
 
-  virtual void STDMETHODCALLTYPE UnregisterDeviceRemoved(DWORD Cookie) final {
+  void STDMETHODCALLTYPE UnregisterDeviceRemoved(DWORD Cookie) final {
     // just do nothing
   };
 
-  virtual HRESULT STDMETHODCALLTYPE OpenSharedFence(HANDLE Handle, REFIID riid,
+  HRESULT STDMETHODCALLTYPE OpenSharedFence(HANDLE Handle, REFIID riid,
                                                     void **ppFence) final {
     return mullion::OpenSharedFence(this, Handle, riid, ppFence);
   };
 
-  virtual HRESULT STDMETHODCALLTYPE CreateFence(UINT64 InitialValue,
+  HRESULT STDMETHODCALLTYPE CreateFence(UINT64 InitialValue,
                                                 D3D11_FENCE_FLAG Flags,
                                                 REFIID riid, void **ppFence) final {
     return mullion::CreateFence(this, InitialValue, Flags, riid, ppFence);
@@ -1597,7 +1597,7 @@ public:
         d3d11_device_(this, adapter, feature_level, feature_flags,
                       *this->device.get()) {}
 
-  ~MTLD3D11DXGIDevice() {
+  ~MTLD3D11DXGIDevice() override {
     // submitted work can still be consumed through the D3D12 device
     if (on12_)
       cmd_queue_.Drain();

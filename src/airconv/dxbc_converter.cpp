@@ -133,7 +133,7 @@ void setup_immediate_constant_buffer(
         );
       }
   );
-  llvm::GlobalVariable *icb = new llvm::GlobalVariable(
+  auto *icb = new llvm::GlobalVariable(
     module, type, true, llvm::GlobalValue::InternalLinkage, const_data, "icb",
     nullptr, llvm::GlobalValue::NotThreadLocal, 2
   );
@@ -152,7 +152,7 @@ void setup_tgsm(
 ) {
   for (auto &[id, tgsm] : shader_info->tgsmMap) {
     auto type = llvm::ArrayType::get(types._int, tgsm.size_in_uint);
-    llvm::GlobalVariable *tgsm_h = new llvm::GlobalVariable(
+    auto *tgsm_h = new llvm::GlobalVariable(
       module, type, false, llvm::GlobalValue::InternalLinkage,
       llvm::UndefValue::get(type), "g" + std::to_string(id), nullptr,
       llvm::GlobalValue::NotThreadLocal, 3
@@ -782,7 +782,7 @@ llvm::Error convert_dxbc_pixel_shader(
                            in->interpolation == Interpolation::centroid_perspective ||
                            in->interpolation == Interpolation::sample_perspective;
         if (~at && perspective)
-          conservative_over_w.push_back({i, at});
+          conservative_over_w.emplace_back(i, at);
       }
       if (std::holds_alternative<air::InputInputCoverage>(inputs[i]))
         conservative_coverage = i;
@@ -984,26 +984,23 @@ llvm::Error convert_dxbc_pixel_shader(
       if (at == 3)
         continue; // at each evaluation instead
       auto vector = llvm::dyn_cast<llvm::FixedVectorType>(input->getType());
-      conservative_inputs.push_back(
-          {input, builder.CreateFDiv(
+      conservative_inputs.emplace_back(input, builder.CreateFDiv(
                       input, vector ? builder.CreateVectorSplat(vector->getNumElements(), rcp_w(at)) : rcp_w(at)
-                  )}
+                  )
       );
     }
-    conservative_inputs.push_back(
-        {position,
+    conservative_inputs.emplace_back(position,
          builder.CreateInsertElement(
              position, builder.CreateFMul(builder.CreateExtractElement(position, uint64_t(3)), rcp_w(0)), uint64_t(3)
-         )}
+         )
     );
     // a covered pixel has all its samples (D3D11.3 15.17.5), where Metal gives a shader that writes memory, which it
     // runs once a sample, that sample's alone
     if (~conservative_coverage) {
       auto all =
           builder.CreateSub(builder.CreateShl(builder.getInt32(1), air.CreateGetNumSamples()), builder.getInt32(1));
-      conservative_inputs.push_back(
-          {function->getArg(conservative_coverage),
-           ~conservative_sample ? builder.CreateShl(builder.getInt32(1), function->getArg(conservative_sample)) : all}
+      conservative_inputs.emplace_back(function->getArg(conservative_coverage),
+           ~conservative_sample ? builder.CreateShl(builder.getInt32(1), function->getArg(conservative_sample)) : all
       );
     }
     if (conservative_test) {
@@ -1941,7 +1938,7 @@ static int SM50InitializeUncached(
     const D3D11_SIGNATURE_PARAMETER *parameters;
     outputParser.RastSignature()->GetParameters(&parameters);
     for (unsigned i = 0; i < outputParser.RastSignature()->GetNumParameters(); i++) {
-      sm50_shader->output_signature.push_back(Signature(parameters[i]));
+      sm50_shader->output_signature.emplace_back(parameters[i]);
     }
   }
 
@@ -2048,7 +2045,7 @@ static int SM50InitializeUncached(
     srv.arg_metadata_index = binding_table.DefineInteger64(
       "meta_t" + std::to_string(range_id), attr_index + 1
     );
-    MTL_SM50_SHADER_ARGUMENT_FLAG flags = (MTL_SM50_SHADER_ARGUMENT_FLAG)0;
+    auto flags = (MTL_SM50_SHADER_ARGUMENT_FLAG)0;
     if (srv.resource_type == ResourceType::NonApplicable) {
       flags |= MTL_SM50_SHADER_ARGUMENT_ELEMENT_WIDTH |
                MTL_SM50_SHADER_ARGUMENT_BUFFER;
@@ -2118,7 +2115,7 @@ static int SM50InitializeUncached(
         uav.rasterizer_order ? std::optional(1) : std::nullopt
       );
     }
-    MTL_SM50_SHADER_ARGUMENT_FLAG flags = (MTL_SM50_SHADER_ARGUMENT_FLAG)0;
+    auto flags = (MTL_SM50_SHADER_ARGUMENT_FLAG)0;
     if (uav.resource_type == ResourceType::NonApplicable) {
       flags |= MTL_SM50_SHADER_ARGUMENT_ELEMENT_WIDTH |
                MTL_SM50_SHADER_ARGUMENT_BUFFER;

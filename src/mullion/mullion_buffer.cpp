@@ -221,12 +221,12 @@ Buffer::createView(BufferViewDescriptor const &descriptor) {
   unsigned i = 0;
   for (; i < version_; i++) {
     if (viewDescriptors_[i].format == descriptor.format && viewDescriptors_[i].write == descriptor.write) {
-      return BufferViewKey(i, std::nullopt);
+      return {i, std::nullopt};
     }
   }
   viewDescriptors_.push_back(descriptor);
   version_ = version_ + 1;
-  return BufferViewKey(i, std::nullopt);;
+  return {i, std::nullopt};;
 }
 
 Rc<BufferAllocation>

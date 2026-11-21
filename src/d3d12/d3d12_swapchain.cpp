@@ -265,7 +265,7 @@ public:
       backbuffer_desc_.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
   }
 
-  ~MTLD3D12SwapChain() {
+  ~MTLD3D12SwapChain() override {
     if (!fullscreen_desc_.Windowed)
       static_cast<MTLDXGIOutput *>(target_.ptr())->SetFullscreen(false);
     WMT::ReleaseMetalView(native_view_);
@@ -609,7 +609,7 @@ public:
           );
           FAILED(hr))
         return hr;
-      backbuffers.push_back(reinterpret_cast<MTLD3D12Resource *>(backbuffer.ptr()));
+      backbuffers.emplace_back(reinterpret_cast<MTLD3D12Resource *>(backbuffer.ptr()));
     }
     if (ppPresentQueue && !presentation_queue_) {
       Com<ID3D12CommandQueue> queue;

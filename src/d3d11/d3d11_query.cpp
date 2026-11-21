@@ -14,14 +14,14 @@ private:
   Rc<VisibilityResultQuery> query_ = new VisibilityResultQuery();
   uint64_t accumulated_value_ = 0;
 
-  virtual UINT STDMETHODCALLTYPE
+  UINT STDMETHODCALLTYPE
   GetDataSize() override {
     return desc_.Query == D3D11_QUERY_OCCLUSION_PREDICATE    ? sizeof(BOOL)
            : desc_.Query == D3D11_QUERY_PIPELINE_STATISTICS ? sizeof(D3D11_QUERY_DATA_PIPELINE_STATISTICS)
                                                              : sizeof(UINT64);
   };
 
-  virtual HRESULT
+  HRESULT
   GetData(void *data) override {
     if (state_ == QueryState::Signaled || query_->getValue(&accumulated_value_)) {
       if (desc_.Query == D3D11_QUERY_OCCLUSION_PREDICATE) {
@@ -59,7 +59,7 @@ private:
     return S_FALSE;
   }
 
-  virtual VisibilityResultQuery *
+  VisibilityResultQuery *
   Begin() override {
     if (state_ == QueryState::Issued)
       query_ = new VisibilityResultQuery();
@@ -68,13 +68,13 @@ private:
     return query_.ptr();
   };
 
-  virtual VisibilityResultQuery *
+  VisibilityResultQuery *
   End() override {
     state_ = QueryState::Issued;
     return query_.ptr();
   };
 
-  virtual void DoDeferredQuery(VisibilityResultQuery *deferred_query) override{
+  void DoDeferredQuery(VisibilityResultQuery *deferred_query) override{
     accumulated_value_ = 0;
     state_ = QueryState::Issued;
     query_ = deferred_query;
@@ -97,12 +97,12 @@ class MTLD3D11TimestampQueryImpl : public MTLD3DQueryBase<MTLD3D11TimestampQuery
   uint64_t latest_value_ = 0;
   HRESULT latest_status_ = S_FALSE;
 
-  virtual UINT STDMETHODCALLTYPE
+  UINT STDMETHODCALLTYPE
   GetDataSize() override {
     return sizeof(UINT64);
   };
 
-  virtual HRESULT
+  HRESULT
   GetData(void *data) override {
     if (!TimestampQueriesSampled()) {
       *((uint64_t *)data) = 0;
@@ -120,7 +120,7 @@ class MTLD3D11TimestampQueryImpl : public MTLD3DQueryBase<MTLD3D11TimestampQuery
     return latest_status_;
   }
 
-  virtual TimestampQuery *
+  TimestampQuery *
   End() override {
     if (!TimestampQueriesSampled())
       return nullptr;
@@ -156,15 +156,15 @@ class StreamOutputQuery : public MTLD3DQueryBase<MTLD3D11StreamOutputQuery> {
 
   // after SO_STATISTICS and SO_OVERFLOW_PREDICATE (stream 0, and all streams), the enumeration goes on with the two
   // of each stream in turn
-  bool
+  [[nodiscard]] bool
   predicate() const {
     return (desc_.Query - D3D11_QUERY_SO_STATISTICS) & 1;
   }
-  uint32_t
+  [[nodiscard]] uint32_t
   first_stream() const {
     return desc_.Query < D3D11_QUERY_SO_STATISTICS_STREAM0 ? 0 : (desc_.Query - D3D11_QUERY_SO_STATISTICS_STREAM0) / 2;
   }
-  uint32_t
+  [[nodiscard]] uint32_t
   streams() const {
     return desc_.Query == D3D11_QUERY_SO_OVERFLOW_PREDICATE ? kStreams : 1;
   }

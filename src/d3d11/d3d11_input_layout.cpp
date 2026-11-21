@@ -118,7 +118,7 @@ public:
     null_gs.shader = desc.GeometryShader;
   }
 
-  ~MTLD3D11StreamOutputLayout() = default;
+  ~MTLD3D11StreamOutputLayout() override = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -165,7 +165,7 @@ public:
     return sha1_;
   };
 
-  virtual UINT RasterizedStream() override {
+  UINT RasterizedStream() override {
     return desc_.RasterizedStream;
   }
 
@@ -187,7 +187,7 @@ private:
       return container->QueryInterface(riid, ppvObject);
     }
 
-    virtual ManagedShader GetManagedShader() override { return shader; };
+    ManagedShader GetManagedShader() override { return shader; };
     ManagedShader shader = nullptr;
   };
 

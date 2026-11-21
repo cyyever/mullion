@@ -980,7 +980,7 @@ protected:
     // `later`: Metal's compile of it into `*target` on a compile thread (DeferredPipeline), as a plain pipeline's.
     // its functions are made here, where what is wrong with the shaders shows, and go with it
     if (later) {
-      later->push_back([this, target, inputs, info, vs_func, gs_func, statistics = std::move(statistics)]() mutable {
+      later->emplace_back([this, target, inputs, info, vs_func, gs_func, statistics = std::move(statistics)]() mutable {
         WMT::Reference<WMT::Error> err;
         if (!(*target = CreatePipeline(info, err, std::move(statistics))))
           ERR("Failed to create geometry PSO of shaders ", name, ": ", err.description().getUTF8String());
@@ -1133,7 +1133,7 @@ public:
 
   // a compile of its Metal pipeline that has not begun is dropped, and one under way finished, before what it makes
   // the pipeline of goes
-  ~MTLD3D12GraphicsPipelineStateImpl() {
+  ~MTLD3D12GraphicsPipelineStateImpl() override {
     if (deferred)
       deferred->Cancel();
   }
@@ -2332,7 +2332,7 @@ public:
     return MTLD3D12PipelineObject::QueryInterface(riid, ppvObject);
   }
 
-  virtual HRESULT STDMETHODCALLTYPE
+  HRESULT STDMETHODCALLTYPE
   GetCachedBlob(ID3DBlob **blob) {
     return GetCachedPipelineBlob(blob);
   }
@@ -2439,8 +2439,8 @@ public:
     return descriptor.variants.emplace(key, std::move(pipeline)).first->second;
   }
 
-  virtual WMT::DepthStencilState
-  GetDepthStencilState(UINT DSVPlanar, UINT DSVReadonlyFlags) {
+  WMT::DepthStencilState
+  GetDepthStencilState(UINT DSVPlanar, UINT DSVReadonlyFlags) override {
     if (!DSVPlanar)
       return device_->default_depth_stencil_state;
 

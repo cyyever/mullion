@@ -191,7 +191,7 @@ public:
       backbuffer_desc_.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
   };
 
-  ~MTLD3D11SwapChain() {
+  ~MTLD3D11SwapChain() override {
     if (!fullscreen_desc_.Windowed)
       static_cast<MTLDXGIOutput *>(target_.ptr())->SetFullscreen(false);
     device_context_->WaitUntilGPUIdle();

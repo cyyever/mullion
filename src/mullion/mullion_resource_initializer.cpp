@@ -351,7 +351,7 @@ ResourceInitializer::initDepthStencilWithData(
         for (auto x = 0u; x < width_sub; x++) {
           uint32_t packed = *(const uint32_t *)((const char *)src_data + x * 4);
           float depth_val = (float)(packed & 0xFFFFFF) / (float)(0xFFFFFF);
-          uint8_t stencil_val = (uint8_t)(packed >> 24);
+          auto stencil_val = (uint8_t)(packed >> 24);
           depth_buf.updateContents(depth_buf_offset + row * depth_bytes_per_row + x * 4, &depth_val, 4);
           stencil_buf.updateContents(stencil_buf_offset + row * stencil_bytes_per_row + x, &stencil_val, 1);
         }

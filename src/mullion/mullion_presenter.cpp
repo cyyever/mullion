@@ -32,8 +32,8 @@ Presenter::upscaleOutputSize(uint32_t input_width, uint32_t input_height, uint32
     return false;
   layer_.getProps(props);
   double scale = native_contents_scale_ > 0 ? native_contents_scale_ : 1.0;
-  uint32_t native_width = uint32_t(props.bounds_width * scale + 0.5);
-  uint32_t native_height = uint32_t(props.bounds_height * scale + 0.5);
+  auto native_width = uint32_t(props.bounds_width * scale + 0.5);
+  auto native_height = uint32_t(props.bounds_height * scale + 0.5);
   if (native_width < input_width || native_height < input_height)
     return false;
   width = native_width;

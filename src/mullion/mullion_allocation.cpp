@@ -65,7 +65,7 @@ AllocationRefTracking::addStorage(void *ptr, size_t length) {
 
 void
 AllocationRefTracking::clear() {
-  RefAddChunk<> *chunk = reinterpret_cast<RefAddChunk<> *>(&chunk_placed);
+  auto *chunk = reinterpret_cast<RefAddChunk<> *>(&chunk_placed);
   while (chunk) {
     mullion::Allocation **list = std::launder(chunk->allocations);
     for (unsigned i = 0; i < chunk->size; i++)

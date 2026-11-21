@@ -69,12 +69,12 @@ classifyPointerType(const Value *V, PointerTypeMap &Map) {
 
   // A CallInst will trigger this case, and we want to classify its Function
   // operand as a Function rather than a generic Value.
-  if (const Function *F = dyn_cast<Function>(V))
+  if (const auto *F = dyn_cast<Function>(V))
     return classifyFunctionType(*F, Map);
 
   // There can potentially be dead constants hanging off of the globals we do
   // not want to deal with. So we remove them here.
-  if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(V))
+  if (const auto *GV = dyn_cast<GlobalVariable>(V))
     GV->removeDeadConstantUsers();
 
   auto It = Map.find(V);

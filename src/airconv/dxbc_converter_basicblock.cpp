@@ -53,7 +53,7 @@ ReaderIO<context, T> throwUnsupported(std::string_view ref) {
 };
 
 ReaderIO<context, context> get_context() {
-  return ReaderIO<context, context>([](struct context ctx) { return ctx; });
+  return {[](struct context ctx) { return ctx; }};
 };
 
 auto get_float4_splat(float value) -> IRValue {
@@ -521,7 +521,7 @@ llvm::Expected<llvm::BasicBlock *> convert_basicblocks(
     block_to_visit.pop_back();
     if (visited.contains(current)) continue;
     auto inserted = visited.insert({current, llvm::BasicBlock::Create(context, current->debug_name, function)});
-    visit_order.push_back(*inserted.first);
+    visit_order.emplace_back(*inserted.first);
     std::visit(
       patterns{
         [](BasicBlockUndefined) {

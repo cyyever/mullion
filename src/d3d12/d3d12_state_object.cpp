@@ -32,7 +32,7 @@ std::wstring
 ExportName(std::string_view function) {
   if (function.starts_with("\x01?"))
     function = function.substr(2, function.find("@@") - 2);
-  return std::wstring(function.begin(), function.end());
+  return {function.begin(), function.end()};
 }
 
 // a DXIL library. its conversion state is made when a conversion first asks for it: a state object whose shaders are
@@ -283,7 +283,7 @@ struct RayFunction {
   WMT::Reference<WMT::Function> function;
   uint32_t calls = 0; // SM50_RAY_SHADER_CALLS
 
-  std::string
+  [[nodiscard]] std::string
   Name() const {
     return "mullion_ray_shader_" + key.string();
   }
@@ -487,10 +487,10 @@ class MTLD3D12StateObjectImpl : public MTLD3D12DeviceChild<MTLD3D12StateObject, 
       this->name += library->digest.string() + " ";
     for (auto &subobject : ReadSubobjects(desc.DXILLibrary)) {
       if (!desc.NumExports)
-        subobjects.push_back({library.get(), subobject});
+        subobjects.emplace_back(library.get(), subobject);
       for (auto &e : std::span(desc.pExports, desc.NumExports))
         if (subobject.name == (e.ExportToRename ? e.ExportToRename : e.Name)) {
-          subobjects.push_back({library.get(), subobject});
+          subobjects.emplace_back(library.get(), subobject);
           subobjects.back().second.name = e.Name;
         }
     }
@@ -733,7 +733,7 @@ public:
         break;
       case D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE:
       case D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE:
-        root_signatures_.push_back(static_cast<MTLD3D12RootSignature *>(definition(&subobject).root));
+        root_signatures_.emplace_back(static_cast<MTLD3D12RootSignature *>(definition(&subobject).root));
         break;
       case D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY:
         if (HRESULT hr = AddLibrary(*(const D3D12_DXIL_LIBRARY_DESC *)subobject.pDesc, library_subobjects); FAILED(hr))
@@ -831,7 +831,7 @@ public:
           ERR("CreateStateObject: a DXIL library's root signature is not usable");
           return E_INVALIDARG;
         }
-        root_signatures_.push_back(static_cast<MTLD3D12RootSignature *>(root.ptr()));
+        root_signatures_.emplace_back(static_cast<MTLD3D12RootSignature *>(root.ptr()));
         library_definitions[subobject.name] = {
             (SubobjectKind)kind(subobject.type), root.ptr(), LibraryDeclared, {}, library};
         break;
@@ -1176,7 +1176,7 @@ public:
   }
 
   bool
-  GetPipeline(WMT::ComputePipelineState &Pipeline, WMT::VisibleFunctionTable &Table, uint32_t &Flags) {
+  GetPipeline(WMT::ComputePipelineState &Pipeline, WMT::VisibleFunctionTable &Table, uint32_t &Flags) override {
     Flags = pipeline_config_.Flags;
     auto &made = MakePipeline(CallDepth());
     Pipeline = made.pipeline;
@@ -1200,7 +1200,7 @@ public:
           if (auto &function = e.functions[i]) {
             slots.resize(std::max<size_t>(slots.size(), function->slot + 1));
             slots[function->slot] = function->function;
-            shaders.push_back({e.kinds[i], function.get()});
+            shaders.emplace_back(e.kinds[i], function.get());
           }
       // the kinds of shaders the pipeline has, for its traces
       bool any_hit = false, intersection = false;

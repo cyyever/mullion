@@ -322,7 +322,7 @@ read_control_flow(
       bb_current->target = BasicBlockCall{func_id, after_call};
       // a function's own calls are inlined into each copy of it; the main program comes before every label
       if (func_entries.empty())
-        call_targets.push_back({bb_current, &std::get<BasicBlockCall>(bb_current->target)});
+        call_targets.emplace_back(bb_current, &std::get<BasicBlockCall>(bb_current->target));
       bb_current = after_call;
       break;
     }
@@ -333,7 +333,7 @@ read_control_flow(
       auto func_id = Inst.m_Operands[1].m_Index[0].m_RegIndex;
       if_true->target = BasicBlockCall{func_id, after_callc};
       if (func_entries.empty())
-        call_targets.push_back({if_true, &std::get<BasicBlockCall>(if_true->target)});
+        call_targets.emplace_back(if_true, &std::get<BasicBlockCall>(if_true->target));
       bb_current = after_callc;
       break;
     }
@@ -752,7 +752,7 @@ read_control_flow(
         );
         std::visit(
             patterns{
-                [&](BasicBlockCall &call) { new_call_targets.push_back({cloned, &call}); },
+                [&](BasicBlockCall &call) { new_call_targets.emplace_back(cloned, &call); },
                 [](const auto &) {},
             },
             cloned->target

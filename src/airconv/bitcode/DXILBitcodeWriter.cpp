@@ -555,7 +555,7 @@ unsigned DXILBitcodeWriter::getGlobalObjectValueTypeID(Type *T,
                                                        const GlobalObject *G) {
   auto It = PointerMap.find(G);
   if (It != PointerMap.end()) {
-    TypedPointerType *PtrTy = cast<TypedPointerType>(It->second);
+    auto *PtrTy = cast<TypedPointerType>(It->second);
     return VE.getTypeID(PtrTy->getElementType());
   }
   return VE.getTypeID(T);
@@ -1093,7 +1093,7 @@ void DXILBitcodeWriter::writeTypeTable() {
       TypeVals.push_back(cast<IntegerType>(T)->getBitWidth());
       break;
     case Type::TypedPointerTyID: {
-      TypedPointerType *PTy = cast<TypedPointerType>(T);
+      auto *PTy = cast<TypedPointerType>(T);
       // POINTER: [pointee type, address space]
       Code = bitc::TYPE_CODE_POINTER;
       TypeVals.push_back(getTypeID(PTy->getElementType()));
@@ -1115,7 +1115,7 @@ void DXILBitcodeWriter::writeTypeTable() {
       break;
     }
     case Type::FunctionTyID: {
-      FunctionType *FT = cast<FunctionType>(T);
+      auto *FT = cast<FunctionType>(T);
       // FUNCTION: [isvararg, retty, paramty x N]
       Code = bitc::TYPE_CODE_FUNCTION;
       TypeVals.push_back(FT->isVarArg());
@@ -1126,7 +1126,7 @@ void DXILBitcodeWriter::writeTypeTable() {
       break;
     }
     case Type::StructTyID: {
-      StructType *ST = cast<StructType>(T);
+      auto *ST = cast<StructType>(T);
       // STRUCT: [ispacked, eltty x N]
       TypeVals.push_back(ST->isPacked());
       // Output all of the element types.
@@ -1152,7 +1152,7 @@ void DXILBitcodeWriter::writeTypeTable() {
       break;
     }
     case Type::ArrayTyID: {
-      ArrayType *AT = cast<ArrayType>(T);
+      auto *AT = cast<ArrayType>(T);
       // ARRAY: [numelts, eltty]
       Code = bitc::TYPE_CODE_ARRAY;
       TypeVals.push_back(AT->getNumElements());
@@ -1162,7 +1162,7 @@ void DXILBitcodeWriter::writeTypeTable() {
     }
     case Type::FixedVectorTyID:
     case Type::ScalableVectorTyID: {
-      VectorType *VT = cast<VectorType>(T);
+      auto *VT = cast<VectorType>(T);
       // VECTOR [numelts, eltty]
       Code = bitc::TYPE_CODE_VECTOR;
       TypeVals.push_back(VT->getElementCount().getKnownMinValue());
@@ -1345,9 +1345,9 @@ void DXILBitcodeWriter::writeValueAsMetadata(
   // Mimic an MDNode with a value as one operand.
   Value *V = MD->getValue();
   Type *Ty = V->getType();
-  if (Function *F = dyn_cast<Function>(V))
+  if (auto *F = dyn_cast<Function>(V))
     Ty = TypedPointerType::get(F->getFunctionType(), F->getAddressSpace());
-  else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(V))
+  else if (auto *GV = dyn_cast<GlobalVariable>(V))
     Ty = TypedPointerType::get(GV->getValueType(), GV->getAddressSpace());
   Record.push_back(getTypeID(Ty, V));
   Record.push_back(VE.getValueID(V));
@@ -1747,7 +1747,7 @@ void DXILBitcodeWriter::writeMetadataRecords(ArrayRef<const Metadata *> MDs,
   for (const Metadata *MD : MDs) {
     if (IndexPos)
       IndexPos->push_back(Stream.GetCurrentBitNo());
-    if (const MDNode *N = dyn_cast<MDNode>(MD)) {
+    if (const auto *N = dyn_cast<MDNode>(MD)) {
       assert(N->isResolved() && "Expected forward references to be resolved");
 
       switch (N->getMetadataID()) {
@@ -1784,7 +1784,7 @@ void DXILBitcodeWriter::writeMetadataStrings(
   unsigned MDSAbbrev = createMetadataStringsAbbrev();
 
   for (const Metadata *MD : Strings) {
-    const MDString *MDS = cast<MDString>(MD);
+    const auto *MDS = cast<MDString>(MD);
     // Code: [strchar x N]
     Record.append(MDS->bytes_begin(), MDS->bytes_end());
 
@@ -1890,9 +1890,9 @@ void DXILBitcodeWriter::writeFunctionMetadataAttachment(const Function &F) {
 
       Record.push_back(VE.getInstructionID(&I));
 
-      for (unsigned i = 0, e = MDs.size(); i != e; ++i) {
-        Record.push_back(MDs[i].first);
-        Record.push_back(VE.getMetadataID(MDs[i].second));
+      for (auto & MD : MDs) {
+        Record.push_back(MD.first);
+        Record.push_back(VE.getMetadataID(MD.second));
       }
       Stream.EmitRecord(bitc::METADATA_ATTACHMENT, Record, 0);
       Record.clear();
@@ -1982,7 +1982,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
       Record.clear();
     }
 
-    if (const InlineAsm *IA = dyn_cast<InlineAsm>(V)) {
+    if (const auto *IA = dyn_cast<InlineAsm>(V)) {
       Record.push_back(unsigned(IA->hasSideEffects()) |
                        unsigned(IA->isAlignStack()) << 1 |
                        unsigned(IA->getDialect() & 1) << 2);
@@ -2000,7 +2000,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
       Record.clear();
       continue;
     }
-    const Constant *C = cast<Constant>(V);
+    const auto *C = cast<Constant>(V);
     unsigned Code = -1U;
     unsigned AbbrevToUse = 0;
     if (C->isNullValue()) {
@@ -2011,7 +2011,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
       Code = bitc::CST_CODE_AGGREGATE;
       Record.append(cast<FixedVectorType>(C->getType())->getNumElements(), VE.getValueID(C->getSplatValue()));
       AbbrevToUse = AggregateAbbrev;
-    } else if (const ConstantInt *IV = dyn_cast<ConstantInt>(C)) {
+    } else if (const auto *IV = dyn_cast<ConstantInt>(C)) {
       if (IV->getBitWidth() <= 64) {
         uint64_t V = IV->getSExtValue();
         emitSignedInt64(Record, V);
@@ -2029,7 +2029,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
         }
         Code = bitc::CST_CODE_WIDE_INTEGER;
       }
-    } else if (const ConstantByte *BV = dyn_cast<ConstantByte>(C)) {
+    } else if (const auto *BV = dyn_cast<ConstantByte>(C)) {
       // Note: we downgrade by converting to the equivalent integer - this logic
       // should match the `ConstantInt` case above.
       if (BV->getBitWidth() <= 64) {
@@ -2045,7 +2045,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
         }
         Code = bitc::CST_CODE_WIDE_INTEGER;
       }
-    } else if (const ConstantFP *CFP = dyn_cast<ConstantFP>(C)) {
+    } else if (const auto *CFP = dyn_cast<ConstantFP>(C)) {
       Code = bitc::CST_CODE_FLOAT;
       Type *Ty = CFP->getType()->getScalarType();
       if (Ty->isHalfTy() || Ty->isFloatTy() || Ty->isDoubleTy()) {
@@ -2067,7 +2067,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
       }
     } else if (isa<ConstantDataSequential>(C) &&
                cast<ConstantDataSequential>(C)->isString()) {
-      const ConstantDataSequential *Str = cast<ConstantDataSequential>(C);
+      const auto *Str = cast<ConstantDataSequential>(C);
       // Emit constant strings specially.
       unsigned NumElts = Str->getNumElements();
       // If this is a null-terminated string, use the denser CSTRING encoding.
@@ -2092,7 +2092,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
         AbbrevToUse = CString6Abbrev;
       else if (isCStr7)
         AbbrevToUse = CString7Abbrev;
-    } else if (const ConstantDataSequential *CDS =
+    } else if (const auto *CDS =
                    dyn_cast<ConstantDataSequential>(C)) {
       Code = bitc::CST_CODE_DATA;
       Type *EltTy = CDS->getElementType();
@@ -2125,7 +2125,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
       for (const Value *Op : C->operands())
         Record.push_back(VE.getValueID(Op));
       AbbrevToUse = AggregateAbbrev;
-    } else if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(C)) {
+    } else if (const auto *CE = dyn_cast<ConstantExpr>(C)) {
       switch (CE->getOpcode()) {
       default:
         if (Instruction::isCast(CE->getOpcode())) {
@@ -2195,7 +2195,7 @@ void DXILBitcodeWriter::writeConstants(unsigned FirstVal, unsigned LastVal,
         Record.push_back(VE.getValueID(C->getOperand(2)));
         break;
       }
-    } else if (const BlockAddress *BA = dyn_cast<BlockAddress>(C)) {
+    } else if (const auto *BA = dyn_cast<BlockAddress>(C)) {
       Code = bitc::CST_CODE_BLOCKADDRESS;
       Record.push_back(getTypeID(BA->getFunction()->getType()));
       Record.push_back(VE.getValueID(BA->getFunction()));
@@ -2316,7 +2316,7 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
   case Instruction::ExtractValue: {
     Code = bitc::FUNC_CODE_INST_EXTRACTVAL;
     pushValueAndType(I.getOperand(0), InstID, Vals);
-    const ExtractValueInst *EVI = cast<ExtractValueInst>(&I);
+    const auto *EVI = cast<ExtractValueInst>(&I);
     Vals.append(EVI->idx_begin(), EVI->idx_end());
     break;
   }
@@ -2324,7 +2324,7 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
     Code = bitc::FUNC_CODE_INST_INSERTVAL;
     pushValueAndType(I.getOperand(0), InstID, Vals);
     pushValueAndType(I.getOperand(1), InstID, Vals);
-    const InsertValueInst *IVI = cast<InsertValueInst>(&I);
+    const auto *IVI = cast<InsertValueInst>(&I);
     Vals.append(IVI->idx_begin(), IVI->idx_end());
     break;
   }
@@ -2384,14 +2384,14 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
     break;
   case Instruction::CondBr: {
     Code = bitc::FUNC_CODE_INST_BR;
-    const CondBrInst &II = cast<CondBrInst>(I);
+    const auto &II = cast<CondBrInst>(I);
     Vals.push_back(VE.getValueID(II.getSuccessor(0)));
     Vals.push_back(VE.getValueID(II.getSuccessor(1)));
     pushValue(II.getCondition(), InstID, Vals);
   } break;
   case Instruction::Switch: {
     Code = bitc::FUNC_CODE_INST_SWITCH;
-    const SwitchInst &SI = cast<SwitchInst>(I);
+    const auto &SI = cast<SwitchInst>(I);
     Vals.push_back(getTypeID(SI.getCondition()->getType()));
     pushValue(SI.getCondition(), InstID, Vals);
     Vals.push_back(VE.getValueID(SI.getDefaultDest()));
@@ -2410,7 +2410,7 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
     break;
 
   case Instruction::Invoke: {
-    const InvokeInst *II = cast<InvokeInst>(&I);
+    const auto *II = cast<InvokeInst>(&I);
     const Value *Callee = II->getCalledOperand();
     FunctionType *FTy = II->getFunctionType();
     Code = bitc::FUNC_CODE_INST_INVOKE;
@@ -2444,7 +2444,7 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
     break;
 
   case Instruction::PHI: {
-    const PHINode &PN = cast<PHINode>(I);
+    const auto &PN = cast<PHINode>(I);
     Code = bitc::FUNC_CODE_INST_PHI;
     // With the newer instruction encoding, forward references could give
     // negative valued IDs.  This is most common for PHIs, so we use
@@ -2462,7 +2462,7 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
   }
 
   case Instruction::LandingPad: {
-    const LandingPadInst &LP = cast<LandingPadInst>(I);
+    const auto &LP = cast<LandingPadInst>(I);
     Code = bitc::FUNC_CODE_INST_LANDINGPAD;
     Vals.push_back(getTypeID(LP.getType()));
     Vals.push_back(LP.isCleanup());
@@ -2479,7 +2479,7 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
 
   case Instruction::Alloca: {
     Code = bitc::FUNC_CODE_INST_ALLOCA;
-    const AllocaInst &AI = cast<AllocaInst>(I);
+    const auto &AI = cast<AllocaInst>(I);
     Vals.push_back(getTypeID(AI.getAllocatedType()));
     Vals.push_back(getTypeID(I.getOperand(0)->getType()));
     Vals.push_back(VE.getValueID(I.getOperand(0))); // size.
@@ -2554,7 +2554,7 @@ void DXILBitcodeWriter::writeInstruction(const Instruction &I, unsigned InstID,
     Vals.push_back(getEncodedSyncScopeID(cast<FenceInst>(I).getSyncScopeID()));
     break;
   case Instruction::Call: {
-    const CallInst &CI = cast<CallInst>(I);
+    const auto &CI = cast<CallInst>(I);
     FunctionType *FTy = CI.getFunctionType();
 
     Code = bitc::FUNC_CODE_INST_CALL;
@@ -2695,8 +2695,8 @@ void DXILBitcodeWriter::writeFunction(const Function &F) {
   DILocation *LastDL = nullptr;
 
   // Finally, emit all the instructions, in order.
-  for (Function::const_iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
-    for (BasicBlock::const_iterator It = BB->begin(), E = BB->end(); It != E;
+  for (const auto & BB : F)
+    for (BasicBlock::const_iterator It = BB.begin(), E = BB.end(); It != E;
          ++It) {
       const Instruction &I = VE.getDXILInstruction(*It);
 

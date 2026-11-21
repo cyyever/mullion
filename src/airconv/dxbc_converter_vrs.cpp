@@ -233,7 +233,7 @@ CoarseShading::Enter(Function *function, IRBuilder<> &ir, llvm::air::AIRBuilder 
   centered = ir.CreateInsertElement(centered, moved(ir.CreateExtractElement(position, uint64_t(2))), uint64_t(2));
   centered = ir.CreateInsertElement(centered, moved_rcp_w, uint64_t(3));
   centered_.reserve(inputs_.size() + 2);
-  centered_.push_back({function->getArg(position_), ir.CreateSelect(coarse, centered, position)});
+  centered_.emplace_back(function->getArg(position_), ir.CreateSelect(coarse, centered, position));
   for (auto input : inputs_) {
     auto value = function->getArg(input.index);
     if (!value->getType()->getScalarType()->isFloatingPointTy())
@@ -245,7 +245,7 @@ CoarseShading::Enter(Function *function, IRBuilder<> &ir, llvm::air::AIRBuilder 
     } else {
       at_center = moved(value);
     }
-    centered_.push_back({value, ir.CreateSelect(coarse, at_center, value)});
+    centered_.emplace_back(value, ir.CreateSelect(coarse, at_center, value));
   }
 
   // the coarse pixel's coverage: its pixels' samples, a pixel after another left to right, then top to bottom
@@ -258,7 +258,7 @@ CoarseShading::Enter(Function *function, IRBuilder<> &ir, llvm::air::AIRBuilder 
       auto bits = ir.CreateShl(quad_shuffle(ir, air, own, ir.getInt32(j)), ir.CreateMul(index, samples));
       all = ir.CreateOr(all, ir.CreateSelect(members[j], bits, ir.getInt32(0)));
     }
-    centered_.push_back({function->getArg(coverage_), ir.CreateSelect(coarse, all, own)});
+    centered_.emplace_back(function->getArg(coverage_), ir.CreateSelect(coarse, all, own));
   }
 
   for (auto &block : *function)

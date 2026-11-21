@@ -9,7 +9,7 @@ public:
   MallocBlob(SIZE_T Size) : size_(Size) {
     data_ = malloc(Size);
   }
-  ~MallocBlob() {
+  ~MallocBlob() override {
     if (data_)
       free(data_);
     data_ = nullptr;

@@ -19,8 +19,8 @@ public:
     return AIR.builder.CreateLoad(TyStruct->getElementType(Index), AIR.builder.CreateStructGEP(TyStruct, Arg, Index));
   };
 
-  virtual std::optional<ConstantBufferDescriptor>
-  GetConstantBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  std::optional<ConstantBufferDescriptor>
+  GetConstantBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~ConstantBufferTableIndex == 0)
       return {};
     auto Iter = ConstantBuffers.find(Range);
@@ -31,8 +31,8 @@ public:
     return ConstantBufferDescriptor{Pointer, Metadata};
   }
 
-  virtual std::optional<SamplerDescriptor>
-  GetSampler(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  std::optional<SamplerDescriptor>
+  GetSampler(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~BindingTableIndex == 0)
       return {};
     auto Iter = Samplers.find(Range);
@@ -44,8 +44,8 @@ public:
     return SamplerDescriptor{Sampler, CubeSampler, Metadata};
   }
 
-  virtual std::optional<TextureDescirptor>
-  GetSRVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  std::optional<TextureDescirptor>
+  GetSRVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~BindingTableIndex == 0)
       return {};
     auto Iter = SRVs.find(Range);
@@ -72,8 +72,8 @@ public:
     return TextureDescirptor{Handle, Metadata, false, ResourceKind, ResourceKindLogical, MemoryAccess, SampleType};
   }
 
-  virtual std::optional<TextureDescirptor>
-  GetUAVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  std::optional<TextureDescirptor>
+  GetUAVTexture(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~BindingTableIndex == 0)
       return {};
     auto Iter = UAVs.find(Range);
@@ -104,8 +104,8 @@ public:
     };
   }
 
-  virtual std::optional<BufferDescriptor>
-  GetSRVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  std::optional<BufferDescriptor>
+  GetSRVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~BindingTableIndex == 0)
       return {};
     auto Iter = SRVs.find(Range);
@@ -118,8 +118,8 @@ public:
     return BufferDescriptor{Handle, Metadata, Iter->second.structure_stride, false};
   }
 
-  virtual std::optional<BufferDescriptor>
-  GetUAVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  std::optional<BufferDescriptor>
+  GetUAVBuffer(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~BindingTableIndex == 0)
       return {};
     auto Iter = UAVs.find(Range);
@@ -131,8 +131,8 @@ public:
     auto Metadata = GetArgument(Builder, BindingTableIndex, Iter->second.arg_metadata_index);
     return BufferDescriptor{Handle, Metadata, Iter->second.structure_stride, Iter->second.global_coherent};
   }
-  virtual std::optional<CounterDescriptor>
-  GetUAVCounter(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) {
+  std::optional<CounterDescriptor>
+  GetUAVCounter(llvm::air::AIRBuilder &Builder, RangeId Range, llvm::Value *Index) override {
     if (~BindingTableIndex == 0)
       return {};
     auto Iter = UAVs.find(Range);

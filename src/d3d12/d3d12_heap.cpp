@@ -31,7 +31,7 @@ public:
   MTLD3D12HeapImpl(MTLD3D12Device *pDevice) : MTLD3D12Pageable<MTLD3D12Heap>(pDevice) {}
 
   // with what is placed on it, which work in flight may use
-  ~MTLD3D12HeapImpl() {
+  ~MTLD3D12HeapImpl() override {
     if (heap)
       EndAfterWorkInFlight(device_, [device = device_, heap = std::move(heap)] { device->UnregisterResidency(heap); });
   }
@@ -135,7 +135,7 @@ public:
     return S_OK;
   }
 
-  virtual D3D12_HEAP_DESC *STDMETHODCALLTYPE
+  D3D12_HEAP_DESC *STDMETHODCALLTYPE
   GetDesc(D3D12_HEAP_DESC *__ret) {
     *__ret = desc_;
     return __ret;

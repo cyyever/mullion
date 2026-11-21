@@ -61,7 +61,7 @@ public:
 
   void Reset() { operands.clear(); }
 
-  auto BuildTuple() const {
+  [[nodiscard]] auto BuildTuple() const {
     return MDTuple::get(context, operands);
   }
 
@@ -77,7 +77,7 @@ uint32_t ArgumentBufferBuilder::DefineBuffer(
 ) {
   auto element_index = fieldsType.size();
   assert(!fields.count(name) && "otherwise duplicated field name");
-  fieldsType.push_back(ArgumentBindingBuffer{
+  fieldsType.emplace_back(ArgumentBindingBuffer{
     .location_index =
       location_index == UINT32_MAX ? (uint32_t)element_index : location_index,
     .array_size = 1,
@@ -95,7 +95,7 @@ uint32_t ArgumentBufferBuilder::DefineSampler(
 ) {
   auto element_index = fieldsType.size();
   assert(!fields.count(name) && "otherwise duplicated field name");
-  fieldsType.push_back(ArgumentBindingSampler{
+  fieldsType.emplace_back(ArgumentBindingSampler{
     .location_index =
       location_index == UINT32_MAX ? (uint32_t)element_index : location_index,
     .array_size = 1,
@@ -111,7 +111,7 @@ uint32_t ArgumentBufferBuilder::DefineTexture(
 ) {
   auto element_index = fieldsType.size();
   assert(!fields.count(name) && "otherwise duplicated field name");
-  fieldsType.push_back(ArgumentBindingTexture{
+  fieldsType.emplace_back(ArgumentBindingTexture{
     .location_index =
       location_index == UINT32_MAX ? (uint32_t)element_index : location_index,
     .array_size = 1,
@@ -134,7 +134,7 @@ uint32_t ArgumentBufferBuilder::DefineInteger64(
 ) {
   auto element_index = fieldsType.size();
   assert(!fields.count(name) && "otherwise duplicated field name");
-  fieldsType.push_back(ArgumentBindingIndirectConstant{
+  fieldsType.emplace_back(ArgumentBindingIndirectConstant{
     .location_index =
       location_index == UINT32_MAX ? (uint32_t)element_index : location_index,
     .array_size = 1,

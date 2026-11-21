@@ -29,7 +29,7 @@ public:
       : MTLD3D11DeviceChild<IMTLD3D11InputLayout>(device),
         input_layout(input_layout), d3d10(this) {}
 
-  ~MTLD3D11InputLayout() = default;
+  ~MTLD3D11InputLayout() override = default;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                            void **ppvObject) final {
@@ -94,7 +94,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
                      const Sha1Digest &hash, ShaderReflection &&info)
         : cache(cache), shader(shader_transferred), bytecode_(bytecode), sha1_(hash), info_(std::move(info)) {}
 
-    ~CachedSM50Shader() {
+    ~CachedSM50Shader() override {
       if (shader) {
         SM50Destroy(shader);
         shader = nullptr;
@@ -104,7 +104,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     CachedSM50Shader(CachedSM50Shader &&moved) = delete;
     CachedSM50Shader(const CachedSM50Shader &copy) = delete;
 
-    virtual sm50_shader_t handle() {
+    sm50_shader_t handle() override {
       std::scoped_lock lock(shader_mutex);
       if (!shader && !bytecode_.empty()) {
         sm50_error_t err = nullptr;
@@ -118,14 +118,14 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
       }
       return shader;
     };
-    virtual MTL_SHADER_REFLECTION &reflection() { return info_.reflection; }
-    virtual MTL_SM50_SHADER_ARGUMENT *constant_buffers_info() {
+    MTL_SHADER_REFLECTION &reflection() override { return info_.reflection; }
+    MTL_SM50_SHADER_ARGUMENT *constant_buffers_info() override {
       return info_.arguments.data();
     };
-    virtual MTL_SM50_SHADER_ARGUMENT *arguments_info() {
+    MTL_SM50_SHADER_ARGUMENT *arguments_info() override {
       return info_.arguments.data() + info_.reflection.NumConstantBuffers;
     };
-    virtual CompiledShader *get_shader(ShaderVariant variant) {
+    CompiledShader *get_shader(ShaderVariant variant) override {
       std::scoped_lock lock(variants_mutex);
       auto c = variants.insert({variant, nullptr});
       if (c.second) {
@@ -138,7 +138,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
       }
       return c.first->second.get();
     }
-    virtual const Sha1Digest &sha1() { return sha1_; };
+    const Sha1Digest &sha1() override { return sha1_; };
 
     std::string dump_bytecode_;
 
@@ -163,13 +163,13 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
         TRACE_IN(Shader, "D3D11 shader ", sha1_.string(), " dumped to ", path);
     }
 
-    virtual WMT::Reference<WMT::DispatchData> find_cached_variant(Sha1Digest &variant_digest) final {
+    WMT::Reference<WMT::DispatchData> find_cached_variant(Sha1Digest &variant_digest) final {
       auto reader = cache->scache_.getReader();
       if (reader)
         return reader.get(std::make_pair(sha1_, variant_digest));
       return {};
     };
-    virtual void update_cached_variant(Sha1Digest &variant_digest, WMT::DispatchData data) final {
+    void update_cached_variant(Sha1Digest &variant_digest, WMT::DispatchData data) final {
       auto writer = cache->scache_.getWriter();
       if (writer)
         writer.set(std::make_pair(sha1_, variant_digest), data);
@@ -192,15 +192,15 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
       sha1_ = h.final();
     }
 
-    virtual uint32_t input_slot_mask() final { return input_slot_mask_; }
+    uint32_t input_slot_mask() final { return input_slot_mask_; }
 
-    virtual uint32_t input_layout_element(
+    uint32_t input_layout_element(
         MTL_SHADER_INPUT_LAYOUT_ELEMENT_DESC **ppElements) final {
       *ppElements = attributes_.data();
       return attributes_.size();
     }
 
-    virtual Sha1Digest &sha1() final { return sha1_; }
+    Sha1Digest &sha1() final { return sha1_; }
 
     std::vector<MTL_SHADER_INPUT_LAYOUT_ELEMENT_DESC> attributes_;
     Sha1Digest sha1_;
@@ -317,7 +317,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     return stage;
   }
 
-  virtual HRESULT AddVertexShader(const void *pBytecode,
+  HRESULT AddVertexShader(const void *pBytecode,
                                   uint32_t BytecodeLength,
                                   ID3D11VertexShader **ppShader) override {
     if (Stage(pBytecode, BytecodeLength) != microsoft::D3D10_SB_VERTEX_SHADER)
@@ -333,7 +333,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     return S_OK;
   }
 
-  virtual HRESULT AddPixelShader(const void *pBytecode, uint32_t BytecodeLength,
+  HRESULT AddPixelShader(const void *pBytecode, uint32_t BytecodeLength,
                                  ID3D11PixelShader **ppShader) override {
     if (Stage(pBytecode, BytecodeLength) != microsoft::D3D10_SB_PIXEL_SHADER)
       return E_INVALIDARG;
@@ -349,7 +349,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     return S_OK;
   }
 
-  virtual HRESULT AddHullShader(const void *pBytecode, uint32_t BytecodeLength,
+  HRESULT AddHullShader(const void *pBytecode, uint32_t BytecodeLength,
                                 ID3D11HullShader **ppShader) override {
     if (Stage(pBytecode, BytecodeLength) != microsoft::D3D11_SB_HULL_SHADER)
       return E_INVALIDARG;
@@ -363,7 +363,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     return S_OK;
   }
 
-  virtual HRESULT AddDomainShader(const void *pBytecode,
+  HRESULT AddDomainShader(const void *pBytecode,
                                   uint32_t BytecodeLength,
                                   ID3D11DomainShader **ppShader) override {
     if (Stage(pBytecode, BytecodeLength) != microsoft::D3D11_SB_DOMAIN_SHADER)
@@ -379,7 +379,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     return S_OK;
   }
 
-  virtual HRESULT AddGeometryShader(const void *pBytecode,
+  HRESULT AddGeometryShader(const void *pBytecode,
                                     uint32_t BytecodeLength,
                                     ID3D11GeometryShader **ppShader) override {
     if (Stage(pBytecode, BytecodeLength) != microsoft::D3D10_SB_GEOMETRY_SHADER)
@@ -395,7 +395,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     return S_OK;
   }
 
-  virtual HRESULT AddComputeShader(const void *pBytecode,
+  HRESULT AddComputeShader(const void *pBytecode,
                                    uint32_t BytecodeLength,
                                    ID3D11ComputeShader **ppShader) override {
     if (Stage(pBytecode, BytecodeLength) != microsoft::D3D11_SB_COMPUTE_SHADER)

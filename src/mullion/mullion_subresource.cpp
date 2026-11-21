@@ -1,4 +1,6 @@
 #include "mullion_subresource.hpp"
+
+#include <utility>
 #include "mullion_texture.hpp"
 
 namespace mullion {
@@ -48,8 +50,8 @@ ResourceSubsetState::ResourceSubsetState(
     uint64_t bits = 0;
     for (auto planar = 0u; planar < total_planar; planar++) {
       // unsigned int bit-fields promote to int if narrower than int
-      for (auto slice = desc->firstArraySlice; slice < unsigned(desc->firstArraySlice + desc->arraySize); slice++) {
-        for (auto level = desc->firstMiplevel; level < unsigned(desc->firstMiplevel + desc->miplevelCount); level++) {
+      for (auto slice = desc->firstArraySlice; std::cmp_less(slice ,desc->firstArraySlice + desc->arraySize); slice++) {
+        for (auto level = desc->firstMiplevel; std::cmp_less(level ,desc->firstMiplevel + desc->miplevelCount); level++) {
           if ((1 << planar) & planar_mask)
             bits |= 1ull << (planar * total_array_size * total_mip_count + slice * total_mip_count + level);
         }

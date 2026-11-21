@@ -954,7 +954,7 @@ convert_dxbc_geometry_shader(
   auto emits = builder.CreateAlloca(types._int, nullptr, "emits");
   builder.CreateStore(zero_const, emits);
   llvm::Value *rasterized_emits = nullptr;
-  if (mesh_vertices < (uint32_t)max_vertex_out)
+  if (std::cmp_less(mesh_vertices ,max_vertex_out))
     builder.CreateStore(zero_const, rasterized_emits = builder.CreateAlloca(types._int, nullptr, "rasterized_emits"));
 
   auto mesh_ptr = function->getArg(mesh_idx);
@@ -1310,8 +1310,8 @@ convert_dxbc_geometry_shader(
       pvalue culled = triangle.culled;
       for (auto &distance : pShaderInternal->cull_distance_scalars) {
         pvalue behind = builder.getTrue();
-        for (uint32_t k = 0; k < 3; k++) {
-          auto value = builder.CreateExtractElement(builder.CreateLoad(types._int4, ring_at(slot[k], distance.reg)), uint64_t(distance.component));
+        for (auto & k : slot) {
+          auto value = builder.CreateExtractElement(builder.CreateLoad(types._int4, ring_at(k, distance.reg)), uint64_t(distance.component));
           behind = builder.CreateAnd(behind, builder.CreateFCmpULT(real(value), llvm::ConstantFP::get(types._float, 0)));
         }
         culled = builder.CreateOr(culled, behind);
@@ -3209,7 +3209,7 @@ convert_dxbc_vertex_for_geometry_shader(
 
   resource_map.output_element_count = max_output_register;
 
-  llvm::GlobalVariable *valid_vertex_mask = new llvm::GlobalVariable(
+  auto *valid_vertex_mask = new llvm::GlobalVariable(
       module, types._int, false, llvm::GlobalValue::InternalLinkage, llvm::Constant::getNullValue(types._int),
       "valid_vertex_mask", nullptr, llvm::GlobalValue::NotThreadLocal, (uint32_t)air::AddressSpace::threadgroup
   );
@@ -3365,7 +3365,7 @@ convert_dxbc_vertex_for_geometry_shader(
     auto missing_at = [&](int32_t at) { return missing[at + 1]; };
     pvalue offset = strip_offset, found = zero, lead = zero, odd = zero;
     pvalue first = builder.getFalse(), last = builder.getFalse(), valid = builder.getFalse();
-    for (int32_t at = 0; at < int32_t(warp_vertex_count); at++) {
+    for (int32_t at = 0; std::cmp_less(at ,warp_vertex_count); at++) {
       pvalue whole = builder.CreateICmpEQ(builder.CreateAnd(offset, one), zero);
       for (int32_t v = 0; v < reach; v++)
         whole = builder.CreateAnd(whole, builder.CreateNot(missing_at(at + v)));
@@ -3522,9 +3522,9 @@ convert_dxbc_vertex_for_geometry_shader(
     g->addIncoming(warp_vertex_id, head);
     llvm::PHINode *sums[4];
     pvalue next_sums[4];
-    for (uint32_t s = 0; s < 4; s++) {
-      sums[s] = builder.CreatePHI(types._long, 2);
-      sums[s]->addIncoming(builder.getInt64(0), head);
+    for (auto & sum : sums) {
+      sum = builder.CreatePHI(types._long, 2);
+      sum->addIncoming(builder.getInt64(0), head);
     }
     // the first items are the blocks before the group's, the rest its block's groups before it
     auto item = builder.CreateSelect(

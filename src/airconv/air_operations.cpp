@@ -3,9 +3,9 @@
 namespace mullion::air {
 
 ReaderIO<AIRBuilderContext, AIRBuilderContext> get_context() {
-  return ReaderIO<AIRBuilderContext, AIRBuilderContext>(
+  return {
     [](struct AIRBuilderContext ctx) { return ctx; }
-  );
+  };
 };
 
 AIRBuilderResult get_int(uint32_t value) {

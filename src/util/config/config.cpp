@@ -328,7 +328,7 @@ namespace mullion {
     if (config)
       return *config;
 
-    return Config();
+    return {};
   }
 
 

@@ -1227,7 +1227,7 @@ public:
     queues_.push_back(this);
   }
 
-  ~MTLD3D12CommandQueueImpl() {
+  ~MTLD3D12CommandQueueImpl() override {
     {
       std::scoped_lock lock(queues_mutex_);
       std::erase(queues_, this);

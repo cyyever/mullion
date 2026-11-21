@@ -21,6 +21,7 @@
 #include "mullion_diag.hpp"
 #include <map>
 #include <bit>
+#include <ranges>
 
 namespace mullion {
 
@@ -156,9 +157,9 @@ MTLD3D12CommandAllocatorImpl::ExcludeGPUWrite(const void *Bytes, size_t Offset, 
   if (found == list->passes.end())
     return;
   auto &records = found->second;
-  for (auto it = records.rbegin(); it != records.rend(); ++it)
-    if (it->bytes == Bytes) {
-      it->written_offset = Offset, it->written_length = Length;
+  for (auto & record : std::views::reverse(records))
+    if (record.bytes == Bytes) {
+      record.written_offset = Offset, record.written_length = Length;
       return;
     }
 }

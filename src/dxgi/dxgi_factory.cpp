@@ -37,7 +37,7 @@ public:
     }
   }
 
-  bool acquired() const { return acquired_; }
+  [[nodiscard]] bool acquired() const { return acquired_; }
 
   HRESULT STDMETHODCALLTYPE
   QueryInterface(REFIID riid, void **object) final {
@@ -492,7 +492,7 @@ private:
 static HRESULT CreateFactory(UINT Flags, bool Extended, REFIID riid, void **ppFactory) {
   InitializeVendorExtension();
   try {
-    MTLDXGIFactory* factory = new MTLDXGIFactory(Flags, Extended);
+    auto* factory = new MTLDXGIFactory(Flags, Extended);
     HRESULT hr = factory->QueryInterface(riid, ppFactory);
     factory->Release();
 

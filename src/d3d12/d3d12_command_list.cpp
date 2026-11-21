@@ -786,7 +786,7 @@ public:
     encoder_count = 0;
   }
 
-  ~MTLD3D12GraphicsCommandListImpl() = default;
+  ~MTLD3D12GraphicsCommandListImpl() override = default;
 
   void
   ResetState(ID3D12PipelineState *pInitialPipelineState) {
@@ -984,7 +984,7 @@ public:
     if (allocator_->records_)
       allocator_->RecordGPUHeap(mapped, stride, "vertex buffer table");
 
-    VERTEX_BUFFER_ENTRY *entries = (VERTEX_BUFFER_ENTRY *)mapped;
+    auto *entries = (VERTEX_BUFFER_ENTRY *)mapped;
     for (unsigned slot = 0, index = 0; slot < max_slot; slot++) {
       if (!(slot_mask & (1 << slot)))
         continue;
@@ -3021,7 +3021,7 @@ public:
         cmd.origin = origin;
         auto mip = std::pair(place.level, place.slice);
         if (texture->accurateBC && std::ranges::find(decoded_mips, mip) == decoded_mips.end())
-          decoded_mips.push_back(mip);
+          decoded_mips.emplace_back(mip);
       } else {
         auto &cmd = allocator_->EncodeBlitCommand<wmtcmd_blit_copy_from_texture_to_buffer>();
         cmd.type = WMTBlitCommandCopyFromTextureToBuffer;
@@ -3932,7 +3932,7 @@ public:
       sum.first_dispatch = indirect_dispatches_.size();
       sum.first_predicated = predicated_statistics_.size();
       sum.first_draw = draw_statistics_.size();
-      active_statistics_.push_back({heap, sum});
+      active_statistics_.emplace_back(heap, sum);
       dirty_state_.set(DirtyState::GraphicsPipelineState);
       return;
     }
@@ -3985,7 +3985,7 @@ public:
       sum.draw_count = draw_statistics_.size() - sum.first_draw;
       // sums run together at the next resolve, so a query ended again before one keeps only its latest result
       std::erase_if(statistics_sums_, [&](auto &s) { return s.first == heap && s.second.query == Index; });
-      statistics_sums_.push_back({heap, sum});
+      statistics_sums_.emplace_back(heap, sum);
       active_statistics_.erase(query);
       dirty_state_.set(DirtyState::GraphicsPipelineState);
       return;
@@ -4929,7 +4929,7 @@ public:
     auto resolve = [&](const D3D12_RENDER_PASS_ENDING_ACCESS &end) {
       if (end.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
         for (auto &sub : std::span(end.Resolve.pSubresourceParameters, end.Resolve.SubresourceCount))
-          pass_resolves_.push_back({end.Resolve, sub});
+          pass_resolves_.emplace_back(end.Resolve, sub);
     };
     // the surfaces bound for raster (Render Passes, "Surfaces That BeginRenderPass Binds For Raster")
     auto bound = [](const D3D12_RENDER_PASS_BEGINNING_ACCESS &begin, bool read_only) {
