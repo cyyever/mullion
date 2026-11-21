@@ -32,7 +32,7 @@ struct MullionHash {
 };
 
 struct GuidPair {
-  GuidPair(){};
+  GuidPair() = default;
   GuidPair(IID a_, IID b_) : a(a_), b(b_) {}
 
   IID a, b;

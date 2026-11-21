@@ -398,7 +398,7 @@ airbitcode::BitcodeWriter::BitcodeWriter(SmallVectorImpl<char> &Buffer)
   Stream->Emit(0xD, 4);
 }
 
-airbitcode::BitcodeWriter::~BitcodeWriter() { }
+airbitcode::BitcodeWriter::~BitcodeWriter() = default;
 
 /// Write the specified module to the specified output stream.
 void airbitcode::WriteDXILToFile(const Module &M, raw_ostream &Out,

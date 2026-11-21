@@ -34,7 +34,7 @@ private:
       );
     }
 
-    ~SRV() {}
+    ~SRV() = default;
   };
 
 public:

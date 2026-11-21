@@ -766,7 +766,7 @@ public:
     CpuFence *frame_latency_fence_ = nullptr;
 
   public:
-    SyncFrameState() {}
+    SyncFrameState() = default;
     SyncFrameState(uint64_t frame_id, CpuFence *frame_latency_fence)
         : frame_id_(frame_id), frame_latency_fence_(frame_latency_fence) {}
 

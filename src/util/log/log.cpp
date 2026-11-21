@@ -22,7 +22,7 @@ namespace mullion {
 Logger::Logger(const std::string &fileName)
     : m_minLevel(getMinLogLevel()), m_fileName(fileName) {}
 
-Logger::~Logger() {}
+Logger::~Logger() = default;
 
 void Logger::trace(const std::string &message) {
   s_instance.emitMsg(LogLevel::Trace, message);
