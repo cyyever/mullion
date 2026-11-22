@@ -133,6 +133,7 @@ main(int argc, char **argv) {
   auto color = texture(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, width, height, target, input);
   auto depth = texture(DXGI_FORMAT_R32_TYPELESS, DXGI_FORMAT_R32_FLOAT, width, height, target, input);
   auto motion = texture(DXGI_FORMAT_R16G16_TYPELESS, DXGI_FORMAT_R16G16_FLOAT, width, height, target, input);
+  auto display_depth = texture(DXGI_FORMAT_R32_TYPELESS, DXGI_FORMAT_R32_FLOAT, out_width, out_height, target, input);
   auto display_motion =
       texture(DXGI_FORMAT_R16G16_TYPELESS, DXGI_FORMAT_R16G16_FLOAT, out_width, out_height, target, input);
   auto exposure = texture(DXGI_FORMAT_R32_TYPELESS, DXGI_FORMAT_R32_FLOAT, 1, 1, target, input);
@@ -143,7 +144,7 @@ main(int argc, char **argv) {
   auto output = texture(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, out_width, out_height,
                         D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   CHECK(color.resource && depth.resource && motion.resource && exposure.resource && normalized.resource &&
-                packed.resource && output.resource && display_motion.resource && mask.resource
+                packed.resource && output.resource && display_motion.resource && mask.resource && display_depth.resource
             ? S_OK
             : E_FAIL);
   CHECK(list->Reset(allocator.Get(), nullptr));
@@ -205,7 +206,7 @@ main(int argc, char **argv) {
       std::vector<D3D12_RECT> rects;
     };
     Clear clears[] = {{&color, fb.data(), fa.data(), squares}, {&depth, half}, {given, zero}, {&exposure, one},
-                      {&display_motion, some}, {&mask, one}};
+                      {&display_motion, some}, {&mask, one}, {&display_depth, half}};
     if (content)
       clears[0].rects = {*content};
     if (moved) {
@@ -652,6 +653,31 @@ main(int argc, char **argv) {
     }
     auto run = [&] { return evaluate(list.Get(), feature, params, nullptr) == NVNGX_RESULT_OK; };
     uniform(upscaled(frames[0], frames[1], 0, run, nullptr, &content), frames[0]);
+    params->Set("DLSS.Render.Subrect.Dimensions.Width", 0u);
+    params->Set("DLSS.Render.Subrect.Dimensions.Height", 0u);
+    for (const char *input : {"Color.Subrect", "Depth.Subrect", "MV.Subrect"}) {
+      params->Set(("DLSS.Input." + std::string(input) + ".Base.X").c_str(), 0u);
+      params->Set(("DLSS.Input." + std::string(input) + ".Base.Y").c_str(), 0u);
+    }
+    params->Set("DLSS.Pre.Exposure", 1.0f);
+    for (bool large_depth : {false, true}) {
+      for (bool large_motion : {false, true}) {
+        step("DLSS with low-resolution motion flag, display-sized depth %d and motion %d", large_depth, large_motion);
+        params->Set("Depth", (large_depth ? display_depth : depth).resource.Get());
+        params->Set("MotionVectors", (large_motion ? display_motion : motion).resource.Get());
+        auto evaluate_frame = [&] { return evaluate(list.Get(), feature, params, nullptr) == NVNGX_RESULT_OK; };
+        params->Set("Reset", 1);
+        uniform(upscaled(frames[0], frames[0], 0, evaluate_frame), frames[0]);
+        auto first_frame = upscaled(light, dark, 0, evaluate_frame, &start);
+        params->Set("Reset", 0);
+        auto second = upscaled(light, dark, 0, evaluate_frame, &moved);
+        if (expect(!first_frame.empty() && !at_input.empty() && second.size() == at_input.size(), "missing moving frame"))
+          expect(!apart(second, at_input), "moving frame differs from input-resolution reference");
+      }
+    }
+    params->Set("Depth", depth.resource.Get());
+    params->Set("MotionVectors", motion.resource.Get());
+    params->Set("Reset", 1);
     step("DLSS without depth");
     params->Set("Depth", (ID3D12Resource *)nullptr);
     expect(evaluate(list.Get(), feature, params, nullptr) == NVNGX_RESULT_INVALID_PARAMETER, "DLSS ran without depth");

@@ -215,6 +215,7 @@ struct UpscaleEncoderData : EncoderData {
   Rc<TemporalScaler> temporal;
   Rc<DenoisedScaler> denoised;
   WMT::Texture color, output, depth, motion, exposure, reactive;
+  WMT::Reference<WMT::Texture> converted_depth, converted_motion;
   WMTFXTemporalScalerProps props;
   WMTFXDenoisedScaleArgs denoise;
 };

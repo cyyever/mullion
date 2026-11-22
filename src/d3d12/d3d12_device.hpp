@@ -1021,6 +1021,7 @@ public:
   // converts a top-level acceleration structure's instances to Metal's (acceleration_structure_instances)
   WMT::Reference<WMT::ComputePipelineState> acceleration_structure_instances;
   // display-resolution motion vectors at the input resolution, in its pixels, for MetalFX (cs_downscale_dilated_mv)
+  WMT::Reference<WMT::ComputePipelineState> resize_upscale_depth;
   WMT::Reference<WMT::ComputePipelineState> downscale_motion;
   // a bottom-level structure's geometry transforms as column-major matrices (acceleration_structure_transforms), for
   // a GPU that takes no row-major ones

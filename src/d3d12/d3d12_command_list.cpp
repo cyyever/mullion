@@ -5797,8 +5797,8 @@ public:
     std::array<uint32_t, 15> key{};
     Rc<TemporalScaler> temporal;
     Rc<DenoisedScaler> denoised;
-    // display-resolution motion vectors brought to the input resolution (DownscaleMotion)
-    WMT::Reference<WMT::Texture> motion;
+    // display-resolution motion vectors / depth brought to the input resolution (ConvertUpscaleInput)
+    WMT::Reference<WMT::Texture> motion, depth;
     // what MetalFX's temporal scaler takes on the device, asked when the cache is made
     WMTFXTemporalScalerSupport support{};
   };
@@ -5809,16 +5809,14 @@ public:
     return size >= extent ? 0 : std::min(offset, extent - size);
   }
 
-  // MetalFX reads motion vectors at the input resolution, in its pixels: those DLSS was given at the output resolution
-  // (MotionVectorInDisplayRes) are read at each input pixel's place, scaled to pixels by `scale` and then to the input
-  // resolution, into the cache's texture, in a pass before the upscale (as D3D11's MTLFXMVScaleContext)
   void
-  DownscaleMotion(Texture *motion, WMT::Texture view, UpscalerCache *cache, float scale_x, float scale_y) {
-    UsedTexture(motion);
+  ConvertUpscaleInput(Texture *source, WMT::Texture view, WMT::Texture output, WMT::ComputePipelineState pipeline,
+                     float scale_x, float scale_y) {
+    UsedTexture(source);
     StartComputePass();
     auto &pso = allocator_->EncodeComputeCommand<wmtcmd_compute_setpso>();
     pso.type = WMTComputeCommandSetPSO;
-    pso.pso = device_->downscale_motion;
+    pso.pso = pipeline;
     pso.threadgroup_size = {.width=8, .height=4, .depth=1};
     auto &from = allocator_->EncodeComputeCommand<wmtcmd_compute_settexture>();
     from.type = WMTComputeCommandSetTexture;
@@ -5826,7 +5824,7 @@ public:
     from.index = 0;
     auto &to = allocator_->EncodeComputeCommand<wmtcmd_compute_settexture>();
     to.type = WMTComputeCommandSetTexture;
-    to.texture = cache->motion.handle;
+    to.texture = output.handle;
     to.index = 1;
     const float scale[2] = {scale_x, scale_y};
     auto &bytes = allocator_->EncodeComputeCommand<wmtcmd_compute_setbytes>();
@@ -5836,7 +5834,7 @@ public:
     bytes.index = 0;
     auto &dispatch = allocator_->EncodeComputeCommand<wmtcmd_compute_dispatch>();
     dispatch.type = WMTComputeCommandDispatchThreads;
-    dispatch.size = {.width=uint32_t(cache->motion.width()), .height=uint32_t(cache->motion.height()), .depth=1};
+    dispatch.size = {.width=uint32_t(output.width()), .height=uint32_t(output.height()), .depth=1};
   }
 
   static Texture *
@@ -5948,17 +5946,19 @@ public:
       *ppCache = cache = new UpscalerCache;
       cache->support = device_->GetMTLDevice().temporalScalerSupport();
     }
-    // motion vectors at the output resolution are read there by MetalFX where it reads them so (macOS 27).
-    // elsewhere, or with the option
-    // metalfx.outputResolutionMotionVectors off, they are brought to the input's (DownscaleMotion), as 32-bit floats
+    // Some DLSS callers mark display-sized motion as low resolution. Select the MetalFX mode from the texture.
     static const bool output_motion =
         Config::getInstance().getOption<bool>("metalfx.outputResolutionMotionVectors", true);
-    bool at_output = pDesc->MotionVectorInDisplayRes &&
+    bool at_output = (pDesc->MotionVectorInDisplayRes || UpscaleSize(motion, output)) &&
                      (motion->width() != color->width() || motion->height() != color->height());
     bool native_motion = at_output && output_motion && cache->support.output_resolution_motion_vectors &&
                          motion_format != WMTPixelFormatInvalid && motion->width() == output->width() &&
                          motion->height() == output->height();
-    bool display_motion = at_output && !native_motion && device_->downscale_motion;
+    bool resize_motion = !native_motion && !UpscaleSize(motion, color);
+    bool display_motion = resize_motion;
+    bool resize_depth = !UpscaleSize(depth, color);
+    if ((resize_motion && !device_->downscale_motion) || (resize_depth && !device_->resize_upscale_depth))
+      return E_FAIL;
     bool motion_pass = display_motion || formatted;
     auto scaler_motion_format = motion_pass ? WMTPixelFormatRG32Float : motion_format;
     // the pass writes the input resolution's motion vectors, or as many as it reads where they are at it already
@@ -5990,7 +5990,7 @@ public:
                                  output->height(),
                                  uint32_t(color->pixelFormat()),
                                  uint32_t(output->pixelFormat()),
-                                 uint32_t(depth_format),
+                                 uint32_t(resize_depth ? WMTPixelFormatR32Float : depth_format),
                                  uint32_t(scaler_motion_format),
                                  uint32_t(!!pDesc->AutoExposure),
                                  uint32_t(display_motion) | uint32_t(native_motion) << 1,
@@ -6002,7 +6002,7 @@ public:
       WMTFXTemporalScalerInfo info{};
       info.color_format = color->pixelFormat();
       info.output_format = output->pixelFormat();
-      info.depth_format = depth_format;
+      info.depth_format = resize_depth ? WMTPixelFormatR32Float : depth_format;
       info.motion_format = scaler_motion_format;
       info.input_width = color->width();
       info.input_height = color->height();
@@ -6070,16 +6070,34 @@ public:
             ", motion at output resolution ", pDesc->MotionVectorInDisplayRes
         ));
     }
-    // the pass writes the input resolution's motion vectors, or as many as it reads where they are at it already
+    if (resize_depth) {
+      if (!cache->depth || cache->depth.width() != color->width() || cache->depth.height() != color->height()) {
+        WMTTextureInfo info{};
+        info.type = WMTTextureType2D;
+        info.pixel_format = WMTPixelFormatR32Float;
+        info.width = color->width();
+        info.height = color->height();
+        info.depth = info.array_length = info.mipmap_level_count = info.sample_count = 1;
+        info.usage = WMTTextureUsageShaderRead | WMTTextureUsageShaderWrite;
+        info.options = WMTResourceStorageModePrivate;
+        cache->depth = device_->GetMTLDevice().newTexture(info);
+        if (!cache->depth)
+          return E_OUTOFMEMORY;
+      }
+      ConvertUpscaleInput(depth, UpscaleView(depth, depth_format), cache->depth, device_->resize_upscale_depth, 1, 1);
+    }
     if (motion_pass)
-      DownscaleMotion(
-          motion, UpscaleView(motion, motion_format), cache, pDesc->MotionVectorScaleX, pDesc->MotionVectorScaleY
-      );
+      ConvertUpscaleInput(motion, UpscaleView(motion, motion_format), cache->motion, device_->downscale_motion,
+                         pDesc->MotionVectorScaleX, pDesc->MotionVectorScaleY);
     auto pass = RecordUpscale();
+    if (resize_depth)
+      pass->converted_depth = cache->depth;
+    if (motion_pass)
+      pass->converted_motion = cache->motion;
     pass->temporal = cache->temporal;
     pass->color = UpscaleView(color);
     pass->output = UpscaleView(output);
-    pass->depth = UpscaleView(depth, depth_format);
+    pass->depth = resize_depth ? WMT::Texture(cache->depth) : UpscaleView(depth, depth_format);
     pass->motion = motion_pass ? WMT::Texture(cache->motion) : UpscaleView(motion, motion_format);
     pass->exposure =
         UpscaleView(exposure, exposure ? ScalarFloatFormat(exposure->pixelFormat()) : WMTPixelFormatInvalid);

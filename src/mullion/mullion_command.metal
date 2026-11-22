@@ -944,6 +944,16 @@ struct MullionClearUintMetadata {
   }
 }
 
+[[kernel]] void cs_resize_upscale_depth(
+  uint2 pos [[thread_position_in_grid]],
+  texture2d<float, access::read> source [[texture(0)]],
+  texture2d<float, access::write> result [[texture(1)]]
+) {
+  float2 uv = (float2(pos) + 0.5f) / float2(result.get_width(), result.get_height());
+  uint2 at = uint2(uv * float2(source.get_width(), source.get_height()));
+  result.write(source.read(at), pos);
+}
+
 [[kernel]] void cs_downscale_dilated_mv(
   uint2 pos [[thread_position_in_grid]],
   constant float2& mv_scale [[buffer(0)]],

@@ -467,6 +467,9 @@ public:
     acceleration_structure_instances = GetMTLDevice().newComputePipelineState(
         command_library.getLibrary().newFunction("acceleration_structure_instances"), err
     );
+    resize_upscale_depth = GetMTLDevice().newComputePipelineState(
+        command_library.getLibrary().newFunction("cs_resize_upscale_depth"), err
+    );
     downscale_motion = GetMTLDevice().newComputePipelineState(
         command_library.getLibrary().newFunction("cs_downscale_dilated_mv"), err
     );
