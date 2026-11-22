@@ -23,6 +23,17 @@ def git(*args):
     return subprocess.check_output(["git", *args])
 
 
+def changed_paths(base):
+    # A force-push can remove the previous tip from the checkout's history.
+    if subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}"],
+                      stdout=subprocess.DEVNULL).returncode == 1:
+        print(f"Diff base {base} is unavailable; checking all tracked fixtures")
+        names = git("ls-tree", "-r", "--name-only", "-z", "HEAD", "--", "tests")
+    else:
+        names = git("diff", "--name-only", "--diff-filter=ACMR", "-z", base, "HEAD", "--")
+    return {os.fsdecode(path) for path in names.split(b"\0") if path}
+
+
 def shader_cases(path, front_ends):
     text = path.read_text(encoding="utf-8")
     sources = defaultdict(list)
@@ -93,8 +104,7 @@ def main():
     args = parser.parse_args()
     paths = set(args.paths)
     if args.base:
-        paths.update(os.fsdecode(p) for p in git("diff", "--name-only", "--diff-filter=ACMR", "-z", args.base,
-                                                 "HEAD", "--").split(b"\0") if p)
+        paths.update(changed_paths(args.base))
     if (not args.base and not paths) or paths & {"tests/lint_hlsl.py", ".github/workflows/hlsl.yml"}:
         paths.update([*SMOKE, "tests/dxc_cases.py"])
     if paths & {"tests/d3d11/d3d11_test.hpp", "tests/d3d12/d3d12_test.hpp",
