@@ -138,7 +138,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -158,7 +158,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  GetCachedBlob(ID3DBlob **blob) {
+  GetCachedBlob(ID3DBlob **blob) override {
     return GetCachedPipelineBlob(blob);
   }
 };

@@ -252,7 +252,7 @@ D3D12SerializeRootSignature(
 template <typename Base> class MTLD3D12RootSignatureDeserializer : public ComObject<Base> {
 public:
   HRESULT STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -264,12 +264,15 @@ public:
     return E_NOINTERFACE;
   }
 
+  // The two COM bases expose different getters. Each getter overrides only one base.
   const D3D12_ROOT_SIGNATURE_DESC *STDMETHODCALLTYPE
+  // NOLINTNEXTLINE(modernize-use-override)
   GetRootSignatureDesc() {
     return &impl_.desc_1_0_.Desc_1_0;
   }
 
   HRESULT STDMETHODCALLTYPE
+  // NOLINTNEXTLINE(modernize-use-override)
   GetRootSignatureDescAtVersion(
       D3D_ROOT_SIGNATURE_VERSION Version, const D3D12_VERSIONED_ROOT_SIGNATURE_DESC **ppDesc
   ) {
@@ -290,6 +293,7 @@ public:
   }
 
   const D3D12_VERSIONED_ROOT_SIGNATURE_DESC *STDMETHODCALLTYPE
+  // NOLINTNEXTLINE(modernize-use-override)
   GetUnconvertedRootSignatureDesc() {
     switch (impl_.raw_root_sig_->Version) {
     case D3D_ROOT_SIGNATURE_VERSION_1_0:
@@ -711,7 +715,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 

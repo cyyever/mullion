@@ -910,7 +910,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -941,12 +941,12 @@ public:
   }
 
   D3D12_COMMAND_LIST_TYPE STDMETHODCALLTYPE
-  GetType() {
+  GetType() override {
     return type_;
   }
 
   HRESULT STDMETHODCALLTYPE
-  Close() {
+  Close() override {
     if (encoder_count < std::numeric_limits<size_t>::max())
       return FAIL(E_FAIL);
     WriteMarkers();
@@ -972,14 +972,14 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  Reset(ID3D12CommandAllocator *pAllocator, ID3D12PipelineState *pInitialState) {
+  Reset(ID3D12CommandAllocator *pAllocator, ID3D12PipelineState *pInitialState) override {
     if (encoder_count == std::numeric_limits<size_t>::max())
       return FAIL(E_FAIL);
     return FAILED(recording_error_) ? recording_error_ : Initialize(pAllocator, pInitialState);
   };
 
   void STDMETHODCALLTYPE
-  ClearState(ID3D12PipelineState *pPipelineState) {
+  ClearState(ID3D12PipelineState *pPipelineState) override {
     // predication is state too
     EndPredication();
     allocator_->InvalidateCurrentPass();
@@ -1979,7 +1979,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  DrawInstanced(UINT VertexCountPerInstance, UINT InstanceCount, UINT StartVertexLocation, UINT StartInstanceLocation) {
+  DrawInstanced(UINT VertexCountPerInstance, UINT InstanceCount, UINT StartVertexLocation, UINT StartInstanceLocation) override {
     if (Bundled() && Record([=](auto *l) { l->DrawInstanced(VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation); }))
       return;
     // a draw of nothing: Metal takes no empty draw
@@ -2032,7 +2032,7 @@ public:
   DrawIndexedInstanced(
       UINT IndexCountPerInstance, UINT InstanceCount, UINT StartVertexLocation, INT BaseVertexLocation,
       UINT StartInstanceLocation
-  ) {
+  ) override {
     if (Bundled() && Record([=](auto *l) { l->DrawIndexedInstanced(IndexCountPerInstance, InstanceCount, StartVertexLocation, BaseVertexLocation, StartInstanceLocation); }))
       return;
     if (!IndexCountPerInstance || !InstanceCount)
@@ -2215,7 +2215,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  Dispatch(UINT X, UINT Y, UINT Z) {
+  Dispatch(UINT X, UINT Y, UINT Z) override {
     if (Bundled() && Record([=](auto *l) { l->Dispatch(X, Y, Z); }))
       return;
     if (pso_compute_ && pso_compute_->groups_work_together) {
@@ -2332,7 +2332,7 @@ public:
   void STDMETHODCALLTYPE
   CopyBufferRegion(
       ID3D12Resource *pDstBuffer, UINT64 DstOffset, ID3D12Resource *pSrcBuffer, UINT64 SrcOffset, UINT64 ByteCount
-  ) {
+  ) override {
     PredicatedPasses predicated(this);
     if (!pDstBuffer || !pSrcBuffer)
       return;
@@ -2430,7 +2430,7 @@ public:
   CopyTextureRegion(
       const D3D12_TEXTURE_COPY_LOCATION *pDst, UINT DstX, UINT DstY, UINT DstZ, const D3D12_TEXTURE_COPY_LOCATION *pSrc,
       const D3D12_BOX *pSrcBox
-  ) {
+  ) override {
     PredicatedPasses predicated(this);
     if (!pDst || !pSrc)
       return;
@@ -2715,7 +2715,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  CopyResource(ID3D12Resource *pDstResource, ID3D12Resource *pSrcResource) {
+  CopyResource(ID3D12Resource *pDstResource, ID3D12Resource *pSrcResource) override {
     PredicatedPasses predicated(this);
     auto *pDst = static_cast<MTLD3D12Resource *>(pDstResource);
     auto *pSrc = static_cast<MTLD3D12Resource *>(pSrcResource);
@@ -2788,7 +2788,7 @@ public:
       ID3D12Resource *tiled_resource, const D3D12_TILED_RESOURCE_COORDINATE *tile_region_start_coordinate,
       const D3D12_TILE_REGION_SIZE *tile_region_size, ID3D12Resource *buffer, UINT64 buffer_offset,
       D3D12_TILE_COPY_FLAGS flags
-  ) {
+  ) override {
     PredicatedPasses predicated(this);
     if (!PreBlit())
       return;
@@ -2868,14 +2868,14 @@ public:
   void STDMETHODCALLTYPE ResolveSubresource(
       ID3D12Resource *pDstResource, UINT DstSubresource, ID3D12Resource *pSrcResource, UINT SrcSubresource,
       DXGI_FORMAT Format
-  ) {
+  ) override {
     ResolveSubresourceRegion(
         pDstResource, DstSubresource, 0, 0, pSrcResource, SrcSubresource, nullptr, Format, D3D12_RESOLVE_MODE_AVERAGE
     );
   };
 
   void STDMETHODCALLTYPE
-  IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY Topology) {
+  IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY Topology) override {
     if (Bundled() && Record([=](auto *l) { l->IASetPrimitiveTopology(Topology); }))
       return;
     // a geometry pipeline has one Metal pipeline for strips and one for lists. a pipeline without a geometry shader
@@ -2893,7 +2893,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  RSSetViewports(UINT NumViewports, const D3D12_VIEWPORT *pViewports) {
+  RSSetViewports(UINT NumViewports, const D3D12_VIEWPORT *pViewports) override {
     if (NumViewports > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE)
       return;
     num_viewports = NumViewports;
@@ -2905,7 +2905,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  RSSetScissorRects(UINT NumRects, const D3D12_RECT *rects) {
+  RSSetScissorRects(UINT NumRects, const D3D12_RECT *rects) override {
     if (NumRects > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE)
       return;
     num_scissors = NumRects;
@@ -2916,7 +2916,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  OMSetBlendFactor(const FLOAT BlendFactors[4]) {
+  OMSetBlendFactor(const FLOAT BlendFactors[4]) override {
     // NULL is a factor of ones
     decltype(blend_factor_) f;
     BlendFactors ? (void)std::copy_n(BlendFactors, std::size(f), f) : (void)std::fill_n(f, std::size(f), 1.0f);
@@ -2927,12 +2927,12 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  OMSetStencilRef(UINT StencilRef) {
+  OMSetStencilRef(UINT StencilRef) override {
     OMSetFrontAndBackStencilRef(StencilRef, StencilRef);
   };
 
   void STDMETHODCALLTYPE
-  OMSetFrontAndBackStencilRef(UINT FrontStencilRef, UINT BackStencilRef) {
+  OMSetFrontAndBackStencilRef(UINT FrontStencilRef, UINT BackStencilRef) override {
     if (Bundled() && Record([=](auto *l) { l->OMSetFrontAndBackStencilRef(FrontStencilRef, BackStencilRef); }))
       return;
     if (stencil_ref_ == (UINT8)FrontStencilRef && back_stencil_ref_ == (UINT8)BackStencilRef)
@@ -2943,7 +2943,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  RSSetDepthBias(FLOAT DepthBias, FLOAT DepthBiasClamp, FLOAT SlopeScaledDepthBias) {
+  RSSetDepthBias(FLOAT DepthBias, FLOAT DepthBiasClamp, FLOAT SlopeScaledDepthBias) override {
     if (Bundled() && Record([=](auto *l) { l->RSSetDepthBias(DepthBias, DepthBiasClamp, SlopeScaledDepthBias); }))
       return;
     depth_bias_ = {DepthBias, DepthBiasClamp, SlopeScaledDepthBias};
@@ -2951,14 +2951,14 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  IASetIndexBufferStripCutValue(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue) {
+  IASetIndexBufferStripCutValue(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue) override {
     // geometry shader pipelines build the cut in, so OPTIONS15 reports no DynamicIndexBufferStripCutSupported
     ERR("IASetIndexBufferStripCutValue: dynamic strip cut is not supported");
     recording_error_ = E_INVALIDARG;
   }
 
   void STDMETHODCALLTYPE
-  SetPipelineState(ID3D12PipelineState *pPSO) {
+  SetPipelineState(ID3D12PipelineState *pPSO) override {
     if (Bundled() && Record([pso = Com<ID3D12PipelineState>(pPSO)](auto *l) { l->SetPipelineState(pso.ptr()); }))
       return;
     if (!pPSO) {
@@ -3069,7 +3069,7 @@ public:
     return true;
   }
 
-  void STDMETHODCALLTYPE ResourceBarrier(UINT Count, const D3D12_RESOURCE_BARRIER *barriers) {
+  void STDMETHODCALLTYPE ResourceBarrier(UINT Count, const D3D12_RESOURCE_BARRIER *barriers) override {
     WriteMarkers();
     constexpr auto pixels = D3D12_RESOURCE_STATE_RENDER_TARGET | D3D12_RESOURCE_STATE_DEPTH_WRITE |
                             D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -3147,12 +3147,12 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  ExecuteBundle(ID3D12GraphicsCommandList *CommandList) {
+  ExecuteBundle(ID3D12GraphicsCommandList *CommandList) override {
     for (auto &call : static_cast<MTLD3D12GraphicsCommandListImpl *>(CommandList)->bundle_)
       call(this);
   };
 
-  void STDMETHODCALLTYPE SetDescriptorHeaps(UINT HeapCount, ID3D12DescriptorHeap *const *Heaps) {
+  void STDMETHODCALLTYPE SetDescriptorHeaps(UINT HeapCount, ID3D12DescriptorHeap *const *Heaps) override {
     if (Bundled() && Record([heaps = std::vector<Com<ID3D12DescriptorHeap>>(Heaps, Heaps + HeapCount)](auto *l) { l->SetDescriptorHeaps(heaps.size(), reinterpret_cast<ID3D12DescriptorHeap *const *>(heaps.data())); }))
       return;
     // tables carry their full address in their root argument; only directly indexed heaps need the heaps
@@ -3168,7 +3168,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  SetComputeRootSignature(ID3D12RootSignature *pRootSignature) {
+  SetComputeRootSignature(ID3D12RootSignature *pRootSignature) override {
     if (Bundled() && Record([rs = Com<ID3D12RootSignature>(pRootSignature)](auto *l) { l->SetComputeRootSignature(rs.ptr()); }))
       return;
     if (rootsig_compute_.ptr() == pRootSignature)
@@ -3187,7 +3187,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  SetGraphicsRootSignature(ID3D12RootSignature *pRootSignature) {
+  SetGraphicsRootSignature(ID3D12RootSignature *pRootSignature) override {
     if (Bundled() && Record([rs = Com<ID3D12RootSignature>(pRootSignature)](auto *l) { l->SetGraphicsRootSignature(rs.ptr()); }))
       return;
     if (rootsig_graphics_.ptr() == pRootSignature)
@@ -3238,47 +3238,47 @@ public:
     RootArgumentsChanged(dirty);
   }
 
-  void STDMETHODCALLTYPE SetComputeRootDescriptorTable(UINT Index, D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor) {
+  void STDMETHODCALLTYPE SetComputeRootDescriptorTable(UINT Index, D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor) override {
     if (Bundled() && Record([=](auto *l) { l->SetComputeRootDescriptorTable(Index, BaseDescriptor); }))
       return;
     SetRootQword(rootsig_compute_.ptr(), rootarg_compute_staging_, DirtyState::ComputeRootArguments, Index, BaseDescriptor.ptr);
   };
 
   void STDMETHODCALLTYPE
-  SetGraphicsRootDescriptorTable(UINT Index, D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor) {
+  SetGraphicsRootDescriptorTable(UINT Index, D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor) override {
     if (Bundled() && Record([=](auto *l) { l->SetGraphicsRootDescriptorTable(Index, BaseDescriptor); }))
       return;
     SetRootQword(rootsig_graphics_.ptr(), rootarg_graphics_staging_, DirtyState::GraphicsRootArguments, Index, BaseDescriptor.ptr);
   };
 
-  void STDMETHODCALLTYPE SetComputeRoot32BitConstant(UINT Index, UINT Data, UINT DstOffset) {
+  void STDMETHODCALLTYPE SetComputeRoot32BitConstant(UINT Index, UINT Data, UINT DstOffset) override {
     if (Bundled() && Record([=](auto *l) { l->SetComputeRoot32BitConstant(Index, Data, DstOffset); }))
       return;
     SetRootConstants(rootsig_compute_.ptr(), rootarg_compute_staging_, DirtyState::ComputeRootArguments, Index, 1, &Data, DstOffset);
   };
 
   void STDMETHODCALLTYPE
-  SetGraphicsRoot32BitConstant(UINT Index, UINT Data, UINT DstOffset) {
+  SetGraphicsRoot32BitConstant(UINT Index, UINT Data, UINT DstOffset) override {
     if (Bundled() && Record([=](auto *l) { l->SetGraphicsRoot32BitConstant(Index, Data, DstOffset); }))
       return;
     SetRootConstants(rootsig_graphics_.ptr(), rootarg_graphics_staging_, DirtyState::GraphicsRootArguments, Index, 1, &Data, DstOffset);
   };
 
   void STDMETHODCALLTYPE
-  SetComputeRoot32BitConstants(UINT Index, UINT ConstantCount, const void *pData, UINT DstOffset) {
+  SetComputeRoot32BitConstants(UINT Index, UINT ConstantCount, const void *pData, UINT DstOffset) override {
     if (Bundled() && Record([=, v = std::vector((const UINT *)pData, (const UINT *)pData + ConstantCount)](auto *l) { l->SetComputeRoot32BitConstants(Index, ConstantCount, v.data(), DstOffset); }))
       return;
     SetRootConstants(rootsig_compute_.ptr(), rootarg_compute_staging_, DirtyState::ComputeRootArguments, Index, ConstantCount, pData, DstOffset);
   };
 
   void STDMETHODCALLTYPE
-  SetGraphicsRoot32BitConstants(UINT Index, UINT ConstantCount, const void *pData, UINT DstOffset) {
+  SetGraphicsRoot32BitConstants(UINT Index, UINT ConstantCount, const void *pData, UINT DstOffset) override {
     if (Bundled() && Record([=, v = std::vector((const UINT *)pData, (const UINT *)pData + ConstantCount)](auto *l) { l->SetGraphicsRoot32BitConstants(Index, ConstantCount, v.data(), DstOffset); }))
       return;
     SetRootConstants(rootsig_graphics_.ptr(), rootarg_graphics_staging_, DirtyState::GraphicsRootArguments, Index, ConstantCount, pData, DstOffset);
   };
 
-  void STDMETHODCALLTYPE SetComputeRootConstantBufferView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) {
+  void STDMETHODCALLTYPE SetComputeRootConstantBufferView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) override {
     if (Bundled() && Record([=](auto *l) { l->SetComputeRootConstantBufferView(Index, VA); }))
       return;
     SetRootQword(
@@ -3288,7 +3288,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  SetGraphicsRootConstantBufferView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) {
+  SetGraphicsRootConstantBufferView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) override {
     if (Bundled() && Record([=](auto *l) { l->SetGraphicsRootConstantBufferView(Index, VA); }))
       return;
     SetRootQword(
@@ -3297,34 +3297,34 @@ public:
     );
   };
 
-  void STDMETHODCALLTYPE SetComputeRootShaderResourceView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) {
+  void STDMETHODCALLTYPE SetComputeRootShaderResourceView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) override {
     if (Bundled() && Record([=](auto *l) { l->SetComputeRootShaderResourceView(Index, VA); }))
       return;
     SetRootQword(rootsig_compute_.ptr(), rootarg_compute_staging_, DirtyState::ComputeRootArguments, Index, VA);
   };
 
   void STDMETHODCALLTYPE
-  SetGraphicsRootShaderResourceView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) {
+  SetGraphicsRootShaderResourceView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) override {
     if (Bundled() && Record([=](auto *l) { l->SetGraphicsRootShaderResourceView(Index, VA); }))
       return;
     SetRootQword(rootsig_graphics_.ptr(), rootarg_graphics_staging_, DirtyState::GraphicsRootArguments, Index, VA);
   };
 
-  void STDMETHODCALLTYPE SetComputeRootUnorderedAccessView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) {
+  void STDMETHODCALLTYPE SetComputeRootUnorderedAccessView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) override {
     if (Bundled() && Record([=](auto *l) { l->SetComputeRootUnorderedAccessView(Index, VA); }))
       return;
     SetRootQword(rootsig_compute_.ptr(), rootarg_compute_staging_, DirtyState::ComputeRootArguments, Index, VA);
   };
 
   void STDMETHODCALLTYPE
-  SetGraphicsRootUnorderedAccessView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) {
+  SetGraphicsRootUnorderedAccessView(UINT Index, D3D12_GPU_VIRTUAL_ADDRESS VA) override {
     if (Bundled() && Record([=](auto *l) { l->SetGraphicsRootUnorderedAccessView(Index, VA); }))
       return;
     SetRootQword(rootsig_graphics_.ptr(), rootarg_graphics_staging_, DirtyState::GraphicsRootArguments, Index, VA);
   };
 
   void STDMETHODCALLTYPE
-  IASetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW *pView) {
+  IASetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW *pView) override {
     if (Bundled() && Record([view = pView ? std::optional(*pView) : std::nullopt](auto *l) { l->IASetIndexBuffer(view ? &*view : nullptr); }))
       return;
     // the view bound already: games set one per draw
@@ -3345,7 +3345,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  IASetVertexBuffers(UINT StartSlot, UINT Count, const D3D12_VERTEX_BUFFER_VIEW *Views) {
+  IASetVertexBuffers(UINT StartSlot, UINT Count, const D3D12_VERTEX_BUFFER_VIEW *Views) override {
     // a range past the last slot is invalid, and changes no slot, as in vkd3d-proton
     if (StartSlot >= vertex_buffers_.size() || Count > vertex_buffers_.size() - StartSlot)
       return;
@@ -3362,7 +3362,7 @@ public:
     dirty_state_.set(DirtyState::VertexBuffer);
   };
 
-  void STDMETHODCALLTYPE SOSetTargets(UINT StartSlot, UINT Count, const D3D12_STREAM_OUTPUT_BUFFER_VIEW *Views) {
+  void STDMETHODCALLTYPE SOSetTargets(UINT StartSlot, UINT Count, const D3D12_STREAM_OUTPUT_BUFFER_VIEW *Views) override {
     for (UINT i = 0; i < Count && StartSlot + i < std::size(so_views_); i++)
       so_views_[StartSlot + i] = Views ? Views[i] : D3D12_STREAM_OUTPUT_BUFFER_VIEW{};
   };
@@ -3371,7 +3371,7 @@ public:
   OMSetRenderTargets(
       UINT NumRTV, const D3D12_CPU_DESCRIPTOR_HANDLE *RTVs, WINBOOL SingleDescriptor,
       const D3D12_CPU_DESCRIPTOR_HANDLE *DSV
-  ) {
+  ) override {
     bool changed = num_rtvs != NumRTV;
     // the views as they are now: a descriptor written over after this call is not the bound one
     auto bind = [&](MTL_RENDER_TARGET_DESC &bound, D3D12_CPU_DESCRIPTOR_HANDLE handle) {
@@ -3396,7 +3396,7 @@ public:
   ClearDepthStencilView(
       D3D12_CPU_DESCRIPTOR_HANDLE DSV, D3D12_CLEAR_FLAGS Flags, FLOAT Depth, UINT8 Stencil, UINT RectCount,
       const D3D12_RECT *Rects
-  ) {
+  ) override {
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetRenderTargetHeap(device_, DSV);
     auto AttachmentDesc = Heap->GetRenderTarget(Index);
@@ -3459,7 +3459,7 @@ public:
   void STDMETHODCALLTYPE
   ClearRenderTargetView(
       D3D12_CPU_DESCRIPTOR_HANDLE RTV, const FLOAT Color[4], UINT RectCount, const D3D12_RECT *Rects
-  ) {
+  ) override {
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetRenderTargetHeap(device_, RTV);
     auto AttachmentDesc = Heap->GetRenderTarget(Index);
@@ -3711,7 +3711,7 @@ public:
   ClearUnorderedAccessViewUint(
       D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle, D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle, ID3D12Resource *pResource,
       const UINT Values[4], UINT RectCount, const D3D12_RECT *pRects
-  ) {
+  ) override {
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetShaderVisibleDescriptorHeap(device_, CpuHandle);
     auto &Descriptor = Heap->GetDescriptor(Index);
@@ -3755,7 +3755,7 @@ public:
   ClearUnorderedAccessViewFloat(
       D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle, D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle, ID3D12Resource *pResource,
       const float Values[4], UINT RectCount, const D3D12_RECT *pRects
-  ) {
+  ) override {
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetShaderVisibleDescriptorHeap(device_, CpuHandle);
     auto &Descriptor = Heap->GetDescriptor(Index);
@@ -3791,7 +3791,7 @@ public:
   // DiscardResource), so the render pass that drew it last, with nothing after it, stores none of it (an MSAA target
   // resolved in that pass resolves without storing its samples), and the next one loads none. a discard of rectangles
   // or of some subresources does nothing, as before
-  void STDMETHODCALLTYPE DiscardResource(ID3D12Resource *pResource, const D3D12_DISCARD_REGION *pRegion) {
+  void STDMETHODCALLTYPE DiscardResource(ID3D12Resource *pResource, const D3D12_DISCARD_REGION *pRegion) override {
     auto resource = static_cast<MTLD3D12Resource *>(pResource);
     if (!resource || !resource->texture || Bundled() || !DiscardsTextures())
       return;
@@ -3857,7 +3857,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  BeginQuery(ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT Index) {
+  BeginQuery(ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT Index) override {
     // a bundle's query is the calling list's: it counts that list's draws, the bundle's among them
     if (Bundled() &&
         Record([=, heap = Com<ID3D12QueryHeap>(pHeap)](auto *l) { l->BeginQuery(heap.ptr(), Type, Index); }))
@@ -3902,7 +3902,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  EndQuery(ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT Index) {
+  EndQuery(ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT Index) override {
     if (Bundled() && Record([=, heap = Com<ID3D12QueryHeap>(pHeap)](auto *l) { l->EndQuery(heap.ptr(), Type, Index); }))
       return;
     OrderingPoint();
@@ -3984,7 +3984,7 @@ public:
   ResolveQueryData(
       ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT StartIndex, UINT QueryCount, ID3D12Resource *pDstBuffer,
       UINT64 AlignedDstBufferOffset
-  ) {
+  ) override {
     OrderingPoint();
     auto heap = static_cast<MTLD3D12QueryHeap *>(pHeap);
     auto resource = static_cast<MTLD3D12Resource *>(pDstBuffer);
@@ -4095,7 +4095,7 @@ public:
   };
 
   // the region's work follows the predicate as it is when the region starts
-  void STDMETHODCALLTYPE SetPredication(ID3D12Resource *pBuffer, UINT64 AlignedBufferOffset, D3D12_PREDICATION_OP Op) {
+  void STDMETHODCALLTYPE SetPredication(ID3D12Resource *pBuffer, UINT64 AlignedBufferOffset, D3D12_PREDICATION_OP Op) override {
     OrderingPoint();
     EndPredication();
     if (!pBuffer)
@@ -4149,10 +4149,10 @@ public:
   }
 
   // a marker is an instant, between passes or inside one, which no pass is named by
-  void STDMETHODCALLTYPE SetMarker(UINT Metadata, const void *data, UINT size) {};
+  void STDMETHODCALLTYPE SetMarker(UINT Metadata, const void *data, UINT size) override {};
 
   void STDMETHODCALLTYPE
-  BeginEvent(UINT Metadata, const void *data, UINT size) {
+  BeginEvent(UINT Metadata, const void *data, UINT size) override {
     if (!diag::events)
       return;
     auto bytes = static_cast<const char *>(data);
@@ -4165,7 +4165,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  EndEvent() {
+  EndEvent() override {
     if (!diag::events || Record([](auto *l) { l->EndEvent(); }) || events_.empty())
       return;
     events_.pop_back();
@@ -4179,7 +4179,7 @@ public:
   void STDMETHODCALLTYPE ExecuteIndirect(
       ID3D12CommandSignature *pCommandSignature, UINT MaxCommandCount, ID3D12Resource *pArgBuffer,
       UINT64 ArgBufferOffset, ID3D12Resource *pCountBuffer, UINT64 CountBufferOffset
-  ) {
+  ) override {
     if (Bundled() && Record([=, sig = Com<ID3D12CommandSignature>(pCommandSignature), args = Com<ID3D12Resource>(pArgBuffer), count = Com<ID3D12Resource>(pCountBuffer)](auto *l) { l->ExecuteIndirect(sig.ptr(), MaxCommandCount, args.ptr(), ArgBufferOffset, count.ptr(), CountBufferOffset); }))
       return;
     auto sig = static_cast<MTLD3D12CommandSignature *>(pCommandSignature);
@@ -4552,7 +4552,7 @@ public:
   AtomicCopyBufferUINT(
       ID3D12Resource *pDstBuffer, UINT64 DstOffset, ID3D12Resource *pSrcBuffer, UINT64 SrcOffset, UINT Dependencies,
       ID3D12Resource *const *ppDependentResources, const D3D12_SUBRESOURCE_RANGE_UINT64 *pDependentSubresourceRanges
-  ) {
+  ) override {
     // the element is copied whole, after the list's work before it, which is where its dependents were written
     CopyBufferRegion(pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, sizeof(UINT));
   }
@@ -4561,12 +4561,12 @@ public:
   AtomicCopyBufferUINT64(
       ID3D12Resource *pDstBuffer, UINT64 DstOffset, ID3D12Resource *pSrcBuffer, UINT64 SrcOffset, UINT Dependencies,
       ID3D12Resource *const *ppDependentResources, const D3D12_SUBRESOURCE_RANGE_UINT64 *pDependentSubresourceRanges
-  ) {
+  ) override {
     CopyBufferRegion(pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, sizeof(UINT64));
   }
 
   void STDMETHODCALLTYPE
-  OMSetDepthBounds(FLOAT Min, FLOAT Max) {
+  OMSetDepthBounds(FLOAT Min, FLOAT Max) override {
     if (Bundled() && Record([=](auto *l) { l->OMSetDepthBounds(Min, Max); }))
       return;
     float bounds[2] = {std::isnan(Min) ? 0.0f : Min, std::isnan(Max) ? 0.0f : Max};
@@ -4577,7 +4577,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  SetSamplePositions(UINT NumSamplesPerPixel, UINT NumPixels, D3D12_SAMPLE_POSITION *pSamplePositions) {
+  SetSamplePositions(UINT NumSamplesPerPixel, UINT NumPixels, D3D12_SAMPLE_POSITION *pSamplePositions) override {
     // one pattern for every pixel (tier 1), or none to take the standard one back; other calls are dropped
     bool reset = !NumSamplesPerPixel && !NumPixels;
     if (!reset && (NumPixels != 1 || !std::has_single_bit(NumSamplesPerPixel) ||
@@ -4673,7 +4673,7 @@ public:
   ResolveSubresourceRegion(
       ID3D12Resource *pDstResource, UINT DstSubresource, UINT DstX, UINT DstY, ID3D12Resource *pSrcResource,
       UINT SrcSubresource, D3D12_RECT *pSrcRect, DXGI_FORMAT Format, D3D12_RESOLVE_MODE ResolveMode
-  ) {
+  ) override {
     // a source with one sample has nothing to resolve: its texels are the result, so it is a copy of the rectangle
     // (Metal resolves only multisampled attachments). CopyTextureRegion opens the predication of its own
     if (ResolveMode != D3D12_RESOLVE_MODE_ENCODE_SAMPLER_FEEDBACK &&
@@ -4780,7 +4780,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  SetViewInstanceMask(UINT Mask) {
+  SetViewInstanceMask(UINT Mask) override {
     // no pipeline has view instancing (ViewInstancingTier is NOT_SUPPORTED): "The view instance mask is only honored
     // by PSOs that have view instancing enabled" (D3D12 View Instancing)
   }
@@ -4788,7 +4788,7 @@ public:
   void STDMETHODCALLTYPE
   WriteBufferImmediate(
       UINT Count, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER *pParams, const D3D12_WRITEBUFFERIMMEDIATE_MODE *pModes
-  ) {
+  ) override {
     if (pModes)
       for (auto mode : std::span(pModes, Count))
         if (mode != D3D12_WRITEBUFFERIMMEDIATE_MODE_DEFAULT && mode != D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN &&
@@ -4873,14 +4873,14 @@ public:
 
   // protected sessions are never created (the device reports none), so the only session is none
   void STDMETHODCALLTYPE
-  SetProtectedResourceSession(ID3D12ProtectedResourceSession *pSession) {}
+  SetProtectedResourceSession(ID3D12ProtectedResourceSession *pSession) override {}
 
   // a render pass is its targets and their clears; EndRenderPass runs its resolves
   void STDMETHODCALLTYPE
   BeginRenderPass(
       UINT NumRenderTargets, const D3D12_RENDER_PASS_RENDER_TARGET_DESC *pRenderTargets,
       const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC *pDepthStencil, D3D12_RENDER_PASS_FLAGS Flags
-  ) {
+  ) override {
     D3D12_CPU_DESCRIPTOR_HANDLE targets[D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT];
     UINT target_count = 0;
     pass_resolves_.clear();
@@ -4981,7 +4981,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  EndRenderPass() {
+  EndRenderPass() override {
     for (auto &[r, sub] : pass_resolves_)
       ResolveSubresourceRegion(
           r.pDstResource, sub.DstSubresource, sub.DstX, sub.DstY, r.pSrcResource, sub.SrcSubresource,
@@ -4998,12 +4998,12 @@ public:
   // the device reports no meta commands, ray tracing, variable rate shading or mesh shaders, so a valid list never
   // records these
   void STDMETHODCALLTYPE
-  InitializeMetaCommand(ID3D12MetaCommand *, const void *, SIZE_T) {
+  InitializeMetaCommand(ID3D12MetaCommand *, const void *, SIZE_T) override {
     ERR("InitializeMetaCommand: meta commands are not supported");
   }
 
   void STDMETHODCALLTYPE
-  ExecuteMetaCommand(ID3D12MetaCommand *, const void *, SIZE_T) {
+  ExecuteMetaCommand(ID3D12MetaCommand *, const void *, SIZE_T) override {
     ERR("ExecuteMetaCommand: meta commands are not supported");
   }
 
@@ -5195,7 +5195,7 @@ public:
   BuildRaytracingAccelerationStructure(
       const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC *pDesc, UINT NumPostbuildInfoDescs,
       const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC *pPostbuildInfoDescs
-  ) {
+  ) override {
     auto &inputs = pDesc->Inputs;
     bool top = inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
     // an update refits its source, into itself or into a structure of its size
@@ -5361,7 +5361,7 @@ public:
   EmitRaytracingAccelerationStructurePostbuildInfo(
       const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC *pDesc, UINT NumSourceAccelerationStructures,
       const D3D12_GPU_VIRTUAL_ADDRESS *pSourceAccelerationStructureData
-  ) {
+  ) override {
     std::vector<std::shared_ptr<AccelerationStructure>> structures;
     for (auto address : std::span(pSourceAccelerationStructureData, NumSourceAccelerationStructures))
       structures.push_back(device_->LookupAccelerationStructure(address));
@@ -5507,7 +5507,7 @@ public:
   CopyRaytracingAccelerationStructure(
       D3D12_GPU_VIRTUAL_ADDRESS DestAccelerationStructureData, D3D12_GPU_VIRTUAL_ADDRESS SourceAccelerationStructureData,
       D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE Mode
-  ) {
+  ) override {
     // a serialized structure is not one yet; the queue builds it, which is not this copy
     bool deserialize = Mode == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_DESERIALIZE;
     bool compact = Mode == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT;
@@ -5556,7 +5556,7 @@ public:
   // SetPipelineState1 and DispatchRays "can be called from graphics or compute command lists and bundles" (DXR spec,
   // "SetPipelineState1", "DispatchRays"), the calls on acceleration structures "not from bundles"
   void STDMETHODCALLTYPE
-  SetPipelineState1(ID3D12StateObject *pStateObject) {
+  SetPipelineState1(ID3D12StateObject *pStateObject) override {
     if (Bundled() && Record([state = Com<ID3D12StateObject>(pStateObject)](auto *l) { l->SetPipelineState1(state.ptr()); }))
       return;
     state_object_ = static_cast<MTLD3D12StateObject *>(pStateObject);
@@ -5565,7 +5565,7 @@ public:
   // the state object's kernel runs a thread per ray generation shader invocation, with the compute root signature's
   // arguments as the global ones (dispatch_rays in mullion_command.metal)
   void STDMETHODCALLTYPE
-  DispatchRays(const D3D12_DISPATCH_RAYS_DESC *pDesc) {
+  DispatchRays(const D3D12_DISPATCH_RAYS_DESC *pDesc) override {
     if (Bundled() && Record([desc = *pDesc](auto *l) { l->DispatchRays(&desc); }))
       return;
     // a grid with a dimension of zero has no ray generation shader to run: Metal takes no empty grid
@@ -5642,7 +5642,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  RSSetShadingRate(D3D12_SHADING_RATE BaseShadingRate, const D3D12_SHADING_RATE_COMBINER *pCombinerArray) {
+  RSSetShadingRate(D3D12_SHADING_RATE BaseShadingRate, const D3D12_SHADING_RATE_COMBINER *pCombinerArray) override {
     if (Record([=, combiners = pCombinerArray ? std::array{pCombinerArray[0], pCombinerArray[1]}
                                               : std::array<D3D12_SHADING_RATE_COMBINER, 2>{}](auto *l) {
           l->RSSetShadingRate(BaseShadingRate, pCombinerArray ? combiners.data() : nullptr);
@@ -5657,7 +5657,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  RSSetShadingRateImage(ID3D12Resource *pShadingRateImage) {
+  RSSetShadingRateImage(ID3D12Resource *pShadingRateImage) override {
     if (Record([=](auto *l) { l->RSSetShadingRateImage(pShadingRateImage); }))
       return;
     shading_rate_image_ = static_cast<MTLD3D12Resource *>(pShadingRateImage);
@@ -5666,7 +5666,7 @@ public:
   }
 
   void STDMETHODCALLTYPE
-  DispatchMesh(UINT ThreadGroupCountX, UINT ThreadGroupCountY, UINT ThreadGroupCountZ) {
+  DispatchMesh(UINT ThreadGroupCountX, UINT ThreadGroupCountY, UINT ThreadGroupCountZ) override {
     if (Bundled() && Record([=](auto *l) { l->DispatchMesh(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ); }))
       return;
     if (!pso_graphics_ || !pso_graphics_->mesh_shader || !ThreadGroupCountX || !ThreadGroupCountY || !ThreadGroupCountZ)
@@ -5713,7 +5713,7 @@ public:
 
   // enhanced barriers order work as ResourceBarrier does
   void STDMETHODCALLTYPE
-  Barrier(UINT32 NumBarrierGroups, const D3D12_BARRIER_GROUP *pBarrierGroups) {
+  Barrier(UINT32 NumBarrierGroups, const D3D12_BARRIER_GROUP *pBarrierGroups) override {
     WriteMarkers();
     barrier_serial_++;
     constexpr auto pixels =

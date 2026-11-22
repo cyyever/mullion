@@ -651,7 +651,7 @@ public:
       if (!holding_ && !gate_->closed && !inflight_cmdbuf_count_.load())
         return;
     }
-    Hold([this, kept]() mutable {
+    Hold([this, kept = kept]() mutable {
       // ends after the lock, where the work has completed already
       std::function<void()> keeps = [kept = std::move(kept)] {};
       std::scoped_lock lock(mutex_commit_);
@@ -937,6 +937,7 @@ private:
           for (auto &[label, most] : inflight.most)
             report(str::format("indirect commands of ", label, ": ", most->words[5], " commands of at most ",
                                most->call->max_count, most->call->max_count_buffer ? " with a count buffer" : "",
+                               // NOLINTNEXTLINE(performance-no-int-to-ptr) The pointer is only formatted for logging.
                                ", arguments at ", (void *)most->call->argument_buffer, "; the most instances ",
                                most->words[0], ", vertices or indices ", most->words[1], ", start ", most->words[2],
                                ", base vertex ", most->words[3], ", start instance ", most->words[4]));
@@ -1319,7 +1320,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -1358,7 +1359,7 @@ public:
       const D3D12_TILE_REGION_SIZE *region_sizes, ID3D12Heap *heap, UINT range_count,
       const D3D12_TILE_RANGE_FLAGS *range_flags, const UINT *heap_range_offsets, const UINT *range_tile_counts,
       D3D12_TILE_MAPPING_FLAGS flags
-  ) {
+  ) override {
     if (trace::On(trace::Resource)) {
       // where the regions start, and their sizes in tiles: up to 8 of them, every one with heavy
       std::string regions;
@@ -1453,7 +1454,7 @@ public:
       ID3D12Resource *dst_resource, const D3D12_TILED_RESOURCE_COORDINATE *dst_region_start_coordinate,
       ID3D12Resource *src_resource, const D3D12_TILED_RESOURCE_COORDINATE *src_region_start_coordinate,
       const D3D12_TILE_REGION_SIZE *region_size, D3D12_TILE_MAPPING_FLAGS flags
-  ) {
+  ) override {
     TRACE_IN(Resource, "queue ", this, ": CopyTileMappings from ", src_resource, " to ", dst_resource, ", ",
              region_size ? region_size->NumTiles : 0u, " tiles, flags ", uint32_t(flags));
     Tiling source(src_resource), destination(dst_resource);
@@ -1505,7 +1506,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  ExecuteCommandLists(UINT Count, ID3D12CommandList *const *ppCommandLists) {
+  ExecuteCommandLists(UINT Count, ID3D12CommandList *const *ppCommandLists) override {
     for (UINT i = 0; i < Count; i++)
       if (static_cast<MTLD3D12GraphicsCommandList *>(ppCommandLists[i])->encoder_count ==
           std::numeric_limits<size_t>::max()) {
@@ -2507,17 +2508,17 @@ public:
   }
 
   // a marker is an instant, which no pass is named by
-  void STDMETHODCALLTYPE SetMarker(UINT metadata, const void *data, UINT size) {};
+  void STDMETHODCALLTYPE SetMarker(UINT metadata, const void *data, UINT size) override {};
 
   // the queue's events hold the lists executed in them: the queue's thread keeps their path, in order with the lists
   void STDMETHODCALLTYPE
-  BeginEvent(UINT metadata, const void *data, UINT size) {
+  BeginEvent(UINT metadata, const void *data, UINT size) override {
     if (diag::events)
       Hold([this, name = diag::EventName(metadata, data, size)] { diag::PushEvent(queue_events_, name); }, true);
   };
 
   void STDMETHODCALLTYPE
-  EndEvent() {
+  EndEvent() override {
     if (diag::events)
       Hold([this] { diag::PopEvent(queue_events_); }, true);
   };
@@ -2559,7 +2560,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  Signal(ID3D12Fence *pFence, UINT64 Value) {
+  Signal(ID3D12Fence *pFence, UINT64 Value) override {
     // from the CPU, once the work before has completed and what it left for the CPU is done
     auto work = [this, fence = Com<MTLD3D12Fence, false>(static_cast<MTLD3D12Fence *>(pFence)), Value] {
       // after a submission another thread is in the middle of
@@ -2585,7 +2586,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  Wait(ID3D12Fence *pFence, UINT64 Value) {
+  Wait(ID3D12Fence *pFence, UINT64 Value) override {
     auto gate = std::make_shared<Gate>();
     gate->device = device_;
     gate->closed = true;
@@ -2645,7 +2646,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  GetTimestampFrequency(UINT64 *pFrequency) {
+  GetTimestampFrequency(UINT64 *pFrequency) override {
     if (!pFrequency)
       return FAIL(E_INVALIDARG);
     *pFrequency = timestamp_frequency_;
@@ -2654,7 +2655,7 @@ public:
 
   // the GPU timestamp paired with the performance counter halfway through taking it
   HRESULT STDMETHODCALLTYPE
-  GetClockCalibration(UINT64 *gpu_timestamp, UINT64 *cpu_timestamp) {
+  GetClockCalibration(UINT64 *gpu_timestamp, UINT64 *cpu_timestamp) override {
     if (!gpu_timestamp || !cpu_timestamp)
       return FAIL(E_INVALIDARG);
     LARGE_INTEGER before, after;
@@ -2668,7 +2669,7 @@ public:
   };
 
   D3D12_COMMAND_QUEUE_DESC *STDMETHODCALLTYPE
-  GetDesc(D3D12_COMMAND_QUEUE_DESC *__ret) {
+  GetDesc(D3D12_COMMAND_QUEUE_DESC *__ret) override {
     *__ret = desc_;
     return __ret;
   };
@@ -2677,7 +2678,7 @@ public:
   CreateSwapChain(
       IDXGIFactory1 *pFactory, HWND hWnd, const DXGI_SWAP_CHAIN_DESC1 *pDesc,
       const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *pFullscreenDesc, IDXGISwapChain1 **ppSwapChain
-  ) {
+  ) override {
     if (desc_.Type != D3D12_COMMAND_LIST_TYPE_DIRECT)
       return FAIL(DXGI_ERROR_INVALID_CALL);
     if (hWnd == GetDesktopWindow())

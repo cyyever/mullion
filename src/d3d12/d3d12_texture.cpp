@@ -421,7 +421,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -442,7 +442,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  Map(UINT Subresource, const D3D12_RANGE *pReadRange, void **ppData) {
+  Map(UINT Subresource, const D3D12_RANGE *pReadRange, void **ppData) override {
     if (!IsCpuVisibleHeap(&heap_props_) || (desc_.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) ||
         desc_.SampleDesc.Count != 1)
       return FAIL(E_INVALIDARG);
@@ -463,23 +463,23 @@ public:
     return S_OK;
   };
 
-  void STDMETHODCALLTYPE Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange) {};
+  void STDMETHODCALLTYPE Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange) override {};
 
   D3D12_RESOURCE_DESC *STDMETHODCALLTYPE
-  GetDesc(D3D12_RESOURCE_DESC *__ret) {
+  GetDesc(D3D12_RESOURCE_DESC *__ret) override {
     *__ret = feedback ? WithoutMipRegion(*feedback) : desc_;
     return __ret;
   };
 
   D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
-  GetGPUVirtualAddress() {
+  GetGPUVirtualAddress() override {
     return 0;
   };
 
   HRESULT STDMETHODCALLTYPE
   WriteToSubresource(
       UINT DstSubresource, const D3D12_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcSlicePitch
-  ) {
+  ) override {
     if (desc_.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D)
       SrcSlicePitch = 0;
     if ((desc_.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) || desc_.SampleDesc.Count != 1 ||
@@ -549,7 +549,7 @@ public:
   HRESULT STDMETHODCALLTYPE
   ReadFromSubresource(
       void *pDstData, UINT DstRowPitch, UINT DstSlicePitch, UINT SrcSubresource, const D3D12_BOX *pSrcBox
-  ) {
+  ) override {
     if (desc_.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D)
       DstSlicePitch = 0;
     if ((desc_.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) || desc_.SampleDesc.Count != 1 ||
@@ -597,7 +597,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  GetHeapProperties(D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS *pFlags) {
+  GetHeapProperties(D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS *pFlags) override {
     if (reserved_)
       return FAIL(E_INVALIDARG);
     if (pHeapProps)
@@ -619,7 +619,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  CreateShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
+  CreateShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) override {
     HRESULT hr;
     D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc;
     if (!pDesc) {
@@ -821,7 +821,7 @@ public:
   HRESULT STDMETHODCALLTYPE
   CreateUnorderedAccessView(
       ID3D12Resource *pCounter, const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor
-  ) {
+  ) override {
     HRESULT hr;
     D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc;
     if (!pDesc) {
@@ -937,7 +937,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateRenderTargetView(const D3D12_RENDER_TARGET_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
+  CreateRenderTargetView(const D3D12_RENDER_TARGET_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) override {
     HRESULT hr;
     D3D12_RENDER_TARGET_VIEW_DESC ViewDesc;
     if (!pDesc) {
@@ -1092,7 +1092,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateDepthStencilView(const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
+  CreateDepthStencilView(const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) override {
     if (texture->chroma)
       return FAIL(E_INVALIDARG);
     HRESULT hr;
@@ -1221,7 +1221,7 @@ public:
   void STDMETHODCALLTYPE GetResourceTiling(
       UINT *TotalTileCount, D3D12_PACKED_MIP_INFO *PackedMipInfo, D3D12_TILE_SHAPE *StandardTileShape,
       UINT *SubresourceTilingCount, UINT FirstSubresourceTiling, D3D12_SUBRESOURCE_TILING *SubresourceTilings
-  ) {
+  ) override {
     if (!reserved_)
       return NoTiling(TotalTileCount, PackedMipInfo, StandardTileShape, SubresourceTilingCount);
     UINT mips = desc_.MipLevels, slices = desc_.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1 : desc_.DepthOrArraySize;

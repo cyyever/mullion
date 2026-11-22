@@ -188,7 +188,7 @@ public:
   }
 
   ULONG STDMETHODCALLTYPE
-  Release() {
+  Release() override {
     uint32_t refCount = --m_refCount;
     if (!refCount) {
       // pending signals keep the object alive after the last public release has unblocked its waiters
@@ -200,7 +200,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -220,14 +220,14 @@ public:
   }
 
   UINT64 STDMETHODCALLTYPE
-  GetCompletedValue() {
+  GetCompletedValue() override {
     // "if the device has been removed, the return value will be UINT64_MAX" (ID3D12Fence::GetCompletedValue)
     auto &event = completion_->event;
     return FAILED(device_->RemovedReason()) ? UINT64_MAX : event ? event.signaledValue() : completion->value.load();
   }
 
   HRESULT STDMETHODCALLTYPE
-  SetEventOnCompletion(UINT64 Value, HANDLE Event) {
+  SetEventOnCompletion(UINT64 Value, HANDLE Event) override {
     if (Logger::logLevel() == LogLevel::Trace)
       TRACE("fence ", this, " at ", completion->value.load(), ": thread ", GetCurrentThreadId(),
             Event ? " sets an event at " : " waits for ", Value);
@@ -252,7 +252,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  Signal(UINT64 Value) {
+  Signal(UINT64 Value) override {
     if (Logger::logLevel() == LogLevel::Trace)
       TRACE("fence ", this, " signaled to ", Value, " by thread ", GetCurrentThreadId());
     {
@@ -265,7 +265,7 @@ public:
   }
 
   D3D12_FENCE_FLAGS STDMETHODCALLTYPE
-  GetCreationFlags() {
+  GetCreationFlags() override {
     return flags_;
   }
 };

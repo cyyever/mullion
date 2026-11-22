@@ -796,13 +796,13 @@ public:
   };
 
   UINT STDMETHODCALLTYPE
-  GetNodeCount() {
+  GetNodeCount() override {
     return 1; // FIXME
   };
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -850,13 +850,13 @@ public:
   }
 
   D3D12_DEVICE_CONFIGURATION_DESC *STDMETHODCALLTYPE
-  GetDesc(D3D12_DEVICE_CONFIGURATION_DESC *desc) {
+  GetDesc(D3D12_DEVICE_CONFIGURATION_DESC *desc) override {
     *desc = {.Flags=D3D12_DEVICE_FLAG_NONE, .GpuBasedValidationFlags=0, .SDKVersion=D3D12_SDK_VERSION, .NumEnabledExperimentalFeatures=UINT(experimental_shader_models_)};
     return desc;
   }
 
   HRESULT STDMETHODCALLTYPE
-  GetEnabledExperimentalFeatures(GUID *guids, UINT count) {
+  GetEnabledExperimentalFeatures(GUID *guids, UINT count) override {
     if (count < UINT(experimental_shader_models_) || (experimental_shader_models_ && !guids))
       return FAIL(E_INVALIDARG);
     if (experimental_shader_models_)
@@ -865,24 +865,24 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  SerializeVersionedRootSignature(const D3D12_VERSIONED_ROOT_SIGNATURE_DESC *desc, ID3DBlob **result, ID3DBlob **error) {
+  SerializeVersionedRootSignature(const D3D12_VERSIONED_ROOT_SIGNATURE_DESC *desc, ID3DBlob **result, ID3DBlob **error) override {
     return D3D12SerializeVersionedRootSignature(desc, result, error);
   }
 
   HRESULT STDMETHODCALLTYPE
-  CreateVersionedRootSignatureDeserializer(const void *blob, SIZE_T size, REFIID riid, void **deserializer) {
+  CreateVersionedRootSignatureDeserializer(const void *blob, SIZE_T size, REFIID riid, void **deserializer) override {
     return D3D12CreateVersionedRootSignatureDeserializer(blob, size, riid, deserializer);
   }
 
   HRESULT STDMETHODCALLTYPE
   CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary(
       const void *library, SIZE_T size, LPCWSTR name, REFIID riid, void **deserializer
-  ) {
+  ) override {
     return DeserializeLibraryRootSignature(library, size, name, riid, deserializer);
   }
 
   HRESULT STDMETHODCALLTYPE
-  CreateCommandQueue(const D3D12_COMMAND_QUEUE_DESC *pDesc, REFIID riid, void **ppCommandQueue) {
+  CreateCommandQueue(const D3D12_COMMAND_QUEUE_DESC *pDesc, REFIID riid, void **ppCommandQueue) override {
     InitReturnPtr(ppCommandQueue);
     if (FAILED(removed_))
       return FAIL(DXGI_ERROR_DEVICE_REMOVED);
@@ -895,18 +895,18 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE Type, REFIID riid, void **ppCommandAllocator) {
+  CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE Type, REFIID riid, void **ppCommandAllocator) override {
     return mullion::CreateCommandAllocator(this, Type, riid, ppCommandAllocator);
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC *pDesc, REFIID riid, void **ppPipelineState) {
+  CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC *pDesc, REFIID riid, void **ppPipelineState) override {
     InitReturnPtr(ppPipelineState);
     return mullion::CreateGraphicsPipelineState(this, pDesc, riid, ppPipelineState);
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC *pDesc, REFIID riid, void **ppPipelineState) {
+  CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC *pDesc, REFIID riid, void **ppPipelineState) override {
     InitReturnPtr(ppPipelineState);
     return mullion::CreateComputePipelineState(this, pDesc, riid, ppPipelineState);
   };
@@ -915,7 +915,7 @@ public:
   CreateCommandList(
       UINT NodeMask, D3D12_COMMAND_LIST_TYPE Type, ID3D12CommandAllocator *pCommandAllocator,
       ID3D12PipelineState *pInitialPipelineState, REFIID riid, void **ppCommandList
-  ) {
+  ) override {
     if (!pCommandAllocator)
       return FAIL(E_INVALIDARG);
     auto allocator = static_cast<MTLD3D12CommandAllocator *>(pCommandAllocator);
@@ -923,7 +923,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  CheckFeatureSupport(D3D12_FEATURE Feature, void *pFeatureData, UINT DataSize) {
+  CheckFeatureSupport(D3D12_FEATURE Feature, void *pFeatureData, UINT DataSize) override {
     auto metal = GetMTLDevice();
     switch (UINT(Feature)) {
     case D3D12_FEATURE_ARCHITECTURE: {
@@ -1464,12 +1464,12 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateDescriptorHeap(const D3D12_DESCRIPTOR_HEAP_DESC *pDesc, REFIID riid, void **ppDescriptorHeap) {
+  CreateDescriptorHeap(const D3D12_DESCRIPTOR_HEAP_DESC *pDesc, REFIID riid, void **ppDescriptorHeap) override {
     return mullion::CreateDescriptorHeap(this, pDesc, riid, ppDescriptorHeap);
   };
 
   UINT STDMETHODCALLTYPE
-  GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapType) {
+  GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapType) override {
     switch (DescriptorHeapType) {
     case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
     case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
@@ -1485,12 +1485,12 @@ public:
   HRESULT STDMETHODCALLTYPE
   CreateRootSignature(
       UINT NodeMask, const void *pBytecode, SIZE_T BytecodeLength, REFIID riid, void **ppRootSignature
-  ) {
+  ) override {
     return mullion::CreateRootSignature(this, NodeMask, pBytecode, BytecodeLength, riid, ppRootSignature);
   };
 
   void STDMETHODCALLTYPE
-  CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
+  CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) override {
     TryCreateConstantBufferView(pDesc, Descriptor);
   };
 
@@ -1532,7 +1532,7 @@ public:
   void STDMETHODCALLTYPE
   CreateShaderResourceView(
       ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor
-  ) {
+  ) override {
     TryCreateShaderResourceView(pResource, pDesc, Descriptor);
   };
 
@@ -1564,7 +1564,7 @@ public:
   CreateUnorderedAccessView(
       ID3D12Resource *pResource, ID3D12Resource *pCounter, const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc,
       D3D12_CPU_DESCRIPTOR_HANDLE Descriptor
-  ) {
+  ) override {
     TryCreateUnorderedAccessView(pResource, pCounter, pDesc, Descriptor);
   };
 
@@ -1591,7 +1591,7 @@ public:
   void STDMETHODCALLTYPE
   CreateRenderTargetView(
       ID3D12Resource *pResource, const D3D12_RENDER_TARGET_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor
-  ) {
+  ) override {
     TryCreateRenderTargetView(pResource, pDesc, Descriptor);
   };
 
@@ -1616,7 +1616,7 @@ public:
   void STDMETHODCALLTYPE
   CreateDepthStencilView(
       ID3D12Resource *pResource, const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor
-  ) {
+  ) override {
     TryCreateDepthStencilView(pResource, pDesc, Descriptor);
   };
 
@@ -1639,7 +1639,7 @@ public:
   };
 
   void STDMETHODCALLTYPE
-  CreateSampler(const D3D12_SAMPLER_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) {
+  CreateSampler(const D3D12_SAMPLER_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE Descriptor) override {
     TryCreateSampler(pDesc, Descriptor);
   };
 
@@ -1682,7 +1682,7 @@ public:
       const UINT *DstDescriptorRangeSizes, UINT SrcDescriptorRangeCount,
       const D3D12_CPU_DESCRIPTOR_HANDLE *SrcDescriptorRangeOffsets, const UINT *SrcDescriptorRangeSizes,
       D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapType
-  ) {
+  ) override {
     mullion::CopyDescriptors(
         this, DstDescriptorRangeCount, DstDescriptorRangeOffsets, DstDescriptorRangeSizes, SrcDescriptorRangeCount,
         SrcDescriptorRangeOffsets, SrcDescriptorRangeSizes, DescriptorHeapType
@@ -1693,7 +1693,7 @@ public:
   CopyDescriptorsSimple(
       UINT DescriptorCount, const D3D12_CPU_DESCRIPTOR_HANDLE DstDescriptorRangeOffset,
       const D3D12_CPU_DESCRIPTOR_HANDLE SrcDescriptorRangeOffset, D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapType
-  ) {
+  ) override {
     mullion::CopyDescriptors(
         this, 1, &DstDescriptorRangeOffset, &DescriptorCount, 1, &SrcDescriptorRangeOffset, &DescriptorCount,
         DescriptorHeapType
@@ -1703,12 +1703,12 @@ public:
   D3D12_RESOURCE_ALLOCATION_INFO *STDMETHODCALLTYPE
   GetResourceAllocationInfo(
       D3D12_RESOURCE_ALLOCATION_INFO *__ret, UINT VisibleMask, UINT ResourceDestCount, const D3D12_RESOURCE_DESC *pDescs
-  ) {
+  ) override {
     return GetResourceAllocationInfo1(__ret, VisibleMask, ResourceDestCount, pDescs, nullptr);
   };
 
   D3D12_HEAP_PROPERTIES *STDMETHODCALLTYPE
-  GetCustomHeapProperties(D3D12_HEAP_PROPERTIES *__ret, UINT NodeMask, D3D12_HEAP_TYPE HeapType) {
+  GetCustomHeapProperties(D3D12_HEAP_PROPERTIES *__ret, UINT NodeMask, D3D12_HEAP_TYPE HeapType) override {
     __ret->Type = D3D12_HEAP_TYPE_CUSTOM;
     __ret->CreationNodeMask = 1;
     __ret->VisibleNodeMask = 1;
@@ -1738,7 +1738,7 @@ public:
   CreateCommittedResource(
       const D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC *pDesc,
       D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *OptimizedClearValue, REFIID riid, void **ppResource
-  ) {
+  ) override {
     InitReturnPtr(ppResource);
     HRESULT hr = S_OK;
     hr = ValidateHeapProperties(pHeapProps, HeapFlags, advertise_numa_);
@@ -1776,7 +1776,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateHeap(const D3D12_HEAP_DESC *pDesc, REFIID riid, void **ppHeap) {
+  CreateHeap(const D3D12_HEAP_DESC *pDesc, REFIID riid, void **ppHeap) override {
     HRESULT hr = S_OK;
     hr = ValidateHeapProperties(&pDesc->Properties, pDesc->Flags, advertise_numa_);
     if (FAILED(hr))
@@ -1792,7 +1792,7 @@ public:
   CreatePlacedResource(
       ID3D12Heap *pHeap, UINT64 Offset, const D3D12_RESOURCE_DESC *pDesc, D3D12_RESOURCE_STATES InitialState,
       const D3D12_CLEAR_VALUE *OptimizedClearValue, REFIID riid, void **ppResource
-  ) {
+  ) override {
     InitReturnPtr(ppResource);
     if (!pHeap)
       return FAIL(E_INVALIDARG);
@@ -1844,7 +1844,7 @@ public:
   CreateReservedResource(
       const D3D12_RESOURCE_DESC *pDesc, D3D12_RESOURCE_STATES InitialState,
       const D3D12_CLEAR_VALUE *OptimizedClearValue, REFIID riid, void **resource
-  ) {
+  ) override {
     InitReturnPtr(resource);
     if (!sparse_page_size_) {
       ERR("CreateReservedResource: tiled resources need placement sparse resources");
@@ -1866,7 +1866,7 @@ public:
   HRESULT STDMETHODCALLTYPE
   CreateSharedHandle(
       ID3D12DeviceChild *object, const SECURITY_ATTRIBUTES *attributes, DWORD access, const WCHAR *name, HANDLE *handle
-  ) {
+  ) override {
     InitReturnPtr(handle);
     Com<ID3D12Fence> fence;
     if (!object || !handle)
@@ -1881,7 +1881,7 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  OpenSharedHandle(HANDLE handle, REFIID riid, void **object) {
+  OpenSharedHandle(HANDLE handle, REFIID riid, void **object) override {
     InitReturnPtr(object);
     char mach_port_name[54];
     auto event = openSharedEvent(GetMTLDevice(), handle, mach_port_name);
@@ -1889,30 +1889,30 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  OpenSharedHandleByName(const WCHAR *name, DWORD access, HANDLE *handle) {
+  OpenSharedHandleByName(const WCHAR *name, DWORD access, HANDLE *handle) override {
     InitReturnPtr(handle);
     // "Currently the only value this parameter accepts is GENERIC_ALL" (OpenSharedHandleByName, Access)
     return name && handle && access == GENERIC_ALL ? openHandleByName(name, access, handle) : E_INVALIDARG;
   };
 
   HRESULT STDMETHODCALLTYPE
-  MakeResident(UINT ObjectCount, ID3D12Pageable *const *objects) {
+  MakeResident(UINT ObjectCount, ID3D12Pageable *const *objects) override {
     return S_OK;
   };
 
   HRESULT STDMETHODCALLTYPE
-  Evict(UINT ObjectCount, ID3D12Pageable *const *objects) {
+  Evict(UINT ObjectCount, ID3D12Pageable *const *objects) override {
     // residency is a hint: memory that stays resident meets every contract of an evicted object
     return S_OK;
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateFence(UINT64 InitialValue, D3D12_FENCE_FLAGS Flags, REFIID riid, void **ppFence) {
+  CreateFence(UINT64 InitialValue, D3D12_FENCE_FLAGS Flags, REFIID riid, void **ppFence) override {
     return mullion::CreateFence(this, InitialValue, Flags, riid, ppFence);
   };
 
   HRESULT STDMETHODCALLTYPE
-  GetDeviceRemovedReason() {
+  GetDeviceRemovedReason() override {
     SettleCommandQueueFeedback(this);
     return removed_;
   };
@@ -1942,7 +1942,7 @@ public:
   void STDMETHODCALLTYPE GetCopyableFootprints(
       const D3D12_RESOURCE_DESC *pDesc, UINT FirstSubresource, UINT SubresourceCount, UINT64 BaseOffset,
       D3D12_PLACED_SUBRESOURCE_FOOTPRINT *pLayouts, UINT *pNumRows, UINT64 *pRowSizeInBytes, UINT64 *pTotalBytes
-  ) {
+  ) override {
     UINT64 TotalBytes = 0;
     UINT64 Offset = 0;
     UINT BlockWidth = 1;
@@ -2066,12 +2066,12 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreateQueryHeap(const D3D12_QUERY_HEAP_DESC *pDesc, REFIID riid, void **ppHeap) {
+  CreateQueryHeap(const D3D12_QUERY_HEAP_DESC *pDesc, REFIID riid, void **ppHeap) override {
     return mullion::CreateQueryHeap(this, pDesc, riid, ppHeap);
   };
 
   HRESULT STDMETHODCALLTYPE
-  SetStablePowerState(WINBOOL Enable) {
+  SetStablePowerState(WINBOOL Enable) override {
     return FAIL(E_NOTIMPL);
   };
 
@@ -2079,7 +2079,7 @@ public:
   CreateCommandSignature(
       const D3D12_COMMAND_SIGNATURE_DESC *pDesc, ID3D12RootSignature *pRootSignature, REFIID riid,
       void **ppCommandSignature
-  ) {
+  ) override {
     return mullion::CreateCommandSignature(this, pDesc, pRootSignature, riid, ppCommandSignature);
   };
 
@@ -2087,7 +2087,7 @@ public:
       ID3D12Resource *pResource, UINT *TotalTileCount, D3D12_PACKED_MIP_INFO *PackedMipInfo,
       D3D12_TILE_SHAPE *StandardTileShape, UINT *SubresourceTilingCount, UINT FirstSubresourceTiling,
       D3D12_SUBRESOURCE_TILING *SubresourceTilings
-  ) {
+  ) override {
     static_cast<MTLD3D12Resource *>(pResource)->GetResourceTiling(
         TotalTileCount, PackedMipInfo, StandardTileShape, SubresourceTilingCount, FirstSubresourceTiling,
         SubresourceTilings
@@ -2095,7 +2095,7 @@ public:
   };
 
   LUID *STDMETHODCALLTYPE
-  GetAdapterLuid(LUID *ret) {
+  GetAdapterLuid(LUID *ret) override {
     DXGI_ADAPTER_DESC desc;
     adapter_->GetDesc(&desc);
     *ret = desc.AdapterLuid;
@@ -2103,7 +2103,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  CreatePipelineLibrary(const void *blob, SIZE_T blob_size, REFIID iid, void **lib) {
+  CreatePipelineLibrary(const void *blob, SIZE_T blob_size, REFIID iid, void **lib) override {
     return mullion::CreatePipelineLibrary(this, blob, blob_size, iid, lib);
   };
 
@@ -2111,7 +2111,7 @@ public:
   SetEventOnMultipleFenceCompletion(
       ID3D12Fence *const *pFences, const UINT64 *pValues, UINT FenceCount, D3D12_MULTIPLE_FENCE_WAIT_FLAGS Flags,
       HANDLE hEvent
-  ) {
+  ) override {
     if (!FenceCount || (Flags != D3D12_MULTIPLE_FENCE_WAIT_FLAG_ALL && Flags != D3D12_MULTIPLE_FENCE_WAIT_FLAG_ANY))
       return FAIL(E_INVALIDARG);
     auto object = hEvent ? EventObject(hEvent) : nullptr;
@@ -2139,12 +2139,12 @@ public:
   };
 
   HRESULT STDMETHODCALLTYPE
-  SetResidencyPriority(UINT ObjectCount, ID3D12Pageable *const *pObjects, const D3D12_RESIDENCY_PRIORITY *pPriorities) {
+  SetResidencyPriority(UINT ObjectCount, ID3D12Pageable *const *pObjects, const D3D12_RESIDENCY_PRIORITY *pPriorities) override {
     return S_OK;
   };
 
   HRESULT STDMETHODCALLTYPE
-  CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc, REFIID riid, void **ppPipelineState) {
+  CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc, REFIID riid, void **ppPipelineState) override {
     InitReturnPtr(ppPipelineState);
     PipelineStateStream desc;
     if (HRESULT hr = desc.Parse(pDesc); FAILED(hr))
@@ -2153,7 +2153,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  OpenExistingHeapFromAddress(const void *pAddress, REFIID riid, void **ppHeap) {
+  OpenExistingHeapFromAddress(const void *pAddress, REFIID riid, void **ppHeap) override {
     return OpenHeap(this, pAddress, nullptr, riid, ppHeap);
   }
 
@@ -2234,7 +2234,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  OpenExistingHeapFromFileMapping(HANDLE hFileMapping, REFIID riid, void **ppHeap) {
+  OpenExistingHeapFromFileMapping(HANDLE hFileMapping, REFIID riid, void **ppHeap) override {
     return hFileMapping ? OpenHeap(this, nullptr, hFileMapping, riid, ppHeap) : FAIL(E_INVALIDARG);
   }
 
@@ -2242,7 +2242,7 @@ public:
   EnqueueMakeResident(
       D3D12_RESIDENCY_FLAGS Flags, UINT NumObjects, ID3D12Pageable *const *ppObjects, ID3D12Fence *pFence,
       UINT64 FenceValue
-  ) {
+  ) override {
     // every object is resident while it exists
     return pFence ? pFence->Signal(FenceValue) : FAIL(E_INVALIDARG);
   }
@@ -2250,14 +2250,14 @@ public:
   HRESULT STDMETHODCALLTYPE
   CreateCommandList1(
       UINT NodeMask, D3D12_COMMAND_LIST_TYPE Type, D3D12_COMMAND_LIST_FLAGS Flags, REFIID riid, void **ppCommandList
-  ) {
+  ) override {
     if (NodeMask > 1 || Flags != D3D12_COMMAND_LIST_FLAG_NONE)
       return FAIL(E_INVALIDARG);
     return CreateClosedCommandList(this, Type, riid, ppCommandList);
   }
 
   HRESULT STDMETHODCALLTYPE
-  CreateProtectedResourceSession(const D3D12_PROTECTED_RESOURCE_SESSION_DESC *pDesc, REFIID riid, void **ppSession) {
+  CreateProtectedResourceSession(const D3D12_PROTECTED_RESOURCE_SESSION_DESC *pDesc, REFIID riid, void **ppSession) override {
     return FAIL(E_NOTIMPL);
   }
 
@@ -2267,7 +2267,7 @@ public:
       const D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC *pDesc,
       D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *OptimizedClearValue,
       ID3D12ProtectedResourceSession *pSession, REFIID riid, void **ppResource
-  ) {
+  ) override {
     InitReturnPtr(ppResource);
     if (pSession)
       return FAIL(E_INVALIDARG);
@@ -2275,7 +2275,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  CreateHeap1(const D3D12_HEAP_DESC *pDesc, ID3D12ProtectedResourceSession *pSession, REFIID riid, void **ppHeap) {
+  CreateHeap1(const D3D12_HEAP_DESC *pDesc, ID3D12ProtectedResourceSession *pSession, REFIID riid, void **ppHeap) override {
     InitReturnPtr(ppHeap);
     if (pSession)
       return FAIL(E_INVALIDARG);
@@ -2287,7 +2287,7 @@ public:
       const D3D12_RESOURCE_DESC *pDesc, D3D12_RESOURCE_STATES InitialState,
       const D3D12_CLEAR_VALUE *OptimizedClearValue, ID3D12ProtectedResourceSession *pSession, REFIID riid,
       void **ppResource
-  ) {
+  ) override {
     InitReturnPtr(ppResource);
     if (pSession)
       return FAIL(E_INVALIDARG);
@@ -2296,18 +2296,18 @@ public:
 
   /* ID3D12Device5: no ray tracing or meta commands yet, as D3D12_FEATURE_D3D12_OPTIONS5 reports */
   HRESULT STDMETHODCALLTYPE
-  CreateLifetimeTracker(ID3D12LifetimeOwner *pOwner, REFIID riid, void **ppvTracker) {
+  CreateLifetimeTracker(ID3D12LifetimeOwner *pOwner, REFIID riid, void **ppvTracker) override {
     InitReturnPtr(ppvTracker);
     return FAIL(E_NOTIMPL);
   }
 
   void STDMETHODCALLTYPE
-  RemoveDevice() {
+  RemoveDevice() override {
     LoseDevice(DXGI_ERROR_DEVICE_REMOVED);
   }
 
   HRESULT STDMETHODCALLTYPE
-  EnumerateMetaCommands(UINT *pNumMetaCommands, D3D12_META_COMMAND_DESC *pDescs) {
+  EnumerateMetaCommands(UINT *pNumMetaCommands, D3D12_META_COMMAND_DESC *pDescs) override {
     if (!pNumMetaCommands)
       return FAIL(E_INVALIDARG);
     *pNumMetaCommands = 0;
@@ -2318,7 +2318,7 @@ public:
   EnumerateMetaCommandParameters(
       REFGUID CommandId, D3D12_META_COMMAND_PARAMETER_STAGE Stage, UINT *pTotalStructureSizeInBytes,
       UINT *pParameterCount, D3D12_META_COMMAND_PARAMETER_DESC *pParameterDescs
-  ) {
+  ) override {
     return FAIL(E_INVALIDARG);
   }
 
@@ -2326,13 +2326,13 @@ public:
   CreateMetaCommand(
       REFGUID CommandId, UINT NodeMask, const void *pCreationParametersData, SIZE_T CreationParametersDataSizeInBytes,
       REFIID riid, void **ppMetaCommand
-  ) {
+  ) override {
     InitReturnPtr(ppMetaCommand);
     return FAIL(E_INVALIDARG);
   }
 
   HRESULT STDMETHODCALLTYPE
-  CreateStateObject(const D3D12_STATE_OBJECT_DESC *pDesc, REFIID riid, void **ppStateObject) {
+  CreateStateObject(const D3D12_STATE_OBJECT_DESC *pDesc, REFIID riid, void **ppStateObject) override {
     return mullion::CreateStateObject(this, pDesc, nullptr, riid, ppStateObject);
   }
 
@@ -2340,7 +2340,7 @@ public:
   GetRaytracingAccelerationStructurePrebuildInfo(
       const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS *pDesc,
       D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO *pInfo
-  ) {
+  ) override {
     // the sizes are Metal's: the structure's memory holds its header and stands for a Metal structure of that
     // size, and the scratch memory is what Metal builds in
     bool top = pDesc->Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -2356,7 +2356,7 @@ public:
   CheckDriverMatchingIdentifier(
       D3D12_SERIALIZED_DATA_TYPE SerializedDataType,
       const D3D12_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER *pIdentifierToCheck
-  ) {
+  ) override {
     if (SerializedDataType != D3D12_SERIALIZED_DATA_RAYTRACING_ACCELERATION_STRUCTURE)
       return D3D12_DRIVER_MATCHING_IDENTIFIER_UNSUPPORTED_TYPE;
     auto &ours = kSerializedIdentifier;
@@ -2373,7 +2373,7 @@ public:
   SetBackgroundProcessingMode(
       D3D12_BACKGROUND_PROCESSING_MODE Mode, D3D12_MEASUREMENTS_ACTION MeasurementsAction,
       HANDLE hEventToSignalUponCompletion, WINBOOL *pbFurtherMeasurementsDesired
-  ) {
+  ) override {
     if (hEventToSignalUponCompletion)
       SetEvent(hEventToSignalUponCompletion);
     if (pbFurtherMeasurementsDesired)
@@ -2386,14 +2386,14 @@ public:
   AddToStateObject(
       const D3D12_STATE_OBJECT_DESC *pAddition, ID3D12StateObject *pStateObjectToGrowFrom, REFIID riid,
       void **ppNewStateObject
-  ) {
+  ) override {
     return mullion::CreateStateObject(this, pAddition, pStateObjectToGrowFrom, riid, ppNewStateObject);
   }
 
   HRESULT STDMETHODCALLTYPE
   CreateProtectedResourceSession1(
       const D3D12_PROTECTED_RESOURCE_SESSION_DESC1 *pDesc, REFIID riid, void **ppSession
-  ) {
+  ) override {
     InitReturnPtr(ppSession);
     return FAIL(E_NOTIMPL);
   }
@@ -2446,7 +2446,7 @@ public:
   GetResourceAllocationInfo2(
       D3D12_RESOURCE_ALLOCATION_INFO *__ret, UINT VisibleMask, UINT ResourceDescsCount,
       const D3D12_RESOURCE_DESC1 *pResourceDescs, D3D12_RESOURCE_ALLOCATION_INFO1 *pAllocationInfos
-  ) {
+  ) override {
     std::vector<D3D12_RESOURCE_DESC> descs(ResourceDescsCount);
 
     for (unsigned i = 0; i < ResourceDescsCount; i++) {
@@ -2482,7 +2482,7 @@ public:
       const D3D12_HEAP_PROPERTIES *pHeapProps, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC1 *pDesc,
       D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *OptimizedClearValue,
       ID3D12ProtectedResourceSession *pSession, REFIID riid, void **ppResource
-  ) {
+  ) override {
     return CreateResource(pDesc, riid, ppResource, [&](auto desc, REFIID riid, void **ppResource) {
       return CreateCommittedResource1(
           pHeapProps, HeapFlags, desc, InitialState, OptimizedClearValue, pSession, riid, ppResource
@@ -2494,7 +2494,7 @@ public:
   CreatePlacedResource1(
       ID3D12Heap *pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1 *pDesc, D3D12_RESOURCE_STATES InitialState,
       const D3D12_CLEAR_VALUE *OptimizedClearValue, REFIID riid, void **ppResource
-  ) {
+  ) override {
     return CreateResource(pDesc, riid, ppResource, [&](auto desc, REFIID riid, void **ppResource) {
       return CreatePlacedResource(pHeap, HeapOffset, desc, InitialState, OptimizedClearValue, riid, ppResource);
     });
@@ -2514,7 +2514,7 @@ public:
       D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE *OptimizedClearValue,
       ID3D12ProtectedResourceSession *pSession, UINT32 NumCastableFormats, DXGI_FORMAT *pCastableFormats, REFIID riid,
       void **ppResource
-  ) {
+  ) override {
     InitReturnPtr(ppResource);
     if (NumCastableFormats)
       return FAIL(E_INVALIDARG);
@@ -2528,7 +2528,7 @@ public:
       ID3D12Heap *pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1 *pDesc, D3D12_BARRIER_LAYOUT InitialLayout,
       const D3D12_CLEAR_VALUE *OptimizedClearValue, UINT32 NumCastableFormats, DXGI_FORMAT *pCastableFormats,
       REFIID riid, void **ppResource
-  ) {
+  ) override {
     InitReturnPtr(ppResource);
     if (NumCastableFormats)
       return FAIL(E_INVALIDARG);
@@ -2542,7 +2542,7 @@ public:
       const D3D12_RESOURCE_DESC *pDesc, D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE *OptimizedClearValue,
       ID3D12ProtectedResourceSession *pSession, UINT32 NumCastableFormats, DXGI_FORMAT *pCastableFormats, REFIID riid,
       void **ppResource
-  ) {
+  ) override {
     InitReturnPtr(ppResource);
     if (NumCastableFormats)
       return FAIL(E_INVALIDARG);
@@ -2552,7 +2552,7 @@ public:
   void STDMETHODCALLTYPE
   CreateSamplerFeedbackUnorderedAccessView(
       ID3D12Resource *pTargetedResource, ID3D12Resource *pFeedbackResource, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor
-  ) {
+  ) override {
     TryCreateSamplerFeedbackUnorderedAccessView(pTargetedResource, pFeedbackResource, DestDescriptor);
   }
 
@@ -2560,7 +2560,7 @@ public:
   GetCopyableFootprints1(
       const D3D12_RESOURCE_DESC1 *pResourceDesc, UINT FirstSubresource, UINT NumSubresources, UINT64 BaseOffset,
       D3D12_PLACED_SUBRESOURCE_FOOTPRINT *pLayouts, UINT *pNumRows, UINT64 *pRowSizeInBytes, UINT64 *pTotalBytes
-  ) {
+  ) override {
     D3D12_RESOURCE_DESC desc;
 
     GetCopyableFootprints(
@@ -2571,20 +2571,20 @@ public:
 
   /* ID3D12Device9: no application shader cache sessions (D3D12_FEATURE_SHADER_CACHE reports the kinds that are) */
   HRESULT STDMETHODCALLTYPE
-  CreateShaderCacheSession(const D3D12_SHADER_CACHE_SESSION_DESC *pDesc, REFIID riid, void **ppvSession) {
+  CreateShaderCacheSession(const D3D12_SHADER_CACHE_SESSION_DESC *pDesc, REFIID riid, void **ppvSession) override {
     InitReturnPtr(ppvSession);
     return FAIL(E_NOTIMPL);
   }
 
   HRESULT STDMETHODCALLTYPE
-  ShaderCacheControl(D3D12_SHADER_CACHE_KIND_FLAGS Kinds, D3D12_SHADER_CACHE_CONTROL_FLAGS Control) {
+  ShaderCacheControl(D3D12_SHADER_CACHE_KIND_FLAGS Kinds, D3D12_SHADER_CACHE_CONTROL_FLAGS Control) override {
     return FAIL(E_NOTIMPL);
   }
 
   HRESULT STDMETHODCALLTYPE
   CreateCommandQueue1(
       const D3D12_COMMAND_QUEUE_DESC *pDesc, REFIID CreatorID, REFIID riid, void **ppCommandQueue
-  ) {
+  ) override {
     return CreateCommandQueue(pDesc, riid, ppCommandQueue);
   }
 
@@ -2592,7 +2592,7 @@ public:
   GetResourceAllocationInfo1(
       D3D12_RESOURCE_ALLOCATION_INFO *__ret, UINT VisibleMask, UINT ResourceDestCount,
       const D3D12_RESOURCE_DESC *pDescs, D3D12_RESOURCE_ALLOCATION_INFO1 *pAllocationInfos
-  ) {
+  ) override {
     D3D12_RESOURCE_ALLOCATION_INFO1 resource_info;
     bool has_msaa_resource = false;
 

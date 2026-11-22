@@ -1105,7 +1105,7 @@ public:
   }
 
   HRESULT STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
     *ppvObject = nullptr;
@@ -1124,7 +1124,7 @@ public:
   }
 
   void *STDMETHODCALLTYPE
-  GetShaderIdentifier(const WCHAR *pExportName) {
+  GetShaderIdentifier(const WCHAR *pExportName) override {
     auto found = exports_.find(pExportName);
     return found == exports_.end() ? nullptr : found->second.identifier.get();
   }
@@ -1132,7 +1132,7 @@ public:
   // a hit group's shaders are named "group::closesthit", "group::anyhit" and "group::intersection"; the group
   // itself has no size, nor has another shader a part
   UINT64 STDMETHODCALLTYPE
-  GetShaderStackSize(const WCHAR *pExportName) {
+  GetShaderStackSize(const WCHAR *pExportName) override {
     std::wstring name = pExportName;
     unsigned index = 0;
     auto at = name.find(L"::");
@@ -1152,14 +1152,14 @@ public:
   }
 
   UINT64 STDMETHODCALLTYPE
-  GetPipelineStackSize() {
+  GetPipelineStackSize() override {
     return stack_size_;
   }
 
   // the pipeline of the new call depth is made here, in the application's set-up, and not in the next DispatchRays
   // (the call is "not thread-safe" against a list's ray dispatches: ID3D12StateObjectProperties::SetPipelineStackSize)
   void STDMETHODCALLTYPE
-  SetPipelineStackSize(UINT64 PipelineStackSizeInBytes) {
+  SetPipelineStackSize(UINT64 PipelineStackSizeInBytes) override {
     if (PipelineStackSizeInBytes >= 0xffffffff)
       return;
     auto start = device_->NamesPasses() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();

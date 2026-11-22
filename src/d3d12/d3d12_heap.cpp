@@ -38,7 +38,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -156,7 +156,7 @@ public:
   }
 
   D3D12_HEAP_DESC *STDMETHODCALLTYPE
-  GetDesc(D3D12_HEAP_DESC *__ret) {
+  GetDesc(D3D12_HEAP_DESC *__ret) override {
     *__ret = desc_;
     return __ret;
   };

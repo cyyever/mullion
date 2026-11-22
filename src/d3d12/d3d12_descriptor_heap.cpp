@@ -219,7 +219,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -239,19 +239,19 @@ public:
   }
 
   D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
-  GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) {
+  GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) override {
     *__ret = desc_;
     return __ret;
   }
 
   D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
-  GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) {
+  GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) override {
     *__ret = GetShaderVisibleDescriptor(this, 0);
     return __ret;
   }
 
   D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
-  GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) {
+  GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) override {
     __ret->ptr = argument_buffer_gpu_address_;
     return __ret;
   }
@@ -565,7 +565,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -585,19 +585,19 @@ public:
   }
 
   D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
-  GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) {
+  GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) override {
     *__ret = desc_;
     return __ret;
   }
 
   D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
-  GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) {
+  GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) override {
     *__ret = GetRenderTargetDescriptor(this, 0);
     return __ret;
   }
 
   D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
-  GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) {
+  GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) override {
     __ret->ptr = 0;
     return __ret;
   }
@@ -747,7 +747,7 @@ public:
 
   HRESULT
   STDMETHODCALLTYPE
-  QueryInterface(REFIID riid, void **ppvObject) {
+  QueryInterface(REFIID riid, void **ppvObject) override {
     if (ppvObject == nullptr)
       return FAIL(E_POINTER);
 
@@ -767,19 +767,19 @@ public:
   }
 
   D3D12_DESCRIPTOR_HEAP_DESC *STDMETHODCALLTYPE
-  GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) {
+  GetDesc(D3D12_DESCRIPTOR_HEAP_DESC *__ret) override {
     *__ret = desc_;
     return __ret;
   }
 
   D3D12_CPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
-  GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) {
+  GetCPUDescriptorHandleForHeapStart(D3D12_CPU_DESCRIPTOR_HANDLE *__ret) override {
     *__ret = GetSamplerDescriptor(this, 0);
     return __ret;
   }
 
   D3D12_GPU_DESCRIPTOR_HANDLE *STDMETHODCALLTYPE
-  GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) {
+  GetGPUDescriptorHandleForHeapStart(D3D12_GPU_DESCRIPTOR_HANDLE *__ret) override {
     __ret->ptr = argument_buffer_gpu_address_;
     return __ret;
   }
