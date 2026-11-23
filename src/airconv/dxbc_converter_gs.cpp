@@ -772,6 +772,10 @@ convert_dxbc_geometry_shader(
   args_get_data<SM50_SHADER_STREAM_OUTPUT, SM50_SHADER_STREAM_OUTPUT_DATA>(pArgs, &so);
   uint32_t rasterized_stream = so ? so->rasterized_stream : 0;
   SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
+  if (std::ranges::any_of(shader_info->uavMap, [](auto &uav) {
+        return uav.second.written && uav.second.resource_type != shader::common::ResourceType::NonApplicable;
+      }))
+    metal_version = SM50_SHADER_METAL_320;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
@@ -3035,6 +3039,10 @@ convert_dxbc_vertex_for_geometry_shader(
     is_strip = pso_data->strip_topology;
   }
   SM50_SHADER_METAL_VERSION metal_version = SM50_SHADER_METAL_400;
+  if (std::ranges::any_of(shader_info->uavMap, [](auto &uav) {
+        return uav.second.written && uav.second.resource_type != shader::common::ResourceType::NonApplicable;
+      }))
+    metal_version = SM50_SHADER_METAL_320;
   SM50_SHADER_FLAG shader_flags = {};
   SM50_SHADER_COMMON_DATA *sm50_common = nullptr;
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
