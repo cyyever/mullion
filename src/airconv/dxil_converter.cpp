@@ -5088,9 +5088,10 @@ convert_dxil_mesh_stage(
     return llvm::make_error<UnsupportedFeature>("invalid root signature or missing resource binding");
   setup_tgsm(shader_info, resource_map, types, module);
 
-  // a mesh shader without an amplification shader runs DispatchMesh's grid itself, which Metal has smaller than D3D12:
-  // a grid past it runs in parts, and the raster scale's buffer tells each part's first group
-  bool origin = mesh && link && !link->amplified && !conservative;
+  // a mesh shader without an amplification shader runs DispatchMesh's grid itself, which Metal has smaller than D3D12;
+  // an amplification shader's large grid is also split in parts to avoid Apple8 GPU OOM. the raster scale's buffer
+  // tells each part's first group
+  bool origin = !mesh || (link && !link->amplified && !conservative);
   auto raster_scale = DefineRasterScale(func_signature);
   auto [function, function_metadata] = func_signature.CreateFunction(name, context, module, 0, true);
 
@@ -5109,6 +5110,14 @@ convert_dxil_mesh_stage(
       builder, nulldbg
   );
   air.RasterScale = function->getArg(raster_scale);
+  // AGXMetalG14G's backend compiler crashes (XPC_ERROR_CONNECTION_INTERRUPTED) when a mesh shader combines
+  // air.payload with an air.indirect_buffer whose offset 0 is never loaded; touch offset 0 with a volatile load
+  if (mesh && link && link->amplified && rootsig && raster_scale > 0) {
+    auto *rootsig_arg = function->getArg(raster_scale - 1);
+    if (rootsig_arg->getType()->isPointerTy() &&
+        rootsig_arg->getType()->getPointerAddressSpace() == (unsigned)air::AddressSpace::constant)
+      builder.CreateLoad(builder.getInt32Ty(), rootsig_arg, /*isVolatile=*/true);
+  }
 
   setup_metal_version(module, metal_version);
   setup_temp_register(shader_info, resource_map, types, module, builder);

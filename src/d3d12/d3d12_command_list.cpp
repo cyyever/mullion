@@ -1535,6 +1535,7 @@ public:
         static_cast<RenderEncoderData *>(allocator_->encoder_current)->viewports += count;
       }
       EncodeBuffer(WMTRenderCommandSetVertexBuffer, scale_offset, SM50_BINDING_INDEX_RASTER_SCALE);
+      EncodeBuffer(WMTRenderCommandSetObjectBuffer, scale_offset, SM50_BINDING_INDEX_RASTER_SCALE);
       EncodeBuffer(WMTRenderCommandSetMeshBuffer, scale_offset, SM50_BINDING_INDEX_RASTER_SCALE);
       raster_scale_ = allocator_->gpu_heap_buffer_address_ + scale_offset;
       std::copy_n((const uint32_t *)scale, SM50_RASTER_SCALE_WORDS, raster_scale_words_);
@@ -5672,27 +5673,33 @@ public:
       cmd.mesh_threadgroup_size = size(pso_graphics_->mesh_threads);
     };
     // D3D12 lets a grid have 2^22 groups (Mesh Shader spec, "DispatchMesh API"), Metal's mesh grids fewer (1024
-    // before Apple9, then 2^20 - 1): without an amplification shader, a grid past that runs in boxes of whole slices,
-    // or of whole rows, or of parts of a row, each with its first group in the raster scale's buffer
-    // (SM50_RASTER_SCALE_MESH_ORIGIN). an amplification shader's grid is an object grid, which has no such limit
-    uint64_t limit = pso_graphics_->mesh_grid_limit, x = ThreadGroupCountX, y = ThreadGroupCountY,
-             z = ThreadGroupCountZ;
-    if (pso_graphics_->object_stage || !limit || x * y * z <= limit || !raster_scale_) {
+    // before Apple9, then 2^20 - 1), and large object grids (>65536 groups) can OOM on Apple8: a grid past the limit
+    // runs in boxes of whole slices, or of whole rows, or of parts of a row, each with its first group in the raster
+    // scale's buffer (SM50_RASTER_SCALE_MESH_ORIGIN)
+    uint64_t limit = pso_graphics_->object_stage ? 65536ull : pso_graphics_->mesh_grid_limit;
+    uint64_t x = ThreadGroupCountX, y = ThreadGroupCountY, z = ThreadGroupCountZ;
+    if (!limit || x * y * z <= limit || !raster_scale_) {
       draw(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
       return;
     }
+    auto origin_stage = pso_graphics_->object_stage ? WMTRenderCommandSetObjectBuffer : WMTRenderCommandSetMeshBuffer;
     uint64_t width = std::min(x, limit), rows = x * y <= limit ? y : std::max<uint64_t>(limit / x, 1),
              slices = x * y <= limit ? limit / (x * y) : 1;
     for (uint64_t k = 0; k < z; k += slices)
       for (uint64_t j = 0; j < y; j += rows)
         for (uint64_t i = 0; i < x; i += width) {
+          if (pso_graphics_->object_stage && (i || j || k)) {
+            allocator_->InvalidateCurrentPass();
+            if (PreDraw() == DrawCallStatus::Invalid)
+              return;
+          }
           auto [part, offset] = allocator_->AllocateGPUHeap(SM50_RASTER_SCALE_WORDS * sizeof(uint32_t), alignof(uint32_t));
           if (!part)
             return;
           std::copy_n(raster_scale_words_, SM50_RASTER_SCALE_MESH_ORIGIN, (uint32_t *)part);
           auto origin = (uint32_t *)part + SM50_RASTER_SCALE_MESH_ORIGIN;
           origin[0] = i, origin[1] = j, origin[2] = k;
-          EncodeBuffer(WMTRenderCommandSetMeshBuffer, offset, SM50_BINDING_INDEX_RASTER_SCALE);
+          EncodeBuffer(origin_stage, offset, SM50_BINDING_INDEX_RASTER_SCALE);
           draw(std::min(width, x - i), std::min(rows, y - j), std::min(slices, z - k));
         }
     // the next draw binds the raster scale again, from the first group
