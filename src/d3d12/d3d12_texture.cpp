@@ -384,7 +384,9 @@ public:
         texture_info = pTexture->texture_info;
       }
       bool accurate_bc = desc_.Format == DXGI_FORMAT_BC4_SNORM || desc_.Format == DXGI_FORMAT_BC5_SNORM ||
-                         desc_.Format == DXGI_FORMAT_BC4_TYPELESS || desc_.Format == DXGI_FORMAT_BC5_TYPELESS;
+                         desc_.Format == DXGI_FORMAT_BC4_TYPELESS || desc_.Format == DXGI_FORMAT_BC5_TYPELESS ||
+                         desc_.Format == DXGI_FORMAT_BC7_TYPELESS || desc_.Format == DXGI_FORMAT_BC7_UNORM ||
+                         desc_.Format == DXGI_FORMAT_BC7_UNORM_SRGB;
       Rc<Texture> storage = new Texture(texture_info, device_->GetMTLDevice(), accurate_bc);
       WMT::Texture adopted;
       adopted.handle = pTexture ? pTexture->texture : NULL_OBJECT_HANDLE;
@@ -520,26 +522,52 @@ public:
     }
 
     std::vector<float> decoded;
+    std::vector<uint8_t> normalized_bc7;
+    bool is_bc7 = storage->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm ||
+                  storage->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm_sRGB;
     UINT channels = storage->pixelFormat() == WMTPixelFormatBC5_RGUnorm ||
                     storage->pixelFormat() == WMTPixelFormatBC5_RGSnorm ? 2 : 1;
-    UINT width = box.right - box.left, height = box.bottom - box.top;
+    UINT width = box.right - box.left, height = box.bottom - box.top, depth = box.back - box.front;
+    UINT bc7_row = ((width + 3) / 4) * 16, bc7_image = bc7_row * ((height + 3) / 4);
     if (storage->current()->signedBC) {
-      try { decoded.resize(size_t(width) * height * channels); }
-      catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
       auto src = static_cast<const uint8_t *>(pSrcData);
-      for (UINT y = 0; y < height; y++)
-        for (UINT x = 0; x < width; x++)
-          for (UINT channel = 0; channel < channels; channel++) {
-            uint32_t words[2];
-            memcpy(words, src + size_t(y / 4) * SrcRowPitch + size_t(x / 4) * channels * 8 + channel * 8, 8);
-            auto value = decodeBCSnorm(words[0], words[1], (y % 4) * 4 + x % 4);
-            decoded[(size_t(y) * width + x) * channels + channel] = float(value.numerator) / value.denominator;
-          }
+      if (is_bc7) {
+        try { normalized_bc7.resize(size_t(bc7_image) * depth); }
+        catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
+        UINT bw = (width + 3) / 4, bh = (height + 3) / 4;
+        for (UINT z = 0; z < depth; z++)
+          for (UINT y = 0; y < bh; y++)
+            for (UINT x = 0; x < bw; x++) {
+              auto *dst_block = normalized_bc7.data() + size_t(z) * bc7_image + size_t(y) * bc7_row + size_t(x) * 16;
+              const auto *src_block = src + size_t(z) * SrcSlicePitch + size_t(y) * SrcRowPitch + size_t(x) * 16;
+              if (src_block[0] == 0) {
+                memset(dst_block, 0, 16);
+                dst_block[0] = 0x40;
+              } else {
+                memcpy(dst_block, src_block, 16);
+              }
+            }
+      } else {
+        try { decoded.resize(size_t(width) * height * channels); }
+        catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
+        for (UINT y = 0; y < height; y++)
+          for (UINT x = 0; x < width; x++)
+            for (UINT channel = 0; channel < channels; channel++) {
+              uint32_t words[2];
+              memcpy(words, src + size_t(y / 4) * SrcRowPitch + size_t(x / 4) * channels * 8 + channel * 8, 8);
+              auto value = decodeBCSnorm(words[0], words[1], (y % 4) * 4 + x % 4);
+              decoded[(size_t(y) * width + x) * channels + channel] = float(value.numerator) / value.denominator;
+            }
+      }
     }
     storage->current()->texture().replaceRegion(
-        {.x=box.left, .y=box.top, .z=box.front}, {.width=box.right - box.left, .height=box.bottom - box.top, .depth=box.back - box.front}, Level,
+        {.x=box.left, .y=box.top, .z=box.front}, {.width=width, .height=height, .depth=depth}, Level,
         Slice, pSrcData, SrcRowPitch, SrcSlicePitch
     );
+    if (!normalized_bc7.empty())
+      storage->current()->signedBC.replaceRegion(
+          {.x=box.left, .y=box.top, .z=box.front}, {.width=width, .height=height, .depth=depth}, Level, Slice,
+          normalized_bc7.data(), bc7_row, depth > 1 ? bc7_image : 0);
     if (!decoded.empty())
       storage->current()->signedBC.replaceRegion(
           {.x=box.left, .y=box.top, .z=0}, {.width=width, .height=height, .depth=1}, Level, Slice, decoded.data(), width * channels * sizeof(float), 0);

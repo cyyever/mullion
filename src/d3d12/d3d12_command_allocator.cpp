@@ -914,12 +914,38 @@ MTLD3D12CommandAllocatorImpl::RefreshSignedBC(Texture *texture, UINT level, UINT
   if (!texture->current()->signedBC)
     return;
   SimpleCommandContext<MTLD3D12CommandAllocatorImpl> ctx{*this};
+  UINT width = std::max(texture->width() >> level, 1u), height = std::max(texture->height() >> level, 1u);
+  if (texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm ||
+      texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm_sRGB) {
+    UINT depth = std::max(texture->info().depth >> level, 1u);
+    WMTSize blocks{.width=(width + 3) / 4, .height=(height + 3) / 4, .depth=depth};
+    uint64_t row = align(blocks.width * 16, 256), image = row * blocks.height;
+    auto [raw, raw_offset] = AllocateTempBuffer(image * depth, 256);
+    auto [normalized, norm_offset] = AllocateTempBuffer(image * depth, 256);
+    if (!raw || !normalized) { exhausted_ = true; return; }
+    ctx.endPass(); ctx.startBlitPass();
+    auto &read = EncodeBlitCommand<wmtcmd_blit_copy_from_texture_to_buffer>();
+    read.type = WMTBlitCommandCopyFromTextureToBuffer;
+    read.src = texture->current()->texture(); read.level = level; read.slice = slice;
+    read.origin = {}; read.size = {.width=width, .height=height, .depth=depth};
+    read.dst = raw; read.offset = raw_offset;
+    read.bytes_per_row = row; read.bytes_per_image = depth > 1 ? image : 0;
+    if (!NormalizeBC7(raw, raw_offset, normalized, norm_offset,
+                      {.src_row=row, .src_image=image, .dst_row=row, .dst_image=image}, blocks))
+      return;
+    auto &write = EncodeBlitCommand<wmtcmd_blit_copy_from_buffer_to_texture>();
+    write.type = WMTBlitCommandCopyFromBufferToTexture;
+    write.src = normalized; write.src_offset = norm_offset;
+    write.bytes_per_row = row; write.bytes_per_image = depth > 1 ? image : 0;
+    write.size = {.width=width, .height=height, .depth=depth}; write.dst = texture->current()->signedBC;
+    write.level = level; write.slice = slice; write.origin = {};
+    return;
+  }
   if (!bc_snorm_pso_)
     bc_snorm_pso_ = ctx.getComputePipeline("cs_decode_bc_snorm");
   if (!bc_snorm_pso_) { exhausted_ = true; return; }
   UINT channels = texture->pixelFormat() == WMTPixelFormatBC5_RGUnorm ||
                   texture->pixelFormat() == WMTPixelFormatBC5_RGSnorm ? 2 : 1;
-  UINT width = std::max(texture->width() >> level, 1u), height = std::max(texture->height() >> level, 1u);
   uint64_t compressed_row = align((width + 3) / 4 * channels * 8, 256);
   uint64_t decoded_row = align(width * channels * 4, 256);
   auto [raw, raw_offset] = AllocateTempBuffer(compressed_row * ((height + 3) / 4), 256);

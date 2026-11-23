@@ -2443,8 +2443,6 @@ public:
     if (pDst->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX &&
         SUCCEEDED(MTLQueryDXGIFormat(device_->GetMTLDevice(), dst_desc.Format, hoisted_format)) &&
         !(hoisted_format.Flag & (MTL_DXGI_FORMAT_EMULATED_RGB32 | MTL_DXGI_FORMAT_EMULATED_D24)) &&
-        dst_desc.Format != DXGI_FORMAT_BC7_TYPELESS && dst_desc.Format != DXGI_FORMAT_BC7_UNORM &&
-        dst_desc.Format != DXGI_FORMAT_BC7_UNORM_SRGB &&
         static_cast<MTLD3D12Resource *>(pDst->pResource)->texture &&
         !static_cast<MTLD3D12Resource *>(pDst->pResource)->texture->accurateBC) {
       if (!PreCopy(hoisted, pDst->pResource, pDst->SubresourceIndex, pSrc->pResource,
@@ -2522,19 +2520,6 @@ public:
                                     src_box.front * src_depth_pitch;
         uint64_t upload_offset = src_offset;
         uint64_t row_pitch = pSrc->PlacedFootprint.Footprint.RowPitch, image_pitch = src_depth_pitch;
-        if (dst_desc.Format == DXGI_FORMAT_BC7_TYPELESS || dst_desc.Format == DXGI_FORMAT_BC7_UNORM ||
-            dst_desc.Format == DXGI_FORMAT_BC7_UNORM_SRGB) {
-          WMTSize blocks{.width=align(src_box.right - src_box.left, block_width) / block_width,
-                         .height=align(src_box.bottom - src_box.top, block_width) / block_width,
-                         .depth=src_box.back - src_box.front};
-          row_pitch = blocks.width * 16;
-          image_pitch = row_pitch * blocks.height;
-          std::tie(upload, upload_offset) = allocator_->AllocateTempBuffer(image_pitch * blocks.depth, 256);
-          if (!allocator_->NormalizeBC7(src->current()->buffer(), src_offset, upload, upload_offset,
-                                       {.src_row=pSrc->PlacedFootprint.Footprint.RowPitch, .src_image=src_depth_pitch,
-                                        .dst_row=row_pitch, .dst_image=image_pitch}, blocks))
-            return;
-        }
         if (dst_format.Flag & MTL_DXGI_FORMAT_EMULATED_RGB32) {
           WMTSize size{.width=src_box.right - src_box.left, .height=src_box.bottom - src_box.top, .depth=src_box.back - src_box.front};
           row_pitch = size.width * MTLGetTexelSize(dst->pixelFormat());

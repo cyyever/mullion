@@ -40,18 +40,26 @@ TextureView::decRef() {
     delete this;
 };
 
+static bool
+IsBC7Format(WMTPixelFormat format) {
+  return format == WMTPixelFormatBC7_RGBAUnorm || format == WMTPixelFormatBC7_RGBAUnorm_sRGB;
+}
+
 static WMTPixelFormat
 SignedBCFormat(WMTPixelFormat format) {
   return format == WMTPixelFormatBC4_RSnorm ? WMTPixelFormatR32Float
-       : format == WMTPixelFormatBC5_RGSnorm ? WMTPixelFormatRG32Float : WMTPixelFormatInvalid;
+       : format == WMTPixelFormatBC5_RGSnorm ? WMTPixelFormatRG32Float
+       : IsBC7Format(format) ? format : WMTPixelFormatInvalid;
 }
 
 void TextureAllocation::createSignedBC() {
   if (!descriptor->accurateBC || !obj_)
     return;
   auto info = descriptor->info();
-  bool two = info.pixel_format == WMTPixelFormatBC5_RGSnorm || info.pixel_format == WMTPixelFormatBC5_RGUnorm;
-  info.pixel_format = two ? WMTPixelFormatRG32Float : WMTPixelFormatR32Float;
+  if (!IsBC7Format(info.pixel_format)) {
+    bool two = info.pixel_format == WMTPixelFormatBC5_RGSnorm || info.pixel_format == WMTPixelFormatBC5_RGUnorm;
+    info.pixel_format = two ? WMTPixelFormatRG32Float : WMTPixelFormatR32Float;
+  }
   info.options = (flags_.test(TextureAllocationFlag::CpuInvisible) ? WMTResourceStorageModePrivate
                                                                   : WMTResourceStorageModeShared) |
                  WMTResourceHazardTrackingModeUntracked;
