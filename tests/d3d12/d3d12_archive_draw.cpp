@@ -127,7 +127,8 @@ main(int argc, char **argv) {
     totals(calls);
     uint64_t count = 0;
     for (auto &[number, ticks, name] : calls)
-      if (name && !strcmp(name, "MTLDevice_newRenderPipelineState"))
+      if (name && (!strcmp(name, "MTLDevice_newRenderPipelineState") ||
+                   !strcmp(name, "MTLDevice_newMeshRenderPipelineState")))
         count += number;
     return count;
   };

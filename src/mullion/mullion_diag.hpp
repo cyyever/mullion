@@ -342,14 +342,25 @@ PipelineRuns(Head head, Name name) {
           runs += '|';
         runs += str::format("Tile:", pipeline, "*1*0*0");
         break;
+      case WMTRenderCommandMullionGeometryDraw:
+      case WMTRenderCommandMullionMeshDraw: {
+        auto draw = reinterpret_cast<const wmtcmd_render_mullion_geometry_draw *>(cmd);
+        calls++;
+        vertices += uint64_t(draw->vertex_count) * draw->instance_count;
+        indices += uint64_t(draw->index_count) * draw->instance_count;
+        break;
+      }
+      case WMTRenderCommandMullionGeometryDrawIndexed: {
+        auto draw = reinterpret_cast<const wmtcmd_render_mullion_geometry_draw_indexed *>(cmd);
+        calls++;
+        indices += uint64_t(draw->index_count) * draw->instance_count;
+        break;
+      }
       case WMTRenderCommandDrawIndirect:
       case WMTRenderCommandDrawIndexedIndirect:
       case WMTRenderCommandDrawPatches:
       case WMTRenderCommandDrawMeshThreadgroups:
       case WMTRenderCommandDrawMeshThreadgroupsIndirect:
-      case WMTRenderCommandMullionGeometryDraw:
-      case WMTRenderCommandMullionMeshDraw:
-      case WMTRenderCommandMullionGeometryDrawIndexed:
       case WMTRenderCommandMullionGeometryDrawIndirect:
       case WMTRenderCommandMullionGeometryDrawIndexedIndirect:
       case WMTRenderCommandMullionTessellationMeshDraw:

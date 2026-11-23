@@ -1824,6 +1824,8 @@ public:
         cmd.max_object_threadgroups = *parts;
         // a geometry shader invocation a thread
         cmd.mesh_threads = enc.currentRenderEncoder()->geometry_mesh_invocations;
+        cmd.vertex_count = VertexCountPerInstance;
+        cmd.index_count = 0;
       };
       auto encoder = enc.currentRenderEncoder();
       if (encoder->so_count_pso)
@@ -1883,6 +1885,7 @@ public:
         cmd.max_object_threadgroups = *parts;
         // a geometry shader invocation a thread
         cmd.mesh_threads = enc.currentRenderEncoder()->geometry_mesh_invocations;
+        cmd.index_count = IndexCountPerInstance;
         cmd.index_buffer = index_buffer;
         cmd.index_buffer_offset = index_buffer_offset;
       };

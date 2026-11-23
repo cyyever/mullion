@@ -120,8 +120,9 @@ main(int argc, char **argv) {
   // one archive to add to, this version's files, and the read past them that finds none
   expect(calls.device["MTLDevice_newBinaryArchive"] == own.size() + 2, "%llu archives opened, want %zu",
          (unsigned long long)calls.device["MTLDevice_newBinaryArchive"], own.size() + 2);
-  expect(calls.pipeline["MTLDevice_newRenderPipelineState"] == 1, "%llu Metal pipeline creations, want the archive's one",
-         (unsigned long long)calls.pipeline["MTLDevice_newRenderPipelineState"]);
+  auto made = calls.pipeline["MTLDevice_newRenderPipelineState"] +
+              calls.pipeline["MTLDevice_newMeshRenderPipelineState"];
+  expect(made == 1, "%llu Metal pipeline creations, want the archive's one", (unsigned long long)made);
   auto now = archive_files(directory);
   for (auto &other : others)
     expect(std::ranges::find(now, other) == now.end(), "%s is still there", other.c_str());

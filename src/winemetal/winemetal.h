@@ -1633,6 +1633,8 @@ struct wmtcmd_render_mullion_geometry_draw {
   uint32_t max_object_threadgroups;
   // the threads of each mesh threadgroup (0 or 1: one), which a conservative hull's points are shared among
   uint32_t mesh_threads;
+  uint32_t vertex_count;
+  uint32_t index_count;
 };
 
 struct wmtcmd_render_mullion_geometry_draw_indexed {
@@ -1649,6 +1651,7 @@ struct wmtcmd_render_mullion_geometry_draw_indexed {
   uint32_t max_object_threadgroups;
   // the threads of each mesh threadgroup (0 or 1: one), which a conservative hull's points are shared among
   uint32_t mesh_threads;
+  uint32_t index_count;
 };
 
 struct wmtcmd_render_mullion_geometry_draw_indirect {

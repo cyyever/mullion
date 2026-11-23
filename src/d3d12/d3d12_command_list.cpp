@@ -1878,6 +1878,9 @@ public:
       cmd.max_object_threadgroups = *parts;
       // a conservative hull's points, a thread each, or a geometry shader's invocations
       cmd.mesh_threads = pso_graphics_->conservative_hull ? SM50_CONSERVATIVE_HULL_POINTS : pso_graphics_->gs_mesh_invocations;
+      constexpr bool indexed = std::is_same_v<Arguments, D3D12_DRAW_INDEXED_ARGUMENTS>;
+      cmd.vertex_count = indexed ? 0 : Count;
+      cmd.index_count = indexed ? Count : 0;
     };
     if (!pso_graphics_->stream_output)
       return draw();
