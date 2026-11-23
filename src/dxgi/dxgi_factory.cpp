@@ -322,8 +322,27 @@ public:
       IDXGIOutput *pRestrictToOutput, IDXGISwapChain1 **ppSwapChain) final {
     InitReturnPtr(ppSwapChain);
 
-    ERR("Not implemented");
-    return E_NOTIMPL;
+    if (!ppSwapChain || !pDevice || !pDesc)
+      return FAIL(DXGI_ERROR_INVALID_CALL);
+    if (!pDesc->Width || !pDesc->Height || pDesc->Scaling != DXGI_SCALING_STRETCH ||
+        (pDesc->SwapEffect != DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL &&
+         pDesc->SwapEffect != DXGI_SWAP_EFFECT_FLIP_DISCARD) ||
+        pDesc->BufferCount < 2 || pDesc->BufferCount > DXGI_MAX_SWAP_CHAIN_BUFFERS ||
+        pDesc->SampleDesc.Count != 1 || pDesc->SampleDesc.Quality)
+      return FAIL(DXGI_ERROR_INVALID_CALL);
+
+    Com<IMTLSwapChainFactory> swapchain_factory;
+    if (FAILED(pDevice->QueryInterface(IID_PPV_ARGS(&swapchain_factory))))
+      return DXGI_ERROR_UNSUPPORTED;
+
+    DXGI_SWAP_CHAIN_DESC1 desc = *pDesc;
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
+    fsDesc.Windowed = TRUE;
+    try {
+      return swapchain_factory->CreateSwapChain(this, nullptr, &desc, &fsDesc, ppSwapChain);
+    } catch (const std::bad_alloc &) {
+      return E_OUTOFMEMORY;
+    }
   }
 
   HRESULT STDMETHODCALLTYPE EnumAdapters(UINT Adapter,

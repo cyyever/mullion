@@ -122,9 +122,10 @@ public:
 
     // frames can go to the window through GDI instead, as they do when a window gets no Metal view: slower, and
     // readable from the window
-    if (!Config::getInstance().getOption<bool>("dxgi.presentThroughGDI", false))
+    if (hWnd && !Config::getInstance().getOption<bool>("dxgi.presentThroughGDI", false))
       native_view_ = WMT::CreateMetalViewFromHWND((intptr_t)hWnd, follower_.placement(hWnd), pDevice->GetMTLDevice(), layer_weak_);
-    follower_.follow(hWnd, native_view_, true);
+    if (hWnd)
+      follower_.follow(hWnd, native_view_, true);
 
     if (!native_view_) {
       WARN("No Metal view for this window; presenting through GDI (slower).");
@@ -261,6 +262,8 @@ public:
   HRESULT
   STDMETHODCALLTYPE
   SetFullscreenState(BOOL Fullscreen, IDXGIOutput *pTarget) final {
+    if (!hWnd)
+      return DXGI_ERROR_INVALID_CALL;
     if (!Fullscreen && pTarget)
       return DXGI_ERROR_INVALID_CALL;
     ModeSetGuard::ModeSetInProgress modeset_inprogress(modeset_guard_);
@@ -751,7 +754,7 @@ public:
       return E_POINTER;
     }
     *pHwnd = hWnd;
-    return S_OK;
+    return hWnd ? S_OK : DXGI_ERROR_INVALID_CALL;
   };
 
   HRESULT
@@ -1083,12 +1086,22 @@ public:
 
   HRESULT STDMETHODCALLTYPE
   SetMatrixTransform(const DXGI_MATRIX_3X2_F *matrix) override {
-    return DXGI_ERROR_INVALID_CALL;
+    if (hWnd)
+      return DXGI_ERROR_INVALID_CALL;
+    if (!matrix || matrix->_12 != 0.0f || matrix->_21 != 0.0f)
+      return E_INVALIDARG;
+    matrix_transform_ = *matrix;
+    return S_OK;
   };
 
   HRESULT STDMETHODCALLTYPE
   GetMatrixTransform(DXGI_MATRIX_3X2_F *matrix) override {
-    return DXGI_ERROR_INVALID_CALL;
+    if (hWnd)
+      return DXGI_ERROR_INVALID_CALL;
+    if (!matrix)
+      return E_INVALIDARG;
+    *matrix = matrix_transform_;
+    return S_OK;
   };
 
   HRESULT STDMETHODCALLTYPE CheckColorSpaceSupport(
@@ -1163,6 +1176,7 @@ private:
   wsi::MullionWindowState window_state_;
   uint32_t frame_latency;
   DXGI_COLOR_SPACE_TYPE colorspace_ = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+  DXGI_MATRIX_3X2_F matrix_transform_{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
   double init_refresh_rate_ = DBL_MAX;
   int preferred_max_frame_rate = 0;
   HUDState hud;
