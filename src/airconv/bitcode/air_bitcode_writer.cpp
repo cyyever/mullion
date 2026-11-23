@@ -142,20 +142,23 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
   // to the LLVM context; only materialize the instruction operands here.
   llvm::convertUsersOfConstantsToInstructions(expressions, nullptr, false, true);
 
-  // Metal's object shader lowering fails on byte-array pointer arithmetic
-  // combined with payload writes. Preserve the stride using an integer element.
-  llvm::SmallPtrSet<const llvm::Function *, 4> objectFunctions;
-  if (auto *objects = m->getNamedMetadata("air.object"))
-    for (auto *entry : objects->operands())
-      objectFunctions.insert(llvm::cast<llvm::Function>(
-          llvm::cast<llvm::ConstantAsMetadata>(entry->getOperand(0))->getValue()));
+  // Metal's object and mesh shader lowering fails on byte-array pointer
+  // arithmetic combined with payload accesses. Preserve the stride using an
+  // integer element on device and payload address spaces.
+  llvm::SmallPtrSet<const llvm::Function *, 4> payloadFunctions;
+  for (const auto *kind : {"air.object", "air.mesh"})
+    if (auto *entries = m->getNamedMetadata(kind))
+      for (auto *entry : entries->operands())
+        payloadFunctions.insert(llvm::cast<llvm::Function>(
+            llvm::cast<llvm::ConstantAsMetadata>(entry->getOperand(0))->getValue()));
   for (auto &f : *m)
     for (auto &b : f)
       for (auto &i : b) {
-        if (!objectFunctions.contains(&f))
+        if (!payloadFunctions.contains(&f))
           continue;
         auto *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(&i);
-        if (!gep || gep->getNumIndices() != 1 || gep->getPointerAddressSpace() != 1)
+        if (!gep || gep->getNumIndices() != 1 ||
+            (gep->getPointerAddressSpace() != 1 && gep->getPointerAddressSpace() != 6))
           continue;
         if (gep->getSourceElementType()->isIntegerTy(8)) {
           auto *offset = gep->getOperand(1);
@@ -168,11 +171,20 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
             gep->setSourceElementType(element);
             gep->setResultElementType(element);
           }
+          continue;
         }
         auto *array = llvm::dyn_cast<llvm::ArrayType>(gep->getSourceElementType());
         if (!array || !array->getElementType()->isIntegerTy(8))
           continue;
         auto bytes = array->getNumElements();
+        if (bytes == 16) {
+          auto *element = llvm::IntegerType::get(m->getContext(), 32);
+          llvm::IRBuilder<> builder(gep);
+          gep->setOperand(1, builder.CreateShl(gep->getOperand(1), 2, "air.element.offset"));
+          gep->setSourceElementType(element);
+          gep->setResultElementType(element);
+          continue;
+        }
         if (bytes != 2 && bytes != 4 && bytes != 8)
           continue;
         auto *element = llvm::IntegerType::get(m->getContext(), bytes * 8);

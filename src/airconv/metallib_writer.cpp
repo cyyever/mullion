@@ -37,6 +37,8 @@ llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
       return createStringError("air.version cannot be represented by this metallib writer");
     airMinor = minor;
   }
+  const uint16_t langMajor = airMinor <= 7 ? 3 : 4;
+  const uint16_t langMinor = airMinor <= 7 ? 2 : 0;
 
   SmallVector<char, 0> bitcode;
   SmallVector<char, 0> public_metadata;
@@ -81,8 +83,8 @@ llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
           .airVersionMinor = uint16_t(airMinor),
-          .languageVersionMajor = 4,
-          .languageVersionMinor = 0,
+          .languageVersionMajor = langMajor,
+          .languageVersionMinor = langMinor,
         });
         while (fn->getNumOperands() > 3 && isa<MDTuple>(fn->getOperand(3).get())
         ) {
@@ -199,8 +201,8 @@ llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
           .airVersionMinor = uint16_t(airMinor),
-          .languageVersionMajor = 4,
-          .languageVersionMinor = 0,
+          .languageVersionMajor = langMajor,
+          .languageVersionMinor = langMinor,
         });
         function_def_stream << "ENDT";
         public_metadata_stream << value(4);
@@ -235,8 +237,8 @@ llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
           .airVersionMinor = uint16_t(airMinor),
-          .languageVersionMajor = 4,
-          .languageVersionMinor = 0,
+          .languageVersionMajor = langMajor,
+          .languageVersionMinor = langMinor,
         });
         function_def_stream << "ENDT";
 
@@ -330,8 +332,8 @@ llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
           .airVersionMinor = uint16_t(airMinor),
-          .languageVersionMajor = 4,
-          .languageVersionMinor = 0,
+          .languageVersionMajor = langMajor,
+          .languageVersionMinor = langMinor,
         });
         function_def_stream << "ENDT";
 
@@ -371,8 +373,8 @@ llvm::Error write(const llvm::Module &module, raw_ostream &OS) {
         function_def_stream << value(MTLB_VERS_TAG{
           .airVersionMajor = 2,
           .airVersionMinor = uint16_t(airMinor),
-          .languageVersionMajor = 4,
-          .languageVersionMinor = 0,
+          .languageVersionMajor = langMajor,
+          .languageVersionMinor = langMinor,
         });
         function_def_stream << "ENDT";
 

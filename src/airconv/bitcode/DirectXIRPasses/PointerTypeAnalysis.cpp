@@ -142,14 +142,16 @@ classifyPointerType(const Value *V, PointerTypeMap &Map) {
       return Resource;
     }
   }
-  // Recover device buffer elements from their typed accesses instead of
-  // introducing byte pointers into Metal's object payload lowering.
-  bool objectShader = false;
+  // Recover device and payload buffer elements from their typed accesses
+  // instead of introducing byte pointers into Metal's object/mesh payload lowering.
+  bool payloadShader = false;
   if (auto *Inst = dyn_cast<Instruction>(V))
-    if (auto *Objects = Inst->getModule()->getNamedMetadata("air.object"))
-      for (auto *Entry : Objects->operands())
-        objectShader |= cast<ConstantAsMetadata>(Entry->getOperand(0))->getValue() == Inst->getFunction();
-  if (!PointeeTy && objectShader && V->getType()->getPointerAddressSpace() == 1) {
+    for (const auto *Kind : {"air.object", "air.mesh"})
+      if (auto *Entries = Inst->getModule()->getNamedMetadata(Kind))
+        for (auto *Entry : Entries->operands())
+          payloadShader |= cast<ConstantAsMetadata>(Entry->getOperand(0))->getValue() == Inst->getFunction();
+  const unsigned AS = V->getType()->getPointerAddressSpace();
+  if (!PointeeTy && payloadShader && (AS == 1 || AS == 6)) {
     for (auto *U : V->users()) {
       auto *Use = U;
       if (auto *Cast = dyn_cast<BitCastInst>(Use); Cast && Cast->hasOneUse())

@@ -65,7 +65,6 @@ void initializeModule(llvm::Module &M) {
     "v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024-n8:"
     "16:32"
   );
-  M.setSDKVersion(VersionTuple(26, 0));
   M.addModuleFlag(Module::ModFlagBehavior::Error, "wchar_size", 4);
   M.addModuleFlag(Module::ModFlagBehavior::Max, "frame-pointer", 2);
   M.addModuleFlag(Module::ModFlagBehavior::Max, "air.max_device_buffers", 31);

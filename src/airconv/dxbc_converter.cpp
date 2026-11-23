@@ -266,6 +266,7 @@ void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION metal_v
     airLangVersion->addOperand(MDTuple::get(
         context, {createString("Metal"), createUnsignedInteger(3), createUnsignedInteger(2), createUnsignedInteger(0)}));
     module.setTargetTriple(Triple("air64-apple-macosx15.0.0"));
+    module.setSDKVersion(VersionTuple(15, 0));
     return;
   }
   airVersion->addOperand(
@@ -273,6 +274,7 @@ void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION metal_v
   airLangVersion->addOperand(MDTuple::get(
       context, {createString("Metal"), createUnsignedInteger(4), createUnsignedInteger(0), createUnsignedInteger(0)}));
   module.setTargetTriple(Triple("air64_v29-apple-macosx27.2.0"));
+  module.setSDKVersion(VersionTuple(26, 0));
 }
 
 RegisterComponentType
