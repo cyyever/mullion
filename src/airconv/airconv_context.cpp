@@ -311,6 +311,80 @@ ContractOutsidePosition(llvm::Module &M) {
   }
 }
 
+// Metal's AIR backend does not implement LLVM's llvm.is.fpclass intrinsic, which LLVM 23's
+// optimizer can synthesize from floating-point comparisons. Lower it to IEEE-754 bit checks.
+static void
+LowerIsFpClass(llvm::Module &M) {
+  std::vector<CallInst *> calls;
+  std::vector<Function *> intrinsics;
+  for (auto &F : M) {
+    if (F.getIntrinsicID() != Intrinsic::is_fpclass)
+      continue;
+    intrinsics.push_back(&F);
+    for (auto *U : F.users())
+      if (auto *CI = dyn_cast<CallInst>(U))
+        calls.push_back(CI);
+  }
+  for (auto *CI : calls) {
+    Value *Val = CI->getArgOperand(0);
+    uint32_t Mask = cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
+    Type *ValTy = Val->getType();
+    Type *ScalarTy = ValTy->getScalarType();
+    unsigned Bits = ScalarTy->getPrimitiveSizeInBits();
+    uint64_t SignMask = 0, ExpMask = 0, MantMask = 0, QNanBit = 0;
+    if (Bits == 16) {
+      SignMask = 0x8000ULL; ExpMask = 0x7c00ULL; MantMask = 0x03ffULL; QNanBit = 0x0200ULL;
+    } else if (Bits == 32) {
+      SignMask = 0x80000000ULL; ExpMask = 0x7f800000ULL; MantMask = 0x007fffffULL; QNanBit = 0x00400000ULL;
+    } else if (Bits == 64) {
+      SignMask = 0x8000000000000000ULL; ExpMask = 0x7ff0000000000000ULL;
+      MantMask = 0x000fffffffffffffULL; QNanBit = 0x0008000000000000ULL;
+    } else {
+      continue;
+    }
+    IRBuilder<> B(CI);
+    Type *IntTy = IntegerType::get(M.getContext(), Bits);
+    if (auto *VT = dyn_cast<FixedVectorType>(ValTy))
+      IntTy = FixedVectorType::get(IntTy, VT->getNumElements());
+    Value *Raw = B.CreateBitCast(Val, IntTy);
+    auto Const = [&](uint64_t V) { return ConstantInt::get(IntTy, V); };
+    Value *Zero = Const(0);
+    Value *Sign = B.CreateAnd(Raw, Const(SignMask));
+    Value *Exp = B.CreateAnd(Raw, Const(ExpMask));
+    Value *Mant = B.CreateAnd(Raw, Const(MantMask));
+    Value *IsNeg = B.CreateICmpNE(Sign, Zero);
+    Value *IsPos = B.CreateICmpEQ(Sign, Zero);
+    Value *ExpAll1 = B.CreateICmpEQ(Exp, Const(ExpMask));
+    Value *ExpZero = B.CreateICmpEQ(Exp, Zero);
+    Value *MantZero = B.CreateICmpEQ(Mant, Zero);
+    Value *MantNonZero = B.CreateICmpNE(Mant, Zero);
+    Value *IsQuiet = B.CreateICmpNE(B.CreateAnd(Raw, Const(QNanBit)), Zero);
+    Value *IsNormal = B.CreateAnd(B.CreateNot(ExpAll1), B.CreateNot(ExpZero));
+
+    Value *Res = ConstantInt::getFalse(CI->getType());
+    auto Add = [&](uint32_t Bit, Value *Cond) {
+      if (Mask & Bit)
+        Res = B.CreateOr(Res, Cond);
+    };
+    Add(0x001, B.CreateAnd(ExpAll1, B.CreateAnd(MantNonZero, B.CreateNot(IsQuiet)))); // fcSNan
+    Add(0x002, B.CreateAnd(ExpAll1, IsQuiet));                                        // fcQNan
+    Add(0x004, B.CreateAnd(IsNeg, B.CreateAnd(ExpAll1, MantZero)));                   // fcNegInf
+    Add(0x008, B.CreateAnd(IsNeg, IsNormal));                                         // fcNegNormal
+    Add(0x010, B.CreateAnd(IsNeg, B.CreateAnd(ExpZero, MantNonZero)));                // fcNegSubnormal
+    Add(0x020, B.CreateAnd(IsNeg, B.CreateAnd(ExpZero, MantZero)));                   // fcNegZero
+    Add(0x040, B.CreateAnd(IsPos, B.CreateAnd(ExpZero, MantZero)));                   // fcPosZero
+    Add(0x080, B.CreateAnd(IsPos, B.CreateAnd(ExpZero, MantNonZero)));                // fcPosSubnormal
+    Add(0x100, B.CreateAnd(IsPos, IsNormal));                                         // fcPosNormal
+    Add(0x200, B.CreateAnd(IsPos, B.CreateAnd(ExpAll1, MantZero)));                   // fcPosInf
+
+    CI->replaceAllUsesWith(Res);
+    CI->eraseFromParent();
+  }
+  for (auto *F : intrinsics)
+    if (F->use_empty())
+      F->eraseFromParent();
+}
+
 bool
 runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
   // a pixel shader that was not shaded coarsely keeps every lane's writes
@@ -436,6 +510,7 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
   ContractOutsidePosition(M);
   AvoidNarrowedSignBitCounts(M);
   AvoidConstantDividends(M);
+  LowerIsFpClass(M);
   return !verifyModule(M, &Error);
 }
 
