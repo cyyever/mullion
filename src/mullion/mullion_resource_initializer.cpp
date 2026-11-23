@@ -18,6 +18,7 @@
 
 #include "Metal.hpp"
 #include "mullion_resource_initializer.hpp"
+#include "mullion_bc_snorm.hpp"
 #include <cstring>
 #include <vector>
 #include "mullion_format.hpp"
@@ -208,7 +209,7 @@ ResourceInitializer::initWithZero(
 
   std::scoped_lock lock(mutex_);
 
-  do {
+  while (true) {
     ALLOC_ZERO(zero, total_bytes_needed);
     RETAIN(allocation);
     ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture, copy);
@@ -223,8 +224,52 @@ ResourceInitializer::initWithZero(
     copy->slice = slice;
     copy->level = level;
     copy->origin = {.x=0, .y=0, .z=0};
+    break;
+  }
 
-  } while (false);
+  if (allocation->signedBC) {
+    while (true) {
+      RETAIN(allocation);
+      bool is_bc7 = texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm ||
+                    texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm_sRGB;
+      if (is_bc7) {
+        ALLOC_GPU(bc7_zero, total_bytes_needed);
+        ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture, bc7_copy);
+        std::vector<uint8_t> blocks(total_bytes_needed, 0);
+        for (size_t off = 0; off < total_bytes_needed; off += 16)
+          blocks[off] = 0x40;
+        bc7_zero.updateContents(bc7_zero_offset, blocks.data(), total_bytes_needed);
+        bc7_copy->type = WMTBlitCommandCopyFromBufferToTexture;
+        bc7_copy->src = bc7_zero;
+        bc7_copy->src_offset = bc7_zero_offset;
+        bc7_copy->bytes_per_row = bytes_per_row_needed;
+        bc7_copy->bytes_per_image = is_3d_tex ? bytes_per_image_needed : 0;
+        bc7_copy->size = {.width=width_sub, .height=height_sub, .depth=depth_sub};
+        bc7_copy->dst = allocation->signedBC;
+        bc7_copy->slice = slice;
+        bc7_copy->level = level;
+        bc7_copy->origin = {.x=0, .y=0, .z=0};
+      } else {
+        uint32_t channels = texture->pixelFormat() == WMTPixelFormatBC5_RGUnorm ||
+                            texture->pixelFormat() == WMTPixelFormatBC5_RGSnorm ? 2 : 1;
+        size_t decoded_row = size_t(width_sub) * channels * sizeof(float);
+        size_t decoded_image = decoded_row * height_sub;
+        ALLOC_ZERO(decoded_zero, decoded_image * depth_sub);
+        ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture, decoded_copy);
+        decoded_copy->type = WMTBlitCommandCopyFromBufferToTexture;
+        decoded_copy->src = decoded_zero;
+        decoded_copy->src_offset = 0;
+        decoded_copy->bytes_per_row = decoded_row;
+        decoded_copy->bytes_per_image = is_3d_tex ? decoded_image : 0;
+        decoded_copy->size = {.width=width_sub, .height=height_sub, .depth=depth_sub};
+        decoded_copy->dst = allocation->signedBC;
+        decoded_copy->slice = slice;
+        decoded_copy->level = level;
+        decoded_copy->origin = {.x=0, .y=0, .z=0};
+      }
+      break;
+    }
+  }
 
   return current_seq_id_;
 }
@@ -277,7 +322,7 @@ ResourceInitializer::initWithData(
   size_t total_bytes_needed = bytes_per_image_needed * depth_sub;
 
   std::scoped_lock lock(mutex_);
-  do {
+  while (true) {
     RETAIN(allocation);
     ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture, copy);
     ALLOC_GPU(temp, total_bytes_needed);
@@ -318,8 +363,78 @@ ResourceInitializer::initWithData(
     copy->slice = slice;
     copy->level = level;
     copy->origin = {.x=0, .y=0, .z=0};
+    break;
+  }
 
-  } while (false);
+  if (allocation->signedBC) {
+    while (true) {
+      RETAIN(allocation);
+      bool is_bc7 = texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm ||
+                    texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm_sRGB;
+      auto src_bytes = static_cast<const uint8_t *>(data);
+      if (is_bc7) {
+        ALLOC_GPU(bc7_temp, total_bytes_needed);
+        ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture, bc7_copy);
+        std::vector<uint8_t> normalized(total_bytes_needed, 0);
+        uint32_t bw = align(width_sub, 4u) / 4u, bh = align(height_sub, 4u) / 4u;
+        for (uint32_t z = 0; z < depth_sub; z++)
+          for (uint32_t y = 0; y < bh; y++)
+            for (uint32_t x = 0; x < bw; x++) {
+              auto *dst_block = normalized.data() + z * bytes_per_image_needed + y * bytes_per_row_needed + x * 16;
+              const auto *src_block = src_bytes + z * bytes_per_image_increment + y * bytes_per_row_increment + x * 16;
+              if (src_block[0] == 0) {
+                dst_block[0] = 0x40;
+              } else {
+                memcpy(dst_block, src_block, 16);
+              }
+            }
+        bc7_temp.updateContents(bc7_temp_offset, normalized.data(), total_bytes_needed);
+        bc7_copy->type = WMTBlitCommandCopyFromBufferToTexture;
+        bc7_copy->src = bc7_temp;
+        bc7_copy->src_offset = bc7_temp_offset;
+        bc7_copy->bytes_per_row = bytes_per_row_needed;
+        bc7_copy->bytes_per_image = is_3d_tex ? bytes_per_image_needed : 0;
+        bc7_copy->size = {.width=width_sub, .height=height_sub, .depth=depth_sub};
+        bc7_copy->dst = allocation->signedBC;
+        bc7_copy->slice = slice;
+        bc7_copy->level = level;
+        bc7_copy->origin = {.x=0, .y=0, .z=0};
+      } else {
+        uint32_t channels = texture->pixelFormat() == WMTPixelFormatBC5_RGUnorm ||
+                            texture->pixelFormat() == WMTPixelFormatBC5_RGSnorm ? 2 : 1;
+        size_t decoded_row = size_t(width_sub) * channels * sizeof(float);
+        size_t decoded_image = decoded_row * height_sub;
+        ALLOC_GPU(decoded_temp, decoded_image * depth_sub);
+        ALLOC_BLIT(wmtcmd_blit_copy_from_buffer_to_texture, decoded_copy);
+        std::vector<float> decoded(size_t(width_sub) * height_sub * channels * depth_sub);
+        for (uint32_t z = 0; z < depth_sub; z++)
+          for (uint32_t y = 0; y < height_sub; y++)
+            for (uint32_t x = 0; x < width_sub; x++)
+              for (uint32_t channel = 0; channel < channels; channel++) {
+                uint32_t words[2];
+                memcpy(words,
+                       src_bytes + z * bytes_per_image_increment + size_t(y / 4) * bytes_per_row_increment +
+                           size_t(x / 4) * channels * 8 + channel * 8,
+                       8);
+                auto value = decodeBCSnorm(words[0], words[1], (y % 4) * 4 + x % 4);
+                decoded[((size_t(z) * height_sub + y) * width_sub + x) * channels + channel] =
+                    float(value.numerator) / value.denominator;
+              }
+        decoded_temp.updateContents(decoded_temp_offset, decoded.data(), decoded_image * depth_sub);
+        decoded_copy->type = WMTBlitCommandCopyFromBufferToTexture;
+        decoded_copy->src = decoded_temp;
+        decoded_copy->src_offset = decoded_temp_offset;
+        decoded_copy->bytes_per_row = decoded_row;
+        decoded_copy->bytes_per_image = is_3d_tex ? decoded_image : 0;
+        decoded_copy->size = {.width=width_sub, .height=height_sub, .depth=depth_sub};
+        decoded_copy->dst = allocation->signedBC;
+        decoded_copy->slice = slice;
+        decoded_copy->level = level;
+        decoded_copy->origin = {.x=0, .y=0, .z=0};
+      }
+      break;
+    }
+  }
 
   return current_seq_id_;
 }

@@ -4890,6 +4890,7 @@ public:
           cmd_cptex.slice = cmd.Dst.ArraySlice;
           cmd_cptex.level = cmd.Dst.MipLevel;
           cmd_cptex.origin = cmd.DstOrigin;
+          enc.refreshAccurateBC(dst_, cmd.Dst.MipLevel, cmd.Dst.ArraySlice);
         });
       } else if (auto src = GetTexture(cmd.pSrc, cmd.Plane)) {
         // on-device copy
@@ -4939,6 +4940,7 @@ public:
             cmd_cptex.slice = cmd.Dst.ArraySlice;
             cmd_cptex.level = cmd.Dst.MipLevel;
             cmd_cptex.origin = cmd.DstOrigin;
+            enc.refreshAccurateBC(dst_, cmd.Dst.MipLevel, cmd.Dst.ArraySlice);
             return;
           }
           auto &cmd_cptex = enc.encodeBlitCommand<wmtcmd_blit_copy_from_texture_to_texture>();
@@ -4955,6 +4957,7 @@ public:
           cmd_cptex.dst_slice = cmd.Dst.ArraySlice;
           cmd_cptex.dst_level = cmd.Dst.MipLevel;
           cmd_cptex.dst_origin = cmd.DstOrigin;
+          enc.refreshAccurateBC(dst_, cmd.Dst.MipLevel, cmd.Dst.ArraySlice);
         });
       } else {
         UNREACHABLE
@@ -5055,6 +5058,7 @@ public:
           cmd_cptex.slice = cmd.Dst.ArraySlice;
           cmd_cptex.level = cmd.Dst.MipLevel;
           cmd_cptex.origin = cmd.DstOrigin;
+          enc.refreshAccurateBC(dst_, cmd.Dst.MipLevel, cmd.Dst.ArraySlice);
         });
       } else {
         UNREACHABLE
@@ -5162,6 +5166,7 @@ public:
         cmd_cptex.slice = cmd.Dst.ArraySlice;
         cmd_cptex.level = cmd.Dst.MipLevel;
         cmd_cptex.origin = cmd.DstOrigin;
+        enc.refreshAccurateBC(dst, cmd.Dst.MipLevel, cmd.Dst.ArraySlice);
       });
     } else {
       UNREACHABLE
@@ -5226,6 +5231,7 @@ public:
         cmd_cptex.slice = cmd.Dst.ArraySlice;
         cmd_cptex.level = cmd.Dst.MipLevel;
         cmd_cptex.origin = cmd.DstOrigin;
+        enc.refreshAccurateBC(dst, cmd.Dst.MipLevel, cmd.Dst.ArraySlice);
       });
     }
   }

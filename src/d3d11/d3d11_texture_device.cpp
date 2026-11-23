@@ -626,7 +626,15 @@ HRESULT CreateDeviceTextureInternal(MTLD3D11Device *pDevice,
   // a renamed texture would leave the Direct3D 12 resource Direct3D 11 on 12 makes of it
   bool single_subresource = info.mipmap_level_count == 1 && info.array_length == 1 &&
                             !(finalDesc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) && !pDevice->shares_with_d3d12;
-  auto texture = Rc<Texture>(new Texture(info, pDevice->GetMTLDevice()));
+  bool accurate_bc = finalDesc.Format == DXGI_FORMAT_BC4_SNORM || finalDesc.Format == DXGI_FORMAT_BC5_SNORM ||
+                     finalDesc.Format == DXGI_FORMAT_BC4_TYPELESS || finalDesc.Format == DXGI_FORMAT_BC5_TYPELESS ||
+                     finalDesc.Format == DXGI_FORMAT_BC7_TYPELESS || finalDesc.Format == DXGI_FORMAT_BC7_UNORM ||
+                     finalDesc.Format == DXGI_FORMAT_BC7_UNORM_SRGB;
+  if (accurate_bc && defers) {
+    info.usage = WMTTextureUsage(info.usage | WMTTextureUsagePixelFormatView);
+    defers = false;
+  }
+  auto texture = Rc<Texture>(new Texture(info, pDevice->GetMTLDevice(), accurate_bc));
   if (defers && !(info.usage & WMTTextureUsagePixelFormatView))
     texture->deferFormatView();
 

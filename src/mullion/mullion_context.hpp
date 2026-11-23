@@ -969,6 +969,9 @@ public:
 
   InternalCommandLibrary &lib;
   RGB32Copy<ArgumentEncodingContext> rgb32_copy_cmd{*this};
+  void refreshAccurateBC(const Rc<Texture> &texture, uint32_t level, uint32_t slice);
+  WMT::Reference<WMT::ComputePipelineState> bc_snorm_pso_;
+  WMT::Reference<WMT::ComputePipelineState> bc7_copy_pso_;
   EmulatedCommandContext emulated_cmd;
   ClearRTV<ArgumentEncodingContext> clear_rt_cmd;
   DepthStencilBlitContext blit_depth_stencil_cmd;

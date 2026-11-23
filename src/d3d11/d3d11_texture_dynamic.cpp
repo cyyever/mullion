@@ -150,7 +150,11 @@ HRESULT CreateDynamicTextureInternal(MTLD3D11Device *pDevice,
     subresources.push_back(std::move(subresource));
   }
 
-  auto texture = Rc<Texture>(new Texture(info, pDevice->GetMTLDevice()));
+  bool accurate_bc = finalDesc.Format == DXGI_FORMAT_BC4_SNORM || finalDesc.Format == DXGI_FORMAT_BC5_SNORM ||
+                     finalDesc.Format == DXGI_FORMAT_BC4_TYPELESS || finalDesc.Format == DXGI_FORMAT_BC5_TYPELESS ||
+                     finalDesc.Format == DXGI_FORMAT_BC7_TYPELESS || finalDesc.Format == DXGI_FORMAT_BC7_UNORM ||
+                     finalDesc.Format == DXGI_FORMAT_BC7_UNORM_SRGB;
+  auto texture = Rc<Texture>(new Texture(info, pDevice->GetMTLDevice(), accurate_bc));
   MTL_DXGI_FORMAT_DESC format;
   MTLQueryDXGIFormat(pDevice->GetMTLDevice(), finalDesc.Format, format);
   if (format.Flag & MTL_DXGI_FORMAT_VIDEO_PLANAR) {

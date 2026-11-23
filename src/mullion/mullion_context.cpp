@@ -2396,4 +2396,111 @@ ArgumentEncodingContext::countComputePipelineStatistics(
   ctx.setComputePSO(encoder->last_pso, size);
 }
 
+void
+ArgumentEncodingContext::refreshAccurateBC(const Rc<Texture> &texture, uint32_t level, uint32_t slice) {
+  if (!texture || !texture->current() || !texture->current()->signedBC)
+    return;
+  auto allocation = texture->current();
+  SimpleCommandContext<ArgumentEncodingContext> ctx{*this};
+  uint32_t width = std::max(texture->width() >> level, 1u);
+  uint32_t height = std::max(texture->height() >> level, 1u);
+  uint32_t depth = std::max(texture->depth() >> level, 1u);
+  bool is_bc7 = texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm ||
+                texture->pixelFormat() == WMTPixelFormatBC7_RGBAUnorm_sRGB;
+  if (is_bc7) {
+    if (!bc7_copy_pso_)
+      bc7_copy_pso_ = ctx.getComputePipeline("cs_normalize_bc7");
+    if (!bc7_copy_pso_)
+      return;
+    WMTSize blocks{.width=(width + 3) / 4, .height=(height + 3) / 4, .depth=depth};
+    uint64_t row = align(blocks.width * 16, 256), image = row * blocks.height;
+    auto [raw, raw_offset] = allocateTempBuffer(image * depth, 256);
+    auto [normalized, norm_offset] = allocateTempBuffer(image * depth, 256);
+    ctx.endPass();
+    ctx.startBlitPass();
+    auto src = access(texture, level, slice, ResourceAccess::Read);
+    auto &read = encodeBlitCommand<wmtcmd_blit_copy_from_texture_to_buffer>();
+    read.type = WMTBlitCommandCopyFromTextureToBuffer;
+    read.src = src;
+    read.level = level;
+    read.slice = slice;
+    read.origin = {};
+    read.size = {.width=width, .height=height, .depth=depth};
+    read.dst = raw;
+    read.offset = raw_offset;
+    read.bytes_per_row = row;
+    read.bytes_per_image = depth > 1 ? image : 0;
+    ctx.endPass();
+    ctx.startComputePass();
+    ctx.setComputePSO(bc7_copy_pso_, {.width=bc7_copy_pso_.threadExecutionWidth(), .height=1, .depth=1});
+    ctx.setComputeBuffer(0, raw, raw_offset);
+    ctx.setComputeBuffer(1, normalized, norm_offset);
+    RGB32CopyLayout layout{.src_row=row, .src_image=image, .dst_row=row, .dst_image=image};
+    memcpy(ctx.setComputeBytes(2, sizeof(layout)), &layout, sizeof(layout));
+    ctx.dispatch(blocks);
+    ctx.endPass();
+    ctx.startBlitPass();
+    access(texture, level, slice, ResourceAccess::Write);
+    auto &write = encodeBlitCommand<wmtcmd_blit_copy_from_buffer_to_texture>();
+    write.type = WMTBlitCommandCopyFromBufferToTexture;
+    write.src = normalized;
+    write.src_offset = norm_offset;
+    write.bytes_per_row = row;
+    write.bytes_per_image = depth > 1 ? image : 0;
+    write.size = {.width=width, .height=height, .depth=depth};
+    write.dst = allocation->signedBC;
+    write.level = level;
+    write.slice = slice;
+    write.origin = {};
+    return;
+  }
+  if (!bc_snorm_pso_)
+    bc_snorm_pso_ = ctx.getComputePipeline("cs_decode_bc_snorm");
+  if (!bc_snorm_pso_)
+    return;
+  uint32_t channels = texture->pixelFormat() == WMTPixelFormatBC5_RGUnorm ||
+                      texture->pixelFormat() == WMTPixelFormatBC5_RGSnorm ? 2 : 1;
+  uint64_t compressed_row = align((width + 3) / 4 * channels * 8, 256);
+  uint64_t decoded_row = align(width * channels * 4, 256);
+  auto [raw, raw_offset] = allocateTempBuffer(compressed_row * ((height + 3) / 4), 256);
+  auto [decoded, decoded_offset] = allocateTempBuffer(decoded_row * height, 256);
+  ctx.endPass();
+  ctx.startBlitPass();
+  auto src = access(texture, level, slice, ResourceAccess::Read);
+  auto &read = encodeBlitCommand<wmtcmd_blit_copy_from_texture_to_buffer>();
+  read.type = WMTBlitCommandCopyFromTextureToBuffer;
+  read.src = src;
+  read.level = level;
+  read.slice = slice;
+  read.origin = {};
+  read.size = {.width=width, .height=height, .depth=1};
+  read.dst = raw;
+  read.offset = raw_offset;
+  read.bytes_per_row = compressed_row;
+  read.bytes_per_image = 0;
+  ctx.endPass();
+  ctx.startComputePass();
+  ctx.setComputePSO(bc_snorm_pso_, {.width=bc_snorm_pso_.threadExecutionWidth(), .height=1, .depth=1});
+  ctx.setComputeBuffer(0, raw, raw_offset);
+  ctx.setComputeBuffer(1, decoded, decoded_offset);
+  RGB32CopyLayout layout{.src_row=compressed_row, .src_image=0, .dst_row=decoded_row, .dst_image=0};
+  memcpy(ctx.setComputeBytes(2, sizeof(layout)), &layout, sizeof(layout));
+  memcpy(ctx.setComputeBytes(3, sizeof(channels)), &channels, sizeof(channels));
+  ctx.dispatch({.width=width, .height=height, .depth=1});
+  ctx.endPass();
+  ctx.startBlitPass();
+  access(texture, level, slice, ResourceAccess::Write);
+  auto &write = encodeBlitCommand<wmtcmd_blit_copy_from_buffer_to_texture>();
+  write.type = WMTBlitCommandCopyFromBufferToTexture;
+  write.src = decoded;
+  write.src_offset = decoded_offset;
+  write.bytes_per_row = decoded_row;
+  write.bytes_per_image = 0;
+  write.size = {.width=width, .height=height, .depth=1};
+  write.dst = allocation->signedBC;
+  write.level = level;
+  write.slice = slice;
+  write.origin = {};
+}
+
 } // namespace mullion
