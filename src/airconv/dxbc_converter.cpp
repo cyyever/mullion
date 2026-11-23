@@ -250,7 +250,7 @@ void setup_temp_register(
   }
 }
 
-void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION) {
+void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION metal_version) {
   using namespace llvm;
   auto &context = module.getContext();
   auto createUnsignedInteger = [&](uint32_t s) {
@@ -260,6 +260,14 @@ void setup_metal_version(llvm::Module &module, SM50_SHADER_METAL_VERSION) {
 
   auto airVersion = module.getOrInsertNamedMetadata("air.version");
   auto airLangVersion = module.getOrInsertNamedMetadata("air.language_version");
+  if (metal_version == SM50_SHADER_METAL_320) {
+    airVersion->addOperand(
+        MDTuple::get(context, {createUnsignedInteger(2), createUnsignedInteger(7), createUnsignedInteger(0)}));
+    airLangVersion->addOperand(MDTuple::get(
+        context, {createString("Metal"), createUnsignedInteger(3), createUnsignedInteger(2), createUnsignedInteger(0)}));
+    module.setTargetTriple(Triple("air64-apple-macosx15.0.0"));
+    return;
+  }
   airVersion->addOperand(
       MDTuple::get(context, {createUnsignedInteger(2), createUnsignedInteger(9), createUnsignedInteger(0)}));
   airLangVersion->addOperand(MDTuple::get(
@@ -1374,6 +1382,14 @@ llvm::Error convert_dxbc_compute_shader(
   if (args_get_data<SM50_SHADER_COMMON, SM50_SHADER_COMMON_DATA>(pArgs, &sm50_common)) {
     shader_flags = sm50_common->flags;
   }
+  // Apple's compiler aborts on a device-coherent texture access in Metal 4's AIR, and
+  // builds the same module as Metal 3.2's (#238): a kernel that reads or writes a globally coherent texture says
+  // Metal 3.2. decided before any code is made, since code takes the forms of its module's version
+  if (metal_version == SM50_SHADER_METAL_400 && std::ranges::any_of(shader_info->uavMap, [](auto &uav) {
+        return uav.second.global_coherent && (uav.second.read || uav.second.written) &&
+               uav.second.resource_type != shader::common::ResourceType::NonApplicable;
+      }))
+    metal_version = SM50_SHADER_METAL_320;
   SM50_SHADER_ROOT_SIGNATURE_DATA *rootsig = nullptr;
   args_get_data<SM50_SHADER_ROOT_SIGNATURE, SM50_SHADER_ROOT_SIGNATURE_DATA>(pArgs, &rootsig);
 

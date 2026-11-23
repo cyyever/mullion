@@ -195,7 +195,7 @@ convert(const std::vector<uint8_t> &bytecode, SM50_SHADER_METAL_VERSION version,
 
 // what Apple's verifier says of the module: empty when it takes it
 static std::string
-verify(const std::string &module) {
+verify(const std::string &module, const char *expected_triple = nullptr) {
   char path[] = "/tmp/texel_forms.XXXXXX";
   int fd = mkstemp(path);
   if (fd < 0)
@@ -234,8 +234,8 @@ verify(const std::string &module) {
   int status = out ? pclose(out) : -1;
   unlink(path);
   if (!status) {
-    if (auto *expected = getenv("MULLION_EXPECTED_AIR_TRIPLE"); expected &&
-        said.find(std::string("target triple = \"") + expected + "\"") == std::string::npos)
+    const char *expected = expected_triple ? expected_triple : getenv("MULLION_EXPECTED_AIR_TRIPLE");
+    if (expected && said.find(std::string("target triple = \"") + expected + "\"") == std::string::npos)
       return std::string("AIR target differs from Apple compiler: expected ") + expected;
     return "";
   }
@@ -249,6 +249,7 @@ main() {
     std::string name;
     std::vector<uint32_t> program;
     const char *access; // the AIR function the case must call
+    const char *expected_triple = nullptr;
   };
   std::vector<Case> cases;
   const struct {
@@ -329,6 +330,7 @@ main() {
     );
   }
   // dcl_uav_typed_texture2d (uint, uint, uint, uint), globallycoherent u0; ld_uav_typed r0.xyzw, l(0, 0, 0, 0), u0.xyzw
+  // Compute shaders with globallycoherent textures intentionally emit Metal 3.2 AIR to avoid an AGXMetal Metal 4 crash.
   cases.push_back(
       {"ld_uav_typed of a globally coherent 2D UAV",
        kernel(
@@ -336,7 +338,8 @@ main() {
            {instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D11_SB_OPCODE_LD_UAV_TYPED), {temp(0, all), origin, uav(xyzw)}),
             keep(0)}
        ),
-       "air.read_texture_2d.device_coherent"}
+       "air.read_texture_2d.device_coherent",
+       "air64-apple-macosx15.0.0"}
   );
   // imm_atomic_cmp_exch r0.x, u0.x, l(0, 0, 0, 0), l(0), l(1)
   cases.push_back(
@@ -362,7 +365,7 @@ main() {
       } else if (module.find(c.access) == std::string::npos) {
         printf("wrong: %s for %s converts to no %s call\n", c.name.c_str(), named, c.access);
         wrong++;
-      } else if (auto said = verify(module); !said.empty()) {
+      } else if (auto said = verify(module, c.expected_triple); !said.empty()) {
         printf("wrong: %s for %s: %s\n", c.name.c_str(), named, said.c_str());
         wrong++;
       }
