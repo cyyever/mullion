@@ -32,6 +32,7 @@ public:
       PixelShader = pDesc->PixelShader->get_pixel_shader(ShaderVariantPixel{
           .sample_mask=pDesc->SampleMask, .dual_source_blending=pDesc->BlendState->IsDualSourceBlending(),
           .disable_depth_output=depth_stencil_format == WMTPixelFormatInvalid,
+          .quantize_d24=pDesc->QuantizeD24,
           .unorm_output_reg_mask=unorm_output_reg_mask, .pipeline_statistics=pDesc->PipelineStatistics, .alpha_to_coverage=pDesc->BlendState->IsAlphaToCoverage(),
           .centered_samples=pDesc->CenteredSamples, .single_raster_sample=pDesc->SingleRasterSample, .paired_samples=pDesc->PairedSamples, .clip_distances=pDesc->ClipDistances},
           {rtv_formats, num_rtvs}, pDesc->BlendState, pDesc->PixelMinMaxFiltering);

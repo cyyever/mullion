@@ -181,6 +181,7 @@ CreateVariantShader(MTLD3D11Device *pDevice, ManagedShader shader,
   h.update(variant.unorm_output_reg_mask);
   h.update(variant.dual_source_blending);
   h.update(variant.disable_depth_output);
+  h.update(variant.quantize_d24);
   h.update(variant.pixel_formats);
   h.update(variant.pipeline_statistics);
   h.update(variant.alpha_to_coverage);
@@ -204,6 +205,7 @@ CreateVariantShader(MTLD3D11Device *pDevice, ManagedShader shader,
     data.sample_mask = variant.sample_mask;
     data.dual_source_blending = variant.dual_source_blending;
     data.disable_depth_output = variant.disable_depth_output;
+    data.quantize_d24 = variant.quantize_d24;
     data.unorm_output_reg_mask = variant.unorm_output_reg_mask;
     std::ranges::copy(variant.pixel_formats, data.pixel_formats);
     data.pipeline_statistics = variant.pipeline_statistics;

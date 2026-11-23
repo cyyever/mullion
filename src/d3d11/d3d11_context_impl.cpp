@@ -3588,7 +3588,10 @@ public:
     // marked
     if (state_.OutputMerger.DepthStencilState == expected.ptr() && state_.OutputMerger.StencilRef == StencilRef)
       return;
-    state_.OutputMerger.DepthStencilState = expected.ptr();
+    if (state_.OutputMerger.DepthStencilState != expected.ptr()) {
+      state_.OutputMerger.DepthStencilState = expected.ptr();
+      InvalidateRenderPipeline();
+    }
     state_.OutputMerger.StencilRef = StencilRef;
     dirty_state.set(DirtyState::DepthStencilState);
   }
@@ -5407,6 +5410,16 @@ public:
     ClearFlags &= DepthStencilPlanarFlags(pDepthStencilView->pixelFormat());
     if (ClearFlags == 0)
       return;
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
+    pDepthStencilView->GetDesc(&dsv_desc);
+    if ((ClearFlags & D3D11_CLEAR_DEPTH) &&
+        (dsv_desc.Format == DXGI_FORMAT_D16_UNORM || dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)) {
+      auto maximum = dsv_desc.Format == DXGI_FORMAT_D16_UNORM ? UINT16_MAX : kD24UnormMax;
+      auto code = std::lround(std::fmin(std::fmax(double(Depth), 0.0), 1.0) * maximum);
+      Depth = float(double(code) / maximum);
+      if (dsv_desc.Format == DXGI_FORMAT_D16_UNORM)
+        Depth = std::nextafter(Depth, 1.0f);
+    }
     InvalidateCurrentPass();
     UseWrappedView(pDepthStencilView, true);
     auto &props = pDepthStencilView->description();
@@ -5832,6 +5845,21 @@ public:
     // a pass with no targets rasterizes the forced count, and its pipeline with it
     Desc.SampleCount = attached ? state_.OutputMerger.SampleCount
                                 : std::max(1u, RasterSampleCount(device->GetMTLDevice(), rs->ForcedSampleCount()));
+    Desc.QuantizeD24 = false;
+    if (state_.OutputMerger.DSV && Desc.PixelShader) {
+      D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
+      state_.OutputMerger.DSV->GetDesc(&dsv_desc);
+      D3D11_DEPTH_STENCIL_DESC ds_desc{};
+      (state_.OutputMerger.DepthStencilState ? state_.OutputMerger.DepthStencilState : default_depth_stencil_state)
+          ->GetDesc(&ds_desc);
+      if (dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT && ds_desc.DepthEnable) {
+        D3D11_RASTERIZER_DESC2 rs_desc{};
+        rs->GetDesc2(&rs_desc);
+        Desc.QuantizeD24 = Desc.PixelShader->reflection().PixelShader.DepthOutput ||
+                           (Desc.SampleCount == 1 && !rs_desc.ForcedSampleCount && rs_desc.DepthClipEnable &&
+                            !rs_desc.DepthBias && !rs_desc.SlopeScaledDepthBias);
+      }
+    }
   }
 
   // how a draw's vertices are numbered: by the bound index buffer's format, or not at all. the object stage of a

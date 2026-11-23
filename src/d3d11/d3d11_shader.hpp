@@ -111,6 +111,7 @@ struct ShaderVariantPixel {
   uint32_t sample_mask;
   bool dual_source_blending;
   bool disable_depth_output;
+  bool quantize_d24 = false;
   uint32_t unorm_output_reg_mask;
   bool pipeline_statistics = false;
   bool alpha_to_coverage = false;
