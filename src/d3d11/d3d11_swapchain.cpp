@@ -935,31 +935,38 @@ public:
     {
       // Pace on the game's Present() thread after PresentBoundary() so the
       // CommandChunk queue drains instead of backing up input-to-display latency.
-      // Default 60 FPS; set MULLION_MAX_FPS=0 to disable.
+      // When MULLION_MAX_FPS is unset, default to 60 FPS only for uncapped
+      // SyncInterval == 0 presents so we never fight Metal's VSync phase when
+      // the game enables VSync (SyncInterval > 0). Set MULLION_MAX_FPS=0 to disable.
       using clock = std::chrono::steady_clock;
-      static const auto frame_interval = []() -> std::chrono::nanoseconds {
+      struct PacerConfig {
+        std::chrono::nanoseconds interval{0};
+        bool explicit_env = false;
+      };
+      static const PacerConfig cfg = []() -> PacerConfig {
         auto val = env::getEnvVar("MULLION_MAX_FPS");
+        bool is_explicit = !val.empty();
         long fps = 60;
-        if (!val.empty()) {
+        if (is_explicit) {
           long parsed = 0;
           auto [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), parsed);
           if (ec == std::errc{} && ptr == val.data() + val.size())
             fps = parsed;
         }
         if (fps <= 0)
-          return std::chrono::nanoseconds{0};
-        return std::chrono::nanoseconds{1'000'000'000LL / fps};
+          return {std::chrono::nanoseconds{0}, is_explicit};
+        return {std::chrono::nanoseconds{1'000'000'000LL / fps}, is_explicit};
       }();
-      if (frame_interval.count() > 0) {
+      if (cfg.interval.count() > 0 && (cfg.explicit_env || SyncInterval == 0)) {
         thread_local clock::time_point next_present_time_{};
         auto now = clock::now();
         if (next_present_time_.time_since_epoch().count() != 0 && now < next_present_time_) {
           std::this_thread::sleep_until(next_present_time_);
           now = clock::now();
         }
-        next_present_time_ = (next_present_time_ + frame_interval > now)
-                                 ? (next_present_time_ + frame_interval)
-                                 : (now + frame_interval);
+        next_present_time_ = (next_present_time_ + cfg.interval > now)
+                                 ? (next_present_time_ + cfg.interval)
+                                 : (now + cfg.interval);
       }
     }
     if (diag::profile) {
