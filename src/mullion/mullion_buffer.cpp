@@ -18,6 +18,7 @@
 
 #include "mullion_buffer.hpp"
 #include "mullion_heartbeat.hpp"
+#include "mullion_mem_stats.hpp"
 #include "mullion_diag.hpp"
 #include "mullion_format.hpp"
 #include "thread.hpp"
@@ -57,6 +58,7 @@ BufferAllocation::BufferAllocation(
   gpuAddress_ = info_.gpu_address;
   mappedMemory_ = info_.memory.get_accessible_or_null();
   kept_ = heartbeat::Keep(obj_, info_.length);
+  mem_stats::add(mem_stats::Kind::Buffer, info_.length);
 };
 
 BufferAllocation::BufferAllocation(
@@ -79,6 +81,7 @@ BufferAllocation::BufferAllocation(
     diag::Write(diag::Line("buffer", diag::Now(), obj_.handle, info_.length));
   gpuAddress_ = info_.gpu_address;
   mappedMemory_ = info_.memory.get_accessible_or_null();
+  mem_stats::add(mem_stats::Kind::Buffer, info_.length);
 }
 
 BufferAllocation::BufferAllocation(
@@ -97,6 +100,7 @@ BufferAllocation::BufferAllocation(
   if (diag::profile && obj_)
     diag::Write(diag::Line("buffer", diag::Now(), obj_.handle, info_.length));
   mappedMemory_ = nullptr;
+  mem_stats::add(mem_stats::Kind::Buffer, info_.length);
 }
 
 BufferAllocation::BufferAllocation(
@@ -109,10 +113,12 @@ BufferAllocation::BufferAllocation(
   fenceTrackers.resize(suballocation_count_);
   gpuAddress_ = info_.gpu_address;
   mappedMemory_ = info_.memory.get_accessible_or_null();
+  mem_stats::add(mem_stats::Kind::Buffer, info_.length);
 }
 
 void
 BufferAllocation::free() {
+  mem_stats::remove(mem_stats::Kind::Buffer, info_.length);
   if (kept_)
     heartbeat::Release(obj_);
   if (placed_buffer) {

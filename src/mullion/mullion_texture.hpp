@@ -193,6 +193,7 @@ private:
   std::vector<std::unique_ptr<TextureView *[]>> published_arrays_;
 
   void publishViews();
+  uint64_t tracked_bytes_ = 0;
   bool kept_ = false; // in the residency heartbeat's set
 };
 

@@ -19,6 +19,7 @@
 #include "mullion_texture.hpp"
 #include "mullion_format.hpp"
 #include "mullion_heartbeat.hpp"
+#include "mullion_mem_stats.hpp"
 #include "mullion_memory.hpp"
 #include "mullion_residency.hpp"
 #include "wsi_platform.hpp"
@@ -117,7 +118,9 @@ TextureAllocation::TextureAllocation(
     flags_(flags) {
   auto info_copy = info;
   obj_ = buffer_.newTexture(info_copy, 0, bytes_per_row);
-  kept_ = heartbeat::Keep(buffer_, uint64_t(bytes_per_row) * info.height * info.depth * info.array_length);
+  tracked_bytes_ = uint64_t(bytes_per_row) * info.height * info.depth * info.array_length;
+  kept_ = heartbeat::Keep(buffer_, tracked_bytes_);
+  mem_stats::add(mem_stats::Kind::LinearTexture, tracked_bytes_);
 
   gpuResourceID = info_copy.gpu_resource_id;
   machPort = 0;
@@ -139,10 +142,12 @@ TextureAllocation::TextureAllocation(
   gpuResourceID = textureDescriptor.gpu_resource_id;
   machPort = textureDescriptor.mach_port;
   // a MiB or more by an estimate of four bytes a texel, for the heartbeat
+  tracked_bytes_ = uint64_t(textureDescriptor.width) * textureDescriptor.height *
+                   textureDescriptor.depth * textureDescriptor.array_length *
+                   std::max(1u, uint32_t(textureDescriptor.sample_count)) * 4;
   if (!flags.test(TextureAllocationFlag::AllocatedOnHeap) && !textureDescriptor.placement_sparse_page_size)
-    kept_ = heartbeat::Keep(obj_, uint64_t(textureDescriptor.width) * textureDescriptor.height *
-                                      textureDescriptor.depth * textureDescriptor.array_length *
-                                      std::max(1u, uint32_t(textureDescriptor.sample_count)) * 4);
+    kept_ = heartbeat::Keep(obj_, tracked_bytes_);
+  mem_stats::add(mem_stats::Kind::Texture, tracked_bytes_);
   fenceTrackers.resize(
       flags.test(TextureAllocationFlag::ShaderReadonly) ? 1 : descriptor->arrayLength() * descriptor->miplevelCount()
   );
@@ -151,6 +156,7 @@ TextureAllocation::TextureAllocation(
 
 void
 TextureAllocation::free(){
+  mem_stats::remove(buffer_ ? mem_stats::Kind::LinearTexture : mem_stats::Kind::Texture, tracked_bytes_);
   if (kept_)
     heartbeat::Release(buffer_ ? WMT::Allocation(buffer_) : WMT::Allocation(obj_));
 #ifdef __i386__
