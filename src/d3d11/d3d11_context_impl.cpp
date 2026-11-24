@@ -5684,6 +5684,62 @@ public:
     return com_cast<IMTLD3D11StreamOutputLayout>(state_.ShaderStages[PipelineStage::Geometry].Shader.ptr()).ptr();
   }
 
+  struct MeshRasterState {
+    bool aliased_lines = false;
+    bool quad_lines = false;
+    bool wire_slope = false;
+    bool wire_snap = false;
+    bool local_triangles = false;
+    D3D11_RASTERIZER_DESC2 rs_desc{};
+  };
+
+  MeshRasterState
+  GetMeshRasterState() {
+    MeshRasterState out;
+    if (state_.ShaderStages[PipelineStage::Hull].Shader || StreamOutputLayout())
+      return out;
+    auto VS = GetManagedShader<PipelineStage::Vertex>();
+    auto GS = GetManagedShader<PipelineStage::Geometry>();
+    auto PS = GetManagedShader<PipelineStage::Pixel>();
+    if (!VS)
+      return out;
+    bool plain = !GS;
+    auto rs = state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
+    rs->GetDesc2(&out.rs_desc);
+    auto prim = to_input_primitive(state_.InputAssembler.Topology);
+    bool is_line = prim == D3D_PRIMITIVE_LINE || prim == D3D_PRIMITIVE_LINE_ADJ;
+    bool is_tri = prim == D3D_PRIMITIVE_TRIANGLE || prim == D3D_PRIMITIVE_TRIANGLE_ADJ;
+    D3D11_DEPTH_STENCIL_DESC ds_desc{};
+    (state_.OutputMerger.DepthStencilState ? state_.OutputMerger.DepthStencilState : default_depth_stencil_state)
+        ->GetDesc(&ds_desc);
+    bool no_ps_varyings = PS && !PS->reflection().PixelShader.UserVaryings;
+    out.aliased_lines =
+        (plain ? is_line : GS->reflection().GeometryShader.AliasedLinesFits) &&
+        !out.rs_desc.MultisampleEnable && !out.rs_desc.AntialiasedLineEnable &&
+        state_.OutputMerger.SampleCount == 1 && !out.rs_desc.ForcedSampleCount &&
+        PS && !PS->reflection().PixelShader.EarlyTests && !PS->reflection().PixelShader.Barycentrics &&
+        no_ps_varyings &&
+        (plain ? VS->reflection().NumOutputElement <= 29 && !VS->reflection().ClipDistances && !VS->reflection().CullDistances
+               : !GS->reflection().ClipDistances && !GS->reflection().CullDistances) &&
+        !state_.OutputMerger.DSV;
+    out.quad_lines = out.aliased_lines ||
+        (out.rs_desc.MultisampleEnable &&
+         (plain ? is_line : GS->reflection().GeometryShader.QuadLinesFits && (!PS || !PS->reflection().PixelShader.Barycentrics)));
+    out.wire_slope = out.rs_desc.FillMode == D3D11_FILL_WIREFRAME &&
+        out.rs_desc.SlopeScaledDepthBias != 0 && !out.rs_desc.DepthBias &&
+        !state_.OutputMerger.DSV && PS &&
+        (plain ? is_tri : GS->reflection().GeometryShader.ConservativeFits);
+    out.wire_snap = out.rs_desc.FillMode == D3D11_FILL_WIREFRAME &&
+        (plain ? !VS->reflection().ClipDistances && !VS->reflection().CullDistances && is_tri
+               : GS->reflection().GeometryShader.ConservativeFits && !GS->reflection().ClipDistances && !GS->reflection().CullDistances);
+    out.local_triangles = plain && is_tri && out.rs_desc.FillMode == D3D11_FILL_SOLID &&
+        !VS->reflection().ClipDistances && !VS->reflection().CullDistances && PS &&
+        no_ps_varyings && !PS->reflection().PixelShader.Barycentrics && !PS->reflection().PixelShader.EarlyTests &&
+        state_.OutputMerger.SampleCount == 1 && !out.rs_desc.ForcedSampleCount &&
+        !out.rs_desc.DepthBias && !out.rs_desc.SlopeScaledDepthBias;
+    return out;
+  }
+
   // without a geometry shader or tessellation, whether the mesh stage has to pass the vertex shader's primitives on:
   // Metal has no topologies with adjacency, whose adjacent vertices only a geometry shader sees (D3D11.3 8.15), and
   // no cull distances, which discard whole primitives (15.4.2)
@@ -5692,8 +5748,9 @@ public:
     if (GetManagedShader<PipelineStage::Geometry>() || state_.ShaderStages[PipelineStage::Hull].Shader)
       return false;
     auto VS = GetManagedShader<PipelineStage::Vertex>();
+    auto mr = GetMeshRasterState();
     return is_adjacency_topology(state_.InputAssembler.Topology) || (VS && VS->reflection().CullDistances) ||
-           QuadLines();
+           mr.quad_lines || mr.wire_slope || mr.wire_snap || mr.local_triangles;
   }
 
   // the topology's lines are quadrilaterals, which the mesh stage makes (SM50_SHADER_PSO_GEOMETRY_SHADER_DATA)
@@ -5705,6 +5762,7 @@ public:
   }
   // whether the current pipeline draws lines as triangles, which the rasterizer state then takes as lines
   bool quad_lines_ = false;
+  bool oversized_local_vp_ = false;
   // the pipeline's pixel shader blends a target itself, reading the blend factor after the depth ranges (ShaderBlend)
   bool shader_blend_ = false;
 
@@ -5827,10 +5885,15 @@ public:
                                   Desc.PixelShader->reflection().PixelShader.HasCoverageInput)
                              ? last->reflection().ClipDistances
                              : 0;
+    auto mr = GetMeshRasterState();
     Desc.PassThrough =
         !so_raster_pass_ && (PassesPrimitivesThrough() || (IndexedDraw && !state_.InputAssembler.IndexBuffer));
     Desc.InputPrimitive = !GS && (Desc.SOLayout || Desc.PassThrough) ? to_input_primitive(state_.InputAssembler.Topology) : 0;
-    Desc.QuadLines = !GS && Desc.PassThrough && QuadLines();
+    Desc.AliasedLines = (GS || Desc.PassThrough) && mr.aliased_lines;
+    Desc.QuadLines = (GS || Desc.PassThrough) && mr.quad_lines;
+    Desc.WireSlope = (GS || Desc.PassThrough) && mr.wire_slope;
+    Desc.WireSnap = (GS || Desc.PassThrough) && mr.wire_snap;
+    Desc.LocalTriangles = !GS && Desc.PassThrough && mr.local_triangles;
     if (std::exchange(quad_lines_, Desc.QuadLines) != Desc.QuadLines)
       dirty_state.set(DirtyState::RasterizerState);
     // which targets the pipeline's pixel shader blends itself (ShaderBlend)
@@ -6165,10 +6228,11 @@ public:
         state_.OutputMerger.SampleCount,
         state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
             state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-    if (dirty_state.any(DirtyState::RasterizerState) || fdb.active) {
+    auto mr = GetMeshRasterState();
+    if (dirty_state.any(DirtyState::RasterizerState) || fdb.active || mr.wire_slope) {
       IMTLD3D11RasterizerState *state =
           state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
-      EmitST([state, lines = quad_lines_, zero_bias = fdb.active && !fdb.clamp_hw](ArgumentEncodingContext& enc) {
+      EmitST([state, lines = quad_lines_, zero_bias = (fdb.active && !fdb.clamp_hw) || mr.wire_slope](ArgumentEncodingContext& enc) {
         auto &cmd = enc.encodeRenderCommand<wmtcmd_render_setrasterizerstate>();
         cmd.type = WMTRenderCommandSetRasterizerState;
         state->SetupRasterizerState(cmd);
@@ -6202,15 +6266,30 @@ public:
     // has there. with no viewport set at all, Metal has its one, and takes one scissor
     const UINT viewport_count =
         state_.Rasterizer.NumViewports ? D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE : 1;
+    bool oversized_local_vp = false;
+    if (mr.local_triangles)
+      for (UINT i = 0; i < state_.Rasterizer.NumViewports; i++)
+        for (auto [origin, size] : {std::pair{state_.Rasterizer.viewports[i].TopLeftX, state_.Rasterizer.viewports[i].Width},
+                                    std::pair{state_.Rasterizer.viewports[i].TopLeftY, state_.Rasterizer.viewports[i].Height}})
+          if (size > 0 && std::abs(2.0 * origin + size - D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION) + 1.5 * size >
+                              1.5 * D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
+            oversized_local_vp = true;
+    if (std::exchange(oversized_local_vp_, oversized_local_vp) != oversized_local_vp)
+      dirty_state.set(DirtyState::Viewport);
     float scale = 1;
     if (dirty_state.any(DirtyState::Viewport) && state_.Rasterizer.NumViewports) {
       auto viewports = AllocateCommandData<WMTViewport>(viewport_count);
       for (unsigned i = 0; i < viewport_count; i++) {
         auto &d3dViewport = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
-        viewports[i] = {d3dViewport.TopLeftX, d3dViewport.TopLeftY, d3dViewport.Width,
-                        d3dViewport.Height,   d3dViewport.MinDepth, d3dViewport.MaxDepth};
+        if (oversized_local_vp)
+          viewports[i] = {0, 0, double(render_pass_width_), double(render_pass_height_),
+                          d3dViewport.MinDepth, d3dViewport.MaxDepth};
+        else
+          viewports[i] = {d3dViewport.TopLeftX, d3dViewport.TopLeftY, d3dViewport.Width,
+                          d3dViewport.Height,   d3dViewport.MinDepth, d3dViewport.MaxDepth};
       }
-      scale = EnlargeViewports(viewports.span(), D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+      if (!oversized_local_vp)
+        scale = EnlargeViewports(viewports.span(), D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION);
       pass_viewports_ += viewport_count;
       EmitST([viewports = std::move(viewports)](ArgumentEncodingContext& enc) {
         auto &cmd = enc.encodeRenderCommand<wmtcmd_render_setviewports>();
@@ -6223,20 +6302,53 @@ public:
     static_assert(SM50_VIEWPORTS == D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
     // with no viewport set, Metal's own has the range 0 to 1. a pixel shader that blends itself reads the blend factor
     // after all the viewports' ranges (SM50_SHADER_BLEND)
+    if (mr.aliased_lines || mr.wire_snap || mr.local_triangles) {
+      auto data = AllocateCommandData<SM50_CONSERVATIVE_VIEWPORTS>(1);
+      memset(data.data(), 0, sizeof(SM50_CONSERVATIVE_VIEWPORTS));
+      for (UINT i = 0; i < std::min<UINT>(state_.Rasterizer.NumViewports, std::size(data[0].viewports)); i++) {
+        auto &vp = state_.Rasterizer.viewports[i];
+        data[0].viewports[i][0] = vp.TopLeftX;
+        data[0].viewports[i][1] = vp.TopLeftY;
+        data[0].viewports[i][2] = vp.Width;
+        data[0].viewports[i][3] = vp.Height;
+      }
+      data[0].state[0] = (mr.rs_desc.DepthClipEnable ? 1u : 0u) | (oversized_local_vp ? 2u : 0u);
+      data[0].state[1] = mr.rs_desc.FrontCounterClockwise ? 1u : 0u;
+      data[0].state[2] = render_pass_width_;
+      data[0].state[3] = render_pass_height_;
+      EmitST([data = std::move(data)](ArgumentEncodingContext &enc) {
+        auto &cmd = enc.encodeRenderCommand<wmtcmd_render_setbytes>();
+        cmd.type = WMTRenderCommandSetMeshBytes;
+        cmd.bytes.set(data.data());
+        cmd.length = sizeof(SM50_CONSERVATIVE_VIEWPORTS);
+        cmd.index = SM50_BINDING_INDEX_VIEWPORTS;
+      });
+    }
     if (dirty_state.any(DirtyState::Viewport) || (shader_blend_ && dirty_state.any(DirtyState::BlendFactorAndStencilRef)) ||
-        fdb.active) {
+        fdb.active || mr.wire_slope) {
       auto &factor = state_.OutputMerger.BlendFactor;
-      auto ranges = AllocateCommandData<float>(fdb.active        ? 2 * SM50_VIEWPORTS + 8
+      auto ranges = AllocateCommandData<float>(mr.wire_slope     ? 2 * SM50_VIEWPORTS + 4 + 4 * SM50_VIEWPORTS
+                                               : fdb.active      ? 2 * SM50_VIEWPORTS + 8
                                                : shader_blend_   ? 2 * SM50_VIEWPORTS + std::size(factor)
                                                                  : 2 * viewport_count);
-      for (unsigned i = 0; i < (fdb.active ? SM50_VIEWPORTS : viewport_count); i++) {
+      for (unsigned i = 0; i < ((fdb.active || mr.wire_slope) ? SM50_VIEWPORTS : viewport_count); i++) {
         auto &d3dViewport = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
         ranges[2 * i] = state_.Rasterizer.NumViewports ? std::min(d3dViewport.MinDepth, d3dViewport.MaxDepth) : 0;
         ranges[2 * i + 1] = state_.Rasterizer.NumViewports ? std::max(d3dViewport.MinDepth, d3dViewport.MaxDepth) : 1;
       }
       if (shader_blend_)
         std::copy_n(factor, std::size(factor), ranges.data() + 2 * SM50_VIEWPORTS);
-      if (fdb.active) {
+      if (mr.wire_slope) {
+        float *bias = ranges.data() + 2 * SM50_VIEWPORTS + 4;
+        for (UINT i = 0; i < SM50_VIEWPORTS; ++i) {
+          const auto &vp = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
+          float span = state_.Rasterizer.NumViewports ? 2 * std::abs(vp.MaxDepth - vp.MinDepth) : 0;
+          bias[4 * i] = state_.Rasterizer.NumViewports && vp.Width ? span / vp.Width : 0;
+          bias[4 * i + 1] = state_.Rasterizer.NumViewports && vp.Height ? span / vp.Height : 0;
+          bias[4 * i + 2] = mr.rs_desc.SlopeScaledDepthBias;
+          bias[4 * i + 3] = mr.rs_desc.DepthBiasClamp;
+        }
+      } else if (fdb.active) {
         float *bias = ranges.data() + 2 * SM50_VIEWPORTS + 4;
         bias[0] = float(fdb.rs_desc.DepthBias);
         bias[1] = fdb.clamp_hw ? 0.0f : fdb.rs_desc.SlopeScaledDepthBias;

@@ -45,6 +45,10 @@ struct MTL_GRAPHICS_PIPELINE_DESC {
   bool PixelMinMaxFiltering = true;
   bool QuantizeD24 = false;
   bool FragmentDepthBias = false;
+  bool AliasedLines = false;
+  bool WireSlope = false;
+  bool WireSnap = false;
+  bool LocalTriangles = false;
 };
 
 struct MTL_COMPUTE_PIPELINE_DESC {
@@ -105,6 +109,10 @@ template <> struct hash<MTL_GRAPHICS_PIPELINE_DESC> {
     state.add(v.PixelMinMaxFiltering);
     state.add(v.QuantizeD24);
     state.add(v.FragmentDepthBias);
+    state.add(v.AliasedLines);
+    state.add(v.WireSlope);
+    state.add(v.WireSnap);
+    state.add(v.LocalTriangles);
     state.add((size_t)v.SampleCount);
     state.add((size_t)v.NumColorAttachments);
     for (unsigned i = 0; i < v.NumColorAttachments; i++) {
@@ -142,7 +150,9 @@ template <> struct equal_to<MTL_GRAPHICS_PIPELINE_DESC> {
            (x.GSPassthrough == y.GSPassthrough) && (x.SOLayout == y.SOLayout) &&
            (x.InputPrimitive == y.InputPrimitive) && (x.PassThrough == y.PassThrough) && (x.QuadLines == y.QuadLines) &&
            (x.PipelineStatistics == y.PipelineStatistics) && (x.PixelMinMaxFiltering == y.PixelMinMaxFiltering) &&
-           (x.QuantizeD24 == y.QuantizeD24) && (x.FragmentDepthBias == y.FragmentDepthBias);
+           (x.QuantizeD24 == y.QuantizeD24) && (x.FragmentDepthBias == y.FragmentDepthBias) &&
+           (x.AliasedLines == y.AliasedLines) && (x.WireSlope == y.WireSlope) &&
+           (x.WireSnap == y.WireSnap) && (x.LocalTriangles == y.LocalTriangles);
   }
 };
 } // namespace std
@@ -185,6 +195,9 @@ CreateGeometryPipeline(MTLD3D11Device *pDevice, MTL_GRAPHICS_PIPELINE_DESC *pDes
 
 std::unique_ptr<MTLCompiledTessellationMeshPipeline>
 CreateTessellationMeshPipeline(MTLD3D11Device *pDevice, MTL_GRAPHICS_PIPELINE_DESC *pDesc);
+
+WMT::Reference<WMT::Function>
+GetFragmentDepthBiasFunction(WMT::Device device);
 
 // The Metal handle is the Render:<handle> key in the pass profiler.
 inline void TraceGraphicsPipeline(uint64_t handle, const MTL_GRAPHICS_PIPELINE_DESC &desc) {

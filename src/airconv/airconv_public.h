@@ -189,6 +189,8 @@ struct MTL_PIXEL_SHADER_REFLECTION {
   uint32_t VertexValues;
   /* the shader reads SV_InnerCoverage */
   uint32_t InnerCoverage;
+  /* scalar user input varyings (non-system-value) read by the pixel shader */
+  uint32_t UserVaryings;
 };
 
 struct MTL_SHADER_REFLECTION {

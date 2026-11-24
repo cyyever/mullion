@@ -2329,7 +2329,7 @@ static int SM50InitializeUncached(
     if (sm50_shader->shader_type == microsoft::D3D10_SB_PIXEL_SHADER) {
       pRefl->PixelShader = {.ValidRenderTargets=sm50_shader->pso_valid_output_reg_mask, .HasCoverageOutput=sm50_shader->ps_has_coverage_output, .SintRenderTargets=0, .UintRenderTargets=0,
                             .HasCoverageInput=sm50_shader->ps_has_coverage_input, .FlatInputs=sm50_shader->ps_flat_input_mask,
-                            .NoPerspectiveInputs=sm50_shader->ps_noperspective_input_mask, .FineShading=0, .Barycentrics=0, .PrimitiveID=0, .DepthOutput=0, .EarlyTests=0, .Discards=0, .VertexValues=0, .InnerCoverage=0};
+                            .NoPerspectiveInputs=sm50_shader->ps_noperspective_input_mask, .FineShading=0, .Barycentrics=0, .PrimitiveID=0, .DepthOutput=0, .EarlyTests=0, .Discards=0, .VertexValues=0, .InnerCoverage=0, .UserVaryings=0};
       // EvaluateAttribute* evaluates where the shader chooses, which coarse shading does not move
       pRefl->PixelShader.FineShading = sm50_shader->ps_fine_shading || sm50_shader->shader_info.pull_mode_reg_mask;
       pRefl->PixelShader.PrimitiveID = sm50_shader->ps_primitive_id;
@@ -2347,6 +2347,11 @@ static int SM50InitializeUncached(
         pRefl->PixelShader.UintRenderTargets |=
             uint32_t(out.componentType() == RegisterComponentType::Uint) << out.reg();
       }
+      D3D11_SIGNATURE_PARAMETER const *ps_params = nullptr;
+      if (inputParser.GetParameters(&ps_params) == S_OK && ps_params)
+        for (UINT i = 0; i < inputParser.GetNumParameters(); i++)
+          if (ps_params[i].SystemValue == microsoft::D3D10_SB_NAME_UNDEFINED)
+            pRefl->PixelShader.UserVaryings += std::popcount(static_cast<unsigned>(ps_params[i].Mask));
     }
     pRefl->ShadingRateOutput = 0;
     for (auto &out : sm50_shader->output_signature)

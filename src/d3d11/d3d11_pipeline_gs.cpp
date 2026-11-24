@@ -34,6 +34,7 @@ public:
         depth_stencil_format(pDesc->DepthStencilFormat), device_(pDevice),
         pBlendState(pDesc->BlendState),
         RasterizationEnabled(pDesc->RasterizationEnabled),
+        FragmentDepthBias(pDesc->FragmentDepthBias),
         SampleCount(pDesc->SampleCount) {
     if (pDesc->RasterizationEnabled && !pDesc->PixelShader)
       num_rtvs = 0;
@@ -66,7 +67,10 @@ public:
         break;
       // the counting pass draws nothing
       ShaderVariantStreamOutput so{
-          .layout=pDesc->SOLayout, .counting=counting, .input_primitive=pDesc->InputPrimitive, .pass_through=pDesc->PassThrough && !counting, .quad_lines=pDesc->QuadLines && !counting
+          .layout=pDesc->SOLayout, .counting=counting, .input_primitive=pDesc->InputPrimitive,
+          .pass_through=pDesc->PassThrough && !counting, .quad_lines=pDesc->QuadLines && !counting,
+          .aliased_lines=pDesc->AliasedLines && !counting, .wire_slope=pDesc->WireSlope && !counting,
+          .wire_snap=pDesc->WireSnap && !counting, .local_triangles=pDesc->LocalTriangles && !counting
       };
       VertexShader[counting] = pDesc->VertexShader->get_shader(ShaderVariantGeometryVertex{
           .input_layout_handle=pDesc->InputLayout, .geometry_shader_handle=pDesc->GeometryShader, .index_buffer_format=pDesc->IndexBufferFormat, .strip_topology=pDesc->GSStripTopology, .stream_output=so});
@@ -81,7 +85,8 @@ public:
           .disable_depth_output=depth_stencil_format == WMTPixelFormatInvalid,
           .quantize_d24=pDesc->QuantizeD24,
           .unorm_output_reg_mask=unorm_output_reg_mask, .pipeline_statistics=pDesc->PipelineStatistics, .alpha_to_coverage=pDesc->BlendState->IsAlphaToCoverage(),
-          .centered_samples=pDesc->CenteredSamples, .single_raster_sample=pDesc->SingleRasterSample, .paired_samples=pDesc->PairedSamples, .clip_distances=pDesc->ClipDistances},
+          .centered_samples=pDesc->CenteredSamples, .single_raster_sample=pDesc->SingleRasterSample, .paired_samples=pDesc->PairedSamples, .clip_distances=pDesc->ClipDistances,
+          .aliased_lines=pDesc->AliasedLines, .wire_slope=pDesc->WireSlope},
           {rtv_formats, num_rtvs}, pDesc->BlendState, pDesc->PixelMinMaxFiltering);
       ps_valid_render_targets = pDesc->PixelShader->reflection().PSValidRenderTargets;
     } else {
@@ -146,6 +151,8 @@ public:
 
     if (PixelShader && RasterizationEnabled) {
       info.fragment_function = ps.Function;
+    } else if (FragmentDepthBias && RasterizationEnabled) {
+      info.fragment_function = GetFragmentDepthBiasFunction(device_->GetMTLDevice());
     }
     info.rasterization_enabled = RasterizationEnabled;
 
@@ -210,6 +217,7 @@ private:
   // the pipeline, and with stream output [1] its counting pass
   WMT::Reference<WMT::RenderPipelineState> state_mesh_[2];
   bool RasterizationEnabled;
+  bool FragmentDepthBias;
   UINT SampleCount;
   uint32_t GeometryInstances;
   uint32_t MeshInstances;

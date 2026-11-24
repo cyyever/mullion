@@ -191,6 +191,8 @@ CreateVariantShader(MTLD3D11Device *pDevice, ManagedShader shader,
   h.update(variant.clip_distances);
   h.update(variant.blend);
   h.update(variant.no_minmax_filter);
+  h.update(variant.aliased_lines);
+  h.update(variant.wire_slope);
   auto variant_digest = h.final();
   std::string func_name = "ps_" + shader->sha1().string().substr(0, 8) + "_" + variant_digest.string();
 
@@ -224,6 +226,8 @@ CreateVariantShader(MTLD3D11Device *pDevice, ManagedShader shader,
     data.coarse_shading = false;
     data.shading_rate_varying = 0;
     data.quad_lines = false;
+    data.aliased_lines = variant.aliased_lines;
+    data.wire_slope = variant.wire_slope;
 
     sm50_bitcode_t compile_result = nullptr;
     sm50_error_t sm50_err = nullptr;
@@ -398,6 +402,10 @@ hash_stream_output(Sha1HashState &h, const ShaderVariantStreamOutput &variant) {
   h.update(variant.input_primitive);
   h.update(variant.pass_through);
   h.update(variant.quad_lines);
+  h.update(variant.aliased_lines);
+  h.update(variant.wire_slope);
+  h.update(variant.wire_snap);
+  h.update(variant.local_triangles);
   if (!variant.layout)
     return;
   h.update(variant.layout->Digest());
@@ -485,6 +493,10 @@ CreateVariantShader(MTLD3D11Device *pDevice, ManagedShader shader,
     geometry.input_primitive = variant.stream_output.input_primitive;
     geometry.pass_through = variant.stream_output.pass_through;
     geometry.quad_lines = variant.stream_output.quad_lines;
+    geometry.aliased_lines = variant.stream_output.aliased_lines;
+    geometry.wire_slope = variant.stream_output.wire_slope;
+    geometry.wire_snap = variant.stream_output.wire_snap;
+    geometry.local_triangles = variant.stream_output.local_triangles;
     geometry.pipeline_statistics = variant.pipeline_statistics;
     geometry.clip_distance_varyings = variant.clip_distance_varyings;
 

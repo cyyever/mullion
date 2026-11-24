@@ -122,6 +122,8 @@ struct ShaderVariantPixel {
   std::array<uint32_t, std::size(SM50_SHADER_PSO_PIXEL_SHADER_DATA{}.pixel_formats)> pixel_formats{};
   std::array<SM50_SHADER_BLEND, std::size(SM50_SHADER_PSO_PIXEL_SHADER_DATA{}.blend)> blend{};
   bool no_minmax_filter = false;
+  bool aliased_lines = false;
+  bool wire_slope = false;
   bool operator==(const this_type &rhs) const = default;
 };
 
@@ -161,6 +163,10 @@ struct ShaderVariantStreamOutput {
   uint32_t input_primitive;
   bool pass_through;
   bool quad_lines;
+  bool aliased_lines = false;
+  bool wire_slope = false;
+  bool wire_snap = false;
+  bool local_triangles = false;
   bool operator==(const this_type &rhs) const = default;
 };
 

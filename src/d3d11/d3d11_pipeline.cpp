@@ -11,7 +11,7 @@
 
 namespace mullion {
 
-static WMT::Reference<WMT::Function>
+WMT::Reference<WMT::Function>
 GetFragmentDepthBiasFunction(WMT::Device device) {
   static std::mutex mutex;
   static std::unordered_map<uint64_t, WMT::Reference<WMT::Function>> cache;
