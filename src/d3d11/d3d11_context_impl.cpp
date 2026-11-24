@@ -5851,32 +5851,60 @@ public:
     Desc.SampleCount = attached ? state_.OutputMerger.SampleCount
                                 : std::max(1u, RasterSampleCount(device->GetMTLDevice(), rs->ForcedSampleCount()));
     Desc.QuantizeD24 = false;
-    Desc.FragmentDepthBias = false;
-    if (state_.OutputMerger.DSV) {
+    if (state_.OutputMerger.DSV && Desc.PixelShader) {
       D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
       state_.OutputMerger.DSV->GetDesc(&dsv_desc);
       D3D11_DEPTH_STENCIL_DESC ds_desc{};
       (state_.OutputMerger.DepthStencilState ? state_.OutputMerger.DepthStencilState : default_depth_stencil_state)
           ->GetDesc(&ds_desc);
-      if (ds_desc.DepthEnable) {
+      if (dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT && ds_desc.DepthEnable) {
         D3D11_RASTERIZER_DESC2 rs_desc{};
         rs->GetDesc2(&rs_desc);
-        if (Desc.PixelShader && dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT) {
-          Desc.QuantizeD24 = Desc.PixelShader->reflection().PixelShader.DepthOutput ||
-                             (Desc.SampleCount == 1 && !rs_desc.ForcedSampleCount && rs_desc.DepthClipEnable &&
-                              !rs_desc.DepthBias && !rs_desc.SlopeScaledDepthBias);
-        } else if (!Desc.PixelShader && !Desc.GeometryShader && !Desc.HullShader && Desc.SampleCount == 1 &&
-                   Desc.SampleMask == ~0u && Desc.TopologyClass == WMTPrimitiveTopologyClassTriangle &&
-                   (rs_desc.DepthBias || rs_desc.SlopeScaledDepthBias)) {
-          bool unorm = dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT || dsv_desc.Format == DXGI_FORMAT_D16_UNORM;
-          bool float_depth = dsv_desc.Format == DXGI_FORMAT_D32_FLOAT ||
-                             dsv_desc.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-          bool clamp_hw = float_depth && rs_desc.DepthBias && std::isfinite(rs_desc.SlopeScaledDepthBias);
-          Desc.FragmentDepthBias = unorm || clamp_hw ||
-                                   (float_depth && !rs_desc.DepthBias && !std::isfinite(rs_desc.SlopeScaledDepthBias));
-        }
+        Desc.QuantizeD24 = Desc.PixelShader->reflection().PixelShader.DepthOutput ||
+                           (Desc.SampleCount == 1 && !rs_desc.ForcedSampleCount && rs_desc.DepthClipEnable &&
+                            !rs_desc.DepthBias && !rs_desc.SlopeScaledDepthBias);
       }
     }
+    Desc.FragmentDepthBias =
+        GetFragmentDepthBiasState(Desc.SampleCount, Desc.TopologyClass == WMTPrimitiveTopologyClassTriangle).active;
+  }
+
+  struct FragmentDepthBiasState {
+    bool active = false;
+    bool clamp_hw = false;
+    float unorm_max = 0.0f;
+    D3D11_RASTERIZER_DESC2 rs_desc{};
+  };
+
+  FragmentDepthBiasState
+  GetFragmentDepthBiasState(UINT sample_count, bool triangle_topology) const {
+    FragmentDepthBiasState out;
+    if (state_.ShaderStages[PipelineStage::Pixel].Shader || state_.ShaderStages[PipelineStage::Geometry].Shader ||
+        state_.ShaderStages[PipelineStage::Hull].Shader || !state_.OutputMerger.DSV || sample_count != 1 ||
+        state_.OutputMerger.SampleMask != ~0u || !triangle_topology)
+      return out;
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
+    state_.OutputMerger.DSV->GetDesc(&dsv_desc);
+    D3D11_DEPTH_STENCIL_DESC ds_desc{};
+    (state_.OutputMerger.DepthStencilState ? state_.OutputMerger.DepthStencilState : default_depth_stencil_state)
+        ->GetDesc(&ds_desc);
+    if (!ds_desc.DepthEnable)
+      return out;
+    IMTLD3D11RasterizerState *rs =
+        state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
+    rs->GetDesc2(&out.rs_desc);
+    if (!out.rs_desc.DepthBias && !out.rs_desc.SlopeScaledDepthBias)
+      return out;
+    if (dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+      out.unorm_max = float((1u << 24) - 1);
+    else if (dsv_desc.Format == DXGI_FORMAT_D16_UNORM)
+      out.unorm_max = float(UINT16_MAX);
+    bool float_depth = dsv_desc.Format == DXGI_FORMAT_D32_FLOAT ||
+                       dsv_desc.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+    out.clamp_hw = float_depth && out.rs_desc.DepthBias && std::isfinite(out.rs_desc.SlopeScaledDepthBias);
+    out.active = (out.unorm_max != 0.0f) || out.clamp_hw ||
+                 (float_depth && !out.rs_desc.DepthBias && !std::isfinite(out.rs_desc.SlopeScaledDepthBias));
+    return out;
   }
 
   // how a draw's vertices are numbered: by the bound index buffer's format, or not at all. the object stage of a
@@ -6133,38 +6161,14 @@ public:
         cmd.stencil_ref = cmd.back_stencil_ref = stencil_ref;
       });
     }
-    bool fragment_depth_bias = false, clamp_hw_bias = false;
-    float depth_bias_unorm_max = 0.0f;
-    D3D11_RASTERIZER_DESC2 fdb_rs_desc{};
-    if (!state_.ShaderStages[PipelineStage::Pixel].Shader && !state_.ShaderStages[PipelineStage::Geometry].Shader &&
-        !state_.ShaderStages[PipelineStage::Hull].Shader && state_.OutputMerger.DSV &&
-        state_.OutputMerger.SampleCount == 1 && state_.OutputMerger.SampleMask == ~0u &&
-        (state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
-         state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP)) {
-      D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
-      state_.OutputMerger.DSV->GetDesc(&dsv_desc);
-      D3D11_DEPTH_STENCIL_DESC ds_desc{};
-      (state_.OutputMerger.DepthStencilState ? state_.OutputMerger.DepthStencilState : default_depth_stencil_state)
-          ->GetDesc(&ds_desc);
-      IMTLD3D11RasterizerState *rs_state =
-          state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
-      rs_state->GetDesc2(&fdb_rs_desc);
-      if (ds_desc.DepthEnable && (fdb_rs_desc.DepthBias || fdb_rs_desc.SlopeScaledDepthBias)) {
-        if (dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
-          depth_bias_unorm_max = float((1u << 24) - 1);
-        else if (dsv_desc.Format == DXGI_FORMAT_D16_UNORM)
-          depth_bias_unorm_max = float(UINT16_MAX);
-        bool float_depth = dsv_desc.Format == DXGI_FORMAT_D32_FLOAT ||
-                           dsv_desc.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-        clamp_hw_bias = float_depth && fdb_rs_desc.DepthBias && std::isfinite(fdb_rs_desc.SlopeScaledDepthBias);
-        fragment_depth_bias = (depth_bias_unorm_max != 0.0f) || clamp_hw_bias ||
-                              (float_depth && !fdb_rs_desc.DepthBias && !std::isfinite(fdb_rs_desc.SlopeScaledDepthBias));
-      }
-    }
-    if (dirty_state.any(DirtyState::RasterizerState) || fragment_depth_bias) {
+    auto fdb = GetFragmentDepthBiasState(
+        state_.OutputMerger.SampleCount,
+        state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
+            state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    if (dirty_state.any(DirtyState::RasterizerState) || fdb.active) {
       IMTLD3D11RasterizerState *state =
           state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
-      EmitST([state, lines = quad_lines_, zero_bias = fragment_depth_bias && !clamp_hw_bias](ArgumentEncodingContext& enc) {
+      EmitST([state, lines = quad_lines_, zero_bias = fdb.active && !fdb.clamp_hw](ArgumentEncodingContext& enc) {
         auto &cmd = enc.encodeRenderCommand<wmtcmd_render_setrasterizerstate>();
         cmd.type = WMTRenderCommandSetRasterizerState;
         state->SetupRasterizerState(cmd);
@@ -6220,24 +6224,24 @@ public:
     // with no viewport set, Metal's own has the range 0 to 1. a pixel shader that blends itself reads the blend factor
     // after all the viewports' ranges (SM50_SHADER_BLEND)
     if (dirty_state.any(DirtyState::Viewport) || (shader_blend_ && dirty_state.any(DirtyState::BlendFactorAndStencilRef)) ||
-        fragment_depth_bias) {
+        fdb.active) {
       auto &factor = state_.OutputMerger.BlendFactor;
-      auto ranges = AllocateCommandData<float>(fragment_depth_bias ? 2 * SM50_VIEWPORTS + 8
-                                               : shader_blend_     ? 2 * SM50_VIEWPORTS + std::size(factor)
-                                                                   : 2 * viewport_count);
-      for (unsigned i = 0; i < (fragment_depth_bias ? SM50_VIEWPORTS : viewport_count); i++) {
+      auto ranges = AllocateCommandData<float>(fdb.active        ? 2 * SM50_VIEWPORTS + 8
+                                               : shader_blend_   ? 2 * SM50_VIEWPORTS + std::size(factor)
+                                                                 : 2 * viewport_count);
+      for (unsigned i = 0; i < (fdb.active ? SM50_VIEWPORTS : viewport_count); i++) {
         auto &d3dViewport = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
         ranges[2 * i] = state_.Rasterizer.NumViewports ? std::min(d3dViewport.MinDepth, d3dViewport.MaxDepth) : 0;
         ranges[2 * i + 1] = state_.Rasterizer.NumViewports ? std::max(d3dViewport.MinDepth, d3dViewport.MaxDepth) : 1;
       }
       if (shader_blend_)
         std::copy_n(factor, std::size(factor), ranges.data() + 2 * SM50_VIEWPORTS);
-      if (fragment_depth_bias) {
+      if (fdb.active) {
         float *bias = ranges.data() + 2 * SM50_VIEWPORTS + 4;
-        bias[0] = float(fdb_rs_desc.DepthBias);
-        bias[1] = clamp_hw_bias ? 0.0f : fdb_rs_desc.SlopeScaledDepthBias;
-        bias[2] = clamp_hw_bias ? 0.0f : fdb_rs_desc.DepthBiasClamp;
-        bias[3] = depth_bias_unorm_max;
+        bias[0] = float(fdb.rs_desc.DepthBias);
+        bias[1] = fdb.clamp_hw ? 0.0f : fdb.rs_desc.SlopeScaledDepthBias;
+        bias[2] = fdb.clamp_hw ? 0.0f : fdb.rs_desc.DepthBiasClamp;
+        bias[3] = fdb.unorm_max;
       }
       EmitST([ranges = std::move(ranges)](ArgumentEncodingContext &enc) {
         auto &cmd = enc.encodeRenderCommand<wmtcmd_render_setbytes>();
