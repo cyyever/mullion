@@ -400,10 +400,9 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
   BlitEncoderData *hoisted_ = nullptr;
   const EncoderData *hoisted_for_ = nullptr;
 
-  static bool
+  static constexpr bool
   HoistsCopies() {
-    static const bool hoists = env::getEnvVar("MULLION_D3D12_HOIST_COPIES") != "0";
-    return hoists;
+    return true;
   }
 
   void

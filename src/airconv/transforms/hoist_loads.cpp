@@ -71,6 +71,26 @@ PreservedAnalyses
 HoistLoadsPass::run(Function &F, FunctionAnalysisManager &) {
   if (!Window)
     return PreservedAnalyses::all();
+  // Avoid pushing large or texture-heavy shaders over Apple Silicon's register
+  // spill cliff (tools/metal-bench/register_pressure.swift: 20x slowdown on spill).
+  unsigned EffectiveWindow = Window;
+  unsigned InstCount = 0;
+  unsigned TexCalls = 0;
+  for (auto &BB : F) {
+    for (auto &I : BB) {
+      InstCount++;
+      if (auto *Call = dyn_cast<CallBase>(&I)) {
+        if (auto *Callee = Call->getCalledFunction()) {
+          if (Callee->getName().starts_with("air.sample_") || Callee->getName().starts_with("air.read_texture"))
+            TexCalls++;
+        }
+      }
+    }
+  }
+  if (TexCalls >= 16 || InstCount >= 512)
+    EffectiveWindow = 0;
+  if (!EffectiveWindow)
+    return PreservedAnalyses::all();
   bool Changed = false;
   for (auto &BB : F) {
     // the latest instruction no load may move above: one that writes memory or has effects; and the loads so far,
@@ -109,7 +129,7 @@ HoistLoadsPass::run(Function &F, FunctionAnalysisManager &) {
       Instruction *To = Anchor ? Anchor->getNextNode() : &*BB.getFirstInsertionPt();
       unsigned Registers = Size(I);
       for (auto & Load : std::views::reverse(Loads))
-        if ((Registers += Size(*Load)) > Window) {
+        if ((Registers += Size(*Load)) > EffectiveWindow) {
           if (auto *Use = FirstConsumer(Load); Use && To->comesBefore(Use))
             To = Use;
           break;

@@ -308,12 +308,9 @@ struct RayExport {
   uint32_t kinds[3]{}; // SM50_RAY_SHADER_KIND
 };
 
-// MULLION_D3D12_SPECIALIZED_RAYS=0: pipelines call every shader through the function table, and their traces do not
-// know which kinds of shaders the pipeline has
-bool
+constexpr bool
 SpecializedRays() {
-  static const bool enabled = env::getEnvVar("MULLION_D3D12_SPECIALIZED_RAYS") != "0";
-  return enabled;
+  return true;
 }
 
 // the most shaders of one kind a dispatcher calls directly; it calls any more through the table

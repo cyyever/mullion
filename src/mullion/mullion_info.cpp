@@ -53,13 +53,6 @@ ShaderMetalVersion(WMT::Device) {
   return WMTMetal400;
 }
 
-// MULLION_D3D12_COARSE_HSR=0 (read once): coarse shading pixel shaders keep their discard, as before airconv 93
-static SM50_SHADER_FLAG
-SwitchedShaderFlags() {
-  static const bool coarse_discard = env::getEnvVar("MULLION_D3D12_COARSE_HSR") == "0";
-  return SM50_SHADER_FLAG(coarse_discard ? SM50_SHADER_FLAG_COARSE_DISCARD_ALWAYS : 0);
-}
-
 SM50_SHADER_FLAG
 GPUShaderFlags(WMT::Device device) {
   auto given = env::getEnvVar("MULLION_SHADER_FLAGS");
@@ -72,7 +65,7 @@ GPUShaderFlags(WMT::Device device) {
                            SM50_SHADER_FLAG_COHERENT_GROUP_SYNC;
     if (end != given.c_str() && !*end && errno != ERANGE &&
         !(flags & ~static_cast<unsigned long>(known)) && given.find('-') == std::string::npos)
-      return SM50_SHADER_FLAG(flags | SwitchedShaderFlags());
+      return SM50_SHADER_FLAG(flags);
     ERR("Invalid MULLION_SHADER_FLAGS '", given, "'; using device defaults");
   }
   uint32_t flags = 0;
@@ -84,7 +77,7 @@ GPUShaderFlags(WMT::Device device) {
   flags |= SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO;
   if (!device.supportsFamily(WMTGPUFamilyApple9))
     flags |= SM50_SHADER_FLAG_COLLAPSE_CULLED_LINES | SM50_SHADER_FLAG_COHERENT_GROUP_SYNC;
-  return SM50_SHADER_FLAG(flags | SwitchedShaderFlags());
+  return SM50_SHADER_FLAG(flags);
 }
 
 uint64_t

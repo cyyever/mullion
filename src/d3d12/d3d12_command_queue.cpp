@@ -102,22 +102,17 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
   std::array<WMT::Reference<WMT::SharedEvent>, kCommandQueueSize> slot_events_;
   // under mutex_commit_: command buffers ended since the last Signal, and how many there were before it
   uint64_t ends_since_signal_ = 0, ends_between_signals_ = 0;
-  static bool
+  static constexpr bool
   EventWait() {
-    static const bool event = env::getEnvVar("MULLION_D3D12_METAL3_EVENT_WAIT") != "0";
-    return !Metal4 && event;
+    return !Metal4;
   }
   uint64_t alias_value_ = 0;
   // Metal 4: the next command buffer's first encoder orders aliased memory too, for a barrier its command buffer ended
   // before an encoder could
   bool order_aliases_ = false;
-  // MULLION_D3D12_ALIASES_INSIDE (on unless 0), Metal 4: an aliasing barrier between work of the buffer's one compute
-  // encoder, which began with the last, is a barrier inside it (MTL4CommandBuffer_orderAliases), and is encoded on any
-  // thread (Parallel). otherwise the next encoder begins with a barrier against all the queue's work before it
-  static bool
+  static constexpr bool
   AliasesInside() {
-    static const bool inside = env::getEnvVar("MULLION_D3D12_ALIASES_INSIDE") != "0";
-    return Metal4 && inside;
+    return Metal4;
   }
   WMT::Reference<WMT::Fence> fence_;
   // the clock of the timestamps the queue's work writes: Metal 3 samples nanoseconds, a Metal 4 counter heap ticks
@@ -142,10 +137,9 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
   // next that does is ordered in its place
   bool order_next_ = false;
 
-  static bool
+  static constexpr bool
   PassesOverlap() {
-    static const bool overlap = env::getEnvVar("MULLION_D3D12_PASS_OVERLAP") != "0";
-    return overlap;
+    return true;
   }
 
   // what a pass waits for and updates: `waits` before it begins (a render pass's before its vertices), `pixels`

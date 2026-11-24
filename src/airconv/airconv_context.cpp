@@ -489,20 +489,21 @@ runOptimizationPasses(llvm::Module &M, llvm::raw_ostream &Error) {
     if (!skip || !strstr(skip, "simdgroup-barrier"))
       GlobalCleanupPM.addPass(air::SimdgroupImplicitMemBarrierPass());
     GlobalCleanupPM.addPass(air::GuardOutOfBoundsPass());
-    // loads move ahead of what uses them, at most 32 registers of values ahead (MULLION_AIRCONV_HOIST_LOADS, which
-    // the shader cache's key has, for another window): more, and Metal's compiler spills them
-    if (!skip || !strstr(skip, "hoist-loads")) {
-      auto window = getenv("MULLION_AIRCONV_HOIST_LOADS");
-      GlobalCleanupPM.addPass(air::HoistLoadsPass(window ? atoi(window) : 32));
-    }
-
     MPM.addPass(createModuleToFunctionPassAdaptor(std::move(GlobalCleanupPM), true /* ? */));
   }
 
-  if (auto temp = getenv("MULLION_TEMP_O2"))
-    MPM.addPass(createModuleToFunctionPassAdaptor(PB.buildFunctionSimplificationPipeline(
-        temp[0] == '3' ? OptimizationLevel::O3 : OptimizationLevel::O2, ThinOrFullLTOPhase::None
-    )));
+  // Run full O2 function simplification before HoistLoadsPass so dead loads and
+  // redundant expressions are eliminated first without undoing load hoisting.
+  MPM.addPass(createModuleToFunctionPassAdaptor(
+      PB.buildFunctionSimplificationPipeline(OptimizationLevel::O2, ThinOrFullLTOPhase::None)
+  ));
+
+  // loads move ahead of what uses them, at most 32 registers of values ahead
+  if (auto skip = getenv("MULLION_AIRCONV_SKIP"); !skip || !strstr(skip, "hoist-loads")) {
+    FunctionPassManager HoistPM;
+    HoistPM.addPass(air::HoistLoadsPass(32));
+    MPM.addPass(createModuleToFunctionPassAdaptor(std::move(HoistPM), true));
+  }
 
   // Optimize the IR!
   MPM.run(M, MAM);

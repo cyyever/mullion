@@ -1537,11 +1537,6 @@ public:
     Name({pDesc->VS, pDesc->HS, pDesc->DS, pDesc->GS, pDesc->PS, MS, AS});
 
     if (mesh_shader) {
-      // an amplification shader builds its payload in place (airconv's direct payload); MULLION_D3D12_FAST_MESH=0, read
-      // once, keeps the copy DispatchMesh made before, for A/B runs. the flag is in the shader cache's key
-      static const bool fast_mesh = env::getEnvVar("MULLION_D3D12_FAST_MESH") != "0";
-      if (!fast_mesh)
-        common.flags = SM50_SHADER_FLAG(common.flags | SM50_SHADER_FLAG_STAGED_PAYLOAD);
       if (FAILED(hr = InitializeShader(device_, MS, &shader_ms, &ref_ms)) ||
           (AS.pShaderBytecode && FAILED(hr = InitializeShader(device_, AS, &shader_as, &ref_as))))
         return hr;
@@ -1723,15 +1718,7 @@ public:
                           pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
     patches = plain && stream_output && pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
     bool mesh = tessellation || geometry_shader || mesh_shader;
-    // a vertex shader's triangles at one raster sample, which Metal rasterizes at the pixel's center: the mesh stage
-    // passes on the hull of the pixels each touches, and the pixel shader tests none of them (and so discards
-    // none, which keeps Metal's hidden surface removal). a pixel shader that reads its inputs at each vertex needs the
-    // three corners as Metal's primitive. MULLION_CONSERVATIVE_HULL=0 grows one triangle and tests its pixels instead
-    static const bool hull_allowed = [] {
-      auto value = getenv("MULLION_CONSERVATIVE_HULL");
-      return !value || strcmp(value, "0");
-    }();
-    conservative_hull = hull_allowed && conservative && pass_through && pDesc->SampleDesc.Count <= 1 &&
+    conservative_hull = conservative && pass_through && pDesc->SampleDesc.Count <= 1 &&
                         pDesc->RasterizerState.ForcedSampleCount <= 1 &&
                         !(pDesc->PS.pShaderBytecode && ref_ps.PixelShader.VertexValues);
     // a pixel shader whose runs are seen tests the last pre-raster stage's clip distances itself (D3D11.3 15.4.1),
@@ -2022,10 +2009,9 @@ public:
       // D3D12_PRIMITIVE_TOPOLOGY_TYPE's point, line and triangle are D3D10_SB_PRIMITIVE's
       // stream output in one pass where each object threadgroup's primitives follow from its place: no index cuts
       // a strip, and a geometry shader, if any, emits the same each time
-      static const bool one_pass = env::getEnvVar("MULLION_D3D12_FAST_STREAM_OUTPUT") != "0";
-      rasterless = one_pass && stream_output && so_data.rasterized_stream == ~0u;
+      rasterless = stream_output && so_data.rasterized_stream == ~0u;
       auto input = bool(pDesc->GS.pShaderBytecode) ? ref_gs.GeometryShader.Primitive : uint32_t(pDesc->PrimitiveTopologyType);
-      bool fixed = one_pass && stream_output && !patches && (!bool(pDesc->GS.pShaderBytecode) || ref_gs.GeometryShader.FixedEmits);
+      bool fixed = stream_output && !patches && (!bool(pDesc->GS.pShaderBytecode) || ref_gs.GeometryShader.FixedEmits);
       so_single = SM50StreamOutputSinglePass(input, false, false, fixed);
       so_single_strip =
           SM50StreamOutputSinglePass(input, true, pDesc->IBStripCutValue != D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, fixed);
