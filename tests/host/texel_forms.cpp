@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <print>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -80,7 +81,7 @@ kernel(std::initializer_list<Tokens> declarations, std::initializer_list<Tokens>
     add(b);
   add(instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D10_SB_OPCODE_RET), {}));
   program[1] = ENCODE_D3D10_SB_TOKENIZED_PROGRAM_LENGTH(program.size());
-  return std::vector<uint32_t>(program.begin(), program.end());
+  return {program.begin(), program.end()};
 }
 
 static Tokens
@@ -130,22 +131,22 @@ container(const std::vector<uint32_t> &program) {
     const void *data;
     uint32_t size;
   } blobs[] = {
-      {DXBC_InputSignature, empty, sizeof(empty)},
-      {DXBC_OutputSignature, empty, sizeof(empty)},
-      {DXBC_GenericShaderEx, program.data(), uint32_t(program.size() * sizeof(uint32_t))},
+      {.fourcc = DXBC_InputSignature, .data = empty, .size = sizeof(empty)},
+      {.fourcc = DXBC_OutputSignature, .data = empty, .size = sizeof(empty)},
+      {.fourcc = DXBC_GenericShaderEx, .data = program.data(), .size = uint32_t(program.size() * sizeof(uint32_t))},
   };
   constexpr uint32_t count = sizeof(blobs) / sizeof(blobs[0]);
   std::vector<uint8_t> out(sizeof(DXBCHeader) + count * sizeof(uint32_t));
   std::vector<uint32_t> offsets;
   for (auto &blob : blobs) {
     offsets.push_back(out.size());
-    DXBCBlobHeader header{blob.fourcc, blob.size};
+    DXBCBlobHeader header{.BlobFourCC = blob.fourcc, .BlobSize = blob.size};
     out.insert(out.end(), (const uint8_t *)&header, (const uint8_t *)&header + sizeof(header));
     out.insert(out.end(), (const uint8_t *)blob.data, (const uint8_t *)blob.data + blob.size);
   }
   DXBCHeader header{};
   header.DXBCHeaderFourCC = DXBC_FOURCC_NAME;
-  header.Version = {DXBC_MAJOR_VERSION, DXBC_MINOR_VERSION};
+  header.Version = {.Major = DXBC_MAJOR_VERSION, .Minor = DXBC_MINOR_VERSION};
   header.ContainerSizeInBytes = out.size();
   header.BlobCount = count;
   memcpy(out.data(), &header, sizeof(header));
@@ -222,8 +223,10 @@ verify(const std::string &module, const char *expected_triple = nullptr) {
     };
     std::string found = ask("xcrun -sdk macosx -f metal-opt 2>/dev/null"),
                 sdk = ask("xcrun -sdk macosx --show-sdk-path 2>/dev/null");
+    if (found.empty())
+      found = ask("xcrun -toolchain Metal -sdk macosx -f metal-opt 2>/dev/null");
     if (found.empty() || sdk.empty())
-      return std::string("xcrun -sdk macosx metal-opt");
+      return std::string("xcrun -toolchain Metal -sdk macosx metal-opt");
     return "SDKROOT='" + sdk + "' '" + found + "'";
   }();
   std::string said, command = tool + " -S '" + path + "' -o - 2>&1";
@@ -256,51 +259,54 @@ main() {
     const char *name;
     D3D10_SB_RESOURCE_DIMENSION dimension;
   } kinds[] = {
-      {"buffer", D3D10_SB_RESOURCE_DIMENSION_BUFFER},           {"1D", D3D10_SB_RESOURCE_DIMENSION_TEXTURE1D},
-      {"1D array", D3D10_SB_RESOURCE_DIMENSION_TEXTURE1DARRAY}, {"2D", D3D10_SB_RESOURCE_DIMENSION_TEXTURE2D},
-      {"2D array", D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DARRAY}, {"3D", D3D10_SB_RESOURCE_DIMENSION_TEXTURE3D},
+      {.name = "buffer", .dimension = D3D10_SB_RESOURCE_DIMENSION_BUFFER},
+      {.name = "1D", .dimension = D3D10_SB_RESOURCE_DIMENSION_TEXTURE1D},
+      {.name = "1D array", .dimension = D3D10_SB_RESOURCE_DIMENSION_TEXTURE1DARRAY},
+      {.name = "2D", .dimension = D3D10_SB_RESOURCE_DIMENSION_TEXTURE2D},
+      {.name = "2D array", .dimension = D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DARRAY},
+      {.name = "3D", .dimension = D3D10_SB_RESOURCE_DIMENSION_TEXTURE3D},
   };
   for (auto &kind : kinds) {
     // ld r0.xyzw, l(0, 0, 0, 0), t0.xyzw
     cases.push_back(
-        {std::string("ld of a ") + kind.name + " SRV",
-         kernel(
+        {.name = std::string("ld of a ") + kind.name + " SRV",
+         .program = kernel(
              {dcl_srv(kind.dimension, 0)},
              {instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D10_SB_OPCODE_LD), {temp(0, all), origin, srv(xyzw)}), keep(0)}
          ),
-         "air.read_"}
+         .access = "air.read_"}
     );
     // ld_uav_typed r0.xyzw, l(0, 0, 0, 0), u0.xyzw
     cases.push_back(
-        {std::string("ld_uav_typed of a ") + kind.name + " UAV",
-         kernel(
+        {.name = std::string("ld_uav_typed of a ") + kind.name + " UAV",
+         .program = kernel(
              {dcl_uav(kind.dimension)},
              {instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D11_SB_OPCODE_LD_UAV_TYPED), {temp(0, all), origin, uav(xyzw)}),
               keep(0)}
          ),
-         "air.read_"}
+         .access = "air.read_"}
     );
     // atomic_iadd u0.x, l(0, 0, 0, 0), l(1)
     cases.push_back(
-        {std::string("atomic_iadd on a ") + kind.name + " UAV",
-         kernel(
+        {.name = std::string("atomic_iadd on a ") + kind.name + " UAV",
+         .program = kernel(
              {dcl_uav(kind.dimension)},
              {instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D11_SB_OPCODE_ATOMIC_IADD), {uav(x), origin, scalar(1)})}
          ),
-         "air.atomic_fetch_add_explicit_"}
+         .access = "air.atomic_fetch_add_explicit_"}
     );
   }
   for (auto dimension : {D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DMS, D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DMSARRAY})
     // ldms r0.xyzw, l(0, 0, 0, 0), t0.xyzw, l(1)
     cases.push_back(
-        {dimension == D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DMS ? "ldms of a 2D multisampled SRV"
-                                                               : "ldms of a 2D multisampled array SRV",
-         kernel(
+        {.name = dimension == D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DMS ? "ldms of a 2D multisampled SRV"
+                                                                      : "ldms of a 2D multisampled array SRV",
+         .program = kernel(
              {dcl_srv(dimension, 4)},
              {instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D10_SB_OPCODE_LD_MS), {temp(0, all), origin, srv(xyzw), scalar(1)}),
               keep(0)}
          ),
-         "air.read_"}
+         .access = "air.read_"}
     );
   for (auto dimension : {D3D10_SB_RESOURCE_DIMENSION_TEXTURE2D, D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DARRAY}) {
     // a float SRV, dcl_sampler s0, mode_comparison; sample_c_lz r1.x, l(0.5, 0.5, 0, 0), t0.xyzw, s0, l(0.5); then
@@ -309,9 +315,9 @@ main() {
     uint32_t h;
     memcpy(&h, &half, sizeof(h));
     cases.push_back(
-        {dimension == D3D10_SB_RESOURCE_DIMENSION_TEXTURE2D ? "ld of a 2D SRV that is compared"
-                                                             : "ld of a 2D array SRV that is compared",
-         kernel(
+        {.name = dimension == D3D10_SB_RESOURCE_DIMENSION_TEXTURE2D ? "ld of a 2D SRV that is compared"
+                                                                    : "ld of a 2D array SRV that is compared",
+         .program = kernel(
              {dcl_srv(dimension, 0, float4),
               instruction(
                   ENCODE_D3D10_SB_OPCODE_TYPE(D3D10_SB_OPCODE_DCL_SAMPLER) |
@@ -326,25 +332,25 @@ main() {
               instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D10_SB_OPCODE_LD), {temp(0, all), origin, srv(xyzw)}), keep(0),
               keep(1)}
          ),
-         "air.read_depth_"}
+         .access = "air.read_depth_"}
     );
   }
   // dcl_uav_typed_texture2d (uint, uint, uint, uint), globallycoherent u0; ld_uav_typed r0.xyzw, l(0, 0, 0, 0), u0.xyzw
   // Compute shaders with globallycoherent textures intentionally emit Metal 3.2 AIR to avoid an AGXMetal Metal 4 crash.
   cases.push_back(
-      {"ld_uav_typed of a globally coherent 2D UAV",
-       kernel(
+      {.name = "ld_uav_typed of a globally coherent 2D UAV",
+       .program = kernel(
            {dcl_uav(D3D10_SB_RESOURCE_DIMENSION_TEXTURE2D, D3D11_SB_GLOBALLY_COHERENT_ACCESS)},
            {instruction(ENCODE_D3D10_SB_OPCODE_TYPE(D3D11_SB_OPCODE_LD_UAV_TYPED), {temp(0, all), origin, uav(xyzw)}),
             keep(0)}
        ),
-       "air.read_texture_2d.device_coherent",
-       "air64-apple-macosx15.0.0"}
+       .access = "air.read_texture_2d.device_coherent",
+       .expected_triple = "air64-apple-macosx15.0.0"}
   );
   // imm_atomic_cmp_exch r0.x, u0.x, l(0, 0, 0, 0), l(0), l(1)
   cases.push_back(
-      {"imm_atomic_cmp_exch on a 2D array UAV",
-       kernel(
+      {.name = "imm_atomic_cmp_exch on a 2D array UAV",
+       .program = kernel(
            {dcl_uav(D3D10_SB_RESOURCE_DIMENSION_TEXTURE2DARRAY)},
            {instruction(
                 ENCODE_D3D10_SB_OPCODE_TYPE(D3D11_SB_OPCODE_IMM_ATOMIC_CMP_EXCH),
@@ -352,7 +358,7 @@ main() {
             ),
             keep(0)}
        ),
-       "air.atomic_compare_exchange_weak_explicit_"}
+       .access = "air.atomic_compare_exchange_weak_explicit_"}
   );
 
   unsigned wrong = 0;
@@ -360,17 +366,17 @@ main() {
     for (auto [version, named] : {std::pair{SM50_SHADER_METAL_400, "Metal 4"}}) {
       std::string message, module = convert(container(c.program), version, message);
       if (module.empty()) {
-        printf("wrong: %s for %s %s\n", c.name.c_str(), named, message.c_str());
+        std::println("wrong: {} for {} {}", c.name, named, message);
         wrong++;
       } else if (module.find(c.access) == std::string::npos) {
-        printf("wrong: %s for %s converts to no %s call\n", c.name.c_str(), named, c.access);
+        std::println("wrong: {} for {} converts to no {} call", c.name, named, c.access);
         wrong++;
       } else if (auto said = verify(module, c.expected_triple); !said.empty()) {
-        printf("wrong: %s for %s: %s\n", c.name.c_str(), named, said.c_str());
+        std::println("wrong: {} for {}: {}", c.name, named, said);
         wrong++;
       }
     }
-  printf("fact: %zu kernels, each for Metal 4\n", cases.size());
-  printf("%s: %u wrong results\n", wrong ? "failed" : "passed", wrong);
+  std::println("fact: {} kernels, each for Metal 4", cases.size());
+  std::println("{}: {} wrong results", wrong ? "failed" : "passed", wrong);
   return wrong ? 1 : 0;
 }

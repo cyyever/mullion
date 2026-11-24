@@ -37,6 +37,6 @@ executable('airconv', airconv_src + airconv_cli_src,
   include_directories : [ mullion_include_path, llvm_include_path_darwin ],
   cpp_args            : [ airconv_args ],
   dependencies        : [ dxbc_parser_native_dep ],
-  link_args           : [ llvm_ld_flags_darwin, llvm_deps ],
+  link_args           : [ '-Wl,-dead_strip', llvm_ld_flags_darwin, llvm_deps ],
   native              : mullion_crossbuild
 )

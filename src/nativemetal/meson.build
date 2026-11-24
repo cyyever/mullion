@@ -6,6 +6,7 @@ winemetal_src = [
 winemetal_link_depends = []
 
 winemetal_ld_args = [
+  '-Wl,-dead_strip',
   '-weak_framework', 'CoreFoundation', '-weak_framework', 'Metal',
   '-framework', 'MetalFX', '-weak_framework', 'Foundation',
   '-weak_framework', 'CoreGraphics', '-weak_framework', 'QuartzCore',

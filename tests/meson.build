@@ -55,7 +55,7 @@ if test_d3d12
   subdir('dxgi')
   subdir('perf')
 endif
-test('com_pointer', executable('com_pointer', 'com_pointer.cpp', override_options : ['cpp_std=c++20']))
+test('com_pointer', executable('com_pointer', 'com_pointer.cpp'))
 subdir('d3d11')
 subdir('d3d10')
 # as the library builds NVAPI (src/meson.build)

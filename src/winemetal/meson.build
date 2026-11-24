@@ -49,10 +49,12 @@ winemetal_dep = declare_dependency(
   include_directories : [ include_directories('.') ],
 )
 
+wine_builtin_stamp = find_program('sh', native: true)
+
 custom_target('postprocess_lib',
   input : winemetal_dll,
   output: 'winemetal.dll.postproc',
-  command : [ winebuild, '--builtin', '@INPUT@' ],
+  command : [ wine_builtin_stamp, '-c', '"$1" --builtin "$2" && : > "$3"', 'stamp', winebuild, '@INPUT@', '@OUTPUT@' ],
   depends : winemetal_dll,
   build_by_default : true
 )

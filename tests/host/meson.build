@@ -1,31 +1,31 @@
 # tests of source that also builds for the host, run without a GPU or Wine: the suite 'host', which CI runs whole
 test('host_colorspace', executable('host_colorspace', 'colorspace.cpp',
-                                 override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+                                 native : true), suite : 'host')
 test('host_window_placement', executable('host_window_placement', 'window_placement.cpp',
                                          include_directories : include_directories('../../src/winemetal'),
-                                         override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+                                         native : true), suite : 'host')
 test('host_geometry_budget', executable('host_geometry_budget', 'geometry_budget.cpp',
                                       include_directories : mullion_native_include_path,
-                                      override_options : ['cpp_std=c++23'], native : true), suite : 'host')
+                                      native : true), suite : 'host')
 test('host_format', executable('host_format', ['format.cpp', '../../src/util/util_string.cpp'],
                              include_directories : mullion_native_include_path,
-                             override_options : ['cpp_std=c++23'], native : true), suite : 'host')
+                             native : true), suite : 'host')
 test('host_rc_self_move', executable('host_rc_self_move', 'rc.cpp',
-                                    override_options : ['cpp_std=c++23'], native : true), suite : 'host')
+                                    native : true), suite : 'host')
 test('host_metal_reference', executable('host_metal_reference', 'metal_reference.cpp',
-                                       override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+                                       native : true), suite : 'host')
 test('host_packed_variant_list', executable('host_packed_variant_list', 'packed_variant_list.cpp',
-                                           override_options : ['cpp_std=c++23'], native : true), suite : 'host')
+                                           native : true), suite : 'host')
 test('host_private_data', executable('host_private_data', ['private_data.cpp', '../../src/util/com/com_private_data.cpp'],
      include_directories : [mullion_native_include_path, include_directories('../../src/util')],
-     override_options : ['cpp_std=c++20'], native : true), suite : 'host')
+     native : true), suite : 'host')
 test('host_denorm', executable('host_denorm', 'denorm.cpp', include_directories : include_directories('metal'),
-                             override_options : ['cpp_std=c++23'], native : true), suite : 'host')
+                             native : true), suite : 'host')
 test('host_tessellator',
      executable('host_tessellator', ['tessellator.cpp', '../reference/reference.cpp'],
                 include_directories : include_directories('metal', '../../src/airconv', '../../src/airconv/shaders', '../../libs'),
                 # the reference's and the Metal source's, neither written for this compiler's warnings
-                cpp_args : ['-w'], override_options : ['cpp_std=c++23'], native : true),
+                cpp_args : ['-w'], native : true),
      # every factor and partitioning on one core: about 270 s on CI's runner, past 300 s when the runner is loaded
      suite : 'host', timeout : 900)
 # the device's tessellation templates, made as the device makes them
@@ -35,7 +35,7 @@ test('host_tessellation_templates',
                  '../../src/mullion/mullion_tessellation_templates.cpp'],
                 include_directories : include_directories('metal', '../../src/airconv', '../../src/airconv/shaders',
                                                           '../../libs', '../../src/mullion'),
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 600)
 # the converter's own functions, built for the host as the bridge links them
 test('host_readerio_frame', executable('host_readerio_frame', 'readerio_frame.cpp',
@@ -43,11 +43,11 @@ test('host_readerio_frame', executable('host_readerio_frame', 'readerio_frame.cp
      native : true), suite : 'host')
 test('host_ray_dispatchers',
      executable('host_ray_dispatchers', 'ray_dispatchers.cpp', dependencies : airconv_dep_darwin,
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 test('host_parse_shared',
      executable('host_parse_shared', 'parse_shared.cpp', dependencies : airconv_dep_darwin,
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 # Run manually with six distinct DXBC files. File I/O is outside the measured rounds.
 executable('bench_shader_init', 'bench_shader_init.cpp', include_directories : llvm_include_path_darwin,
@@ -56,40 +56,40 @@ test('host_pixel_input_declarations',
      executable('host_pixel_input_declarations', 'pixel_input_declarations.cpp',
                 include_directories : llvm_include_path_darwin,
                 dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 test('host_geometry_payload',
      executable('host_geometry_payload', 'geometry_payload.cpp',
                 include_directories : llvm_include_path_darwin,
                 dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 test('host_geometry_packing',
      executable('host_geometry_packing', 'geometry_packing.cpp',
                 include_directories : llvm_include_path_darwin,
                 dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 test('host_dxil_header',
      executable('host_dxil_header', 'dxil_header.cpp', dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 test('host_position_invariance',
      executable('host_position_invariance', 'position_invariance.cpp',
                 include_directories : llvm_include_path_darwin,
                 dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 test('host_metallib_header',
      executable('host_metallib_header', 'metallib_header.cpp', include_directories : llvm_include_path_darwin,
                 dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-                cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true),
+                cpp_args : ['-w'], native : true),
      suite : 'host', timeout : 120)
 # which DXIL operations shaders use, for tests/coverage.py; it reads DXIL with the LLVM the converter is built with
 executable('dxilops', ['dxilops.cpp'], include_directories : llvm_include_path_darwin,
-           link_args : [ llvm_ld_flags_darwin, llvm_deps ], cpp_args : ['-w'], override_options : ['cpp_std=c++23'], native : true)
+           link_args : [ '-Wl,-dead_strip', llvm_ld_flags_darwin, llvm_deps ], cpp_args : ['-w'], native : true)
 # the tests' own container hash against the hashes real shaders carry; it wants directories of them (MULLION_HASHED)
-test('host_dxbc_hash', executable('host_dxbc_hash', ['dxbchash.cpp'], override_options : ['cpp_std=c++23'], native : true),
+test('host_dxbc_hash', executable('host_dxbc_hash', ['dxbchash.cpp'], native : true),
      suite : 'host')
 # the bridge's shader store, which is Objective-C built as the bridge builds it
 test('host_shader_store',
@@ -105,7 +105,7 @@ test('host_shader_store',
 test('host_texel_forms', texel_forms, suite : 'host', timeout : 300)
 # SHA-1's digests; where the native compiler targets Arm, its blocks go through the ARMv8 SHA-1 instructions as an Arm build's do
 test('host_sha1', executable('host_sha1', 'sha1.cpp', '../../src/util/sha1/sha1.c',
-                           include_directories : include_directories('../../src/util'), override_options : ['cpp_std=c++20'],
+                           include_directories : include_directories('../../src/util'),
                            native : true), suite : 'host')
 test('host_diag_profile', find_program('python3', native : true), args : files('diag.py'), suite : 'host')
 test('host_mutate', find_program('python3', native : true), args : files('mutate.py'), suite : 'host')

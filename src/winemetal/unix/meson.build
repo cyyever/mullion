@@ -15,6 +15,9 @@ endif
 
 winemetal_unix_ld_args = [
   '-Wl,-install_name,@rpath/winemetal.so',
+  '-Wl,-dead_strip',
+  '-Wl,-exported_symbol,___wine_unix_call_funcs',
+  '-Wl,-exported_symbol,___wine_unix_call_wow64_funcs',
   winemac_so, ntdll_so,
   '-weak_framework', 'CoreFoundation', '-weak_framework', 'Metal',
   '-framework', 'MetalFX', '-weak_framework', 'Foundation',

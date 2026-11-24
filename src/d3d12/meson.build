@@ -54,7 +54,7 @@ foreach dll : [ d3d12_dll, d3d12core_dll ]
 custom_target('postprocess_lib' + dll.name(),
   input : dll,
   output: dll.name() + '.dll.postproc',
-  command : [ winebuild, '--builtin', '@INPUT@' ],
+  command : [ wine_builtin_stamp, '-c', '"$1" --builtin "$2" && : > "$3"', 'stamp', winebuild, '@INPUT@', '@OUTPUT@' ],
   depends : dll,
   build_by_default : true
 )

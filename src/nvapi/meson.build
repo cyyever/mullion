@@ -21,7 +21,7 @@ if wine_builtin_dll
 custom_target('postprocess_libnvapi64',
   input : nvapi_dll,
   output: 'nvapi64.dll.postproc',
-  command : [ winebuild, '--builtin', '@INPUT@' ],
+  command : [ wine_builtin_stamp, '-c', '"$1" --builtin "$2" && : > "$3"', 'stamp', winebuild, '@INPUT@', '@OUTPUT@' ],
   depends : nvapi_dll,
   build_by_default : true
 )

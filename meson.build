@@ -116,12 +116,12 @@ xcrun = find_program('xcrun')
 
 metalir_generator = generator(xcrun,
   output    : [ '@BASENAME@.air'],
-  arguments : [ '-sdk', 'macosx', 'metal', '-o', '@OUTPUT@', '-c', '@INPUT@', '-std=metal4.0', '--target=air64-apple-macos27.2', '@EXTRA_ARGS@'],
+  arguments : [ '-toolchain', 'Metal', '-sdk', 'macosx', 'metal', '-o', '@OUTPUT@', '-c', '@INPUT@', '-std=metal4.0', '--target=air64-apple-macos27.2', '@EXTRA_ARGS@'],
 )
 
 metallib_generator = generator(xcrun,
   output    : [ '@BASENAME@.metallib'],
-  arguments : [ '-sdk', 'macosx', 'metallib', '-o', '@OUTPUT@', '@INPUT@'],
+  arguments : [ '-toolchain', 'Metal', '-sdk', 'macosx', 'metallib', '-o', '@OUTPUT@', '@INPUT@'],
 )
 
 xxd = find_program('xxd')
@@ -220,7 +220,7 @@ subdir('src')
 # Validate generated AIR even when the optional test suite is disabled.
 texel_forms = executable('host_texel_forms', 'tests/host/texel_forms.cpp',
   dependencies : [airconv_dep_darwin, dxbc_parser_native_dep],
-  cpp_args : ['-w'], override_options : ['cpp_std=c++20'], native : true)
+  cpp_args : ['-w'], link_args : ['-Wl,-dead_strip'], native : true)
 custom_target('verify_air_build',
   output : 'verified-air.stamp',
   command : [find_program('python3', native : true), files('tests/host/verify_air_build.py'), texel_forms, '@OUTPUT@'],

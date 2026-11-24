@@ -31,7 +31,7 @@ if wine_builtin_dll
 custom_target('postprocess_libdxgi',
   input : dxgi_dll,
   output: 'dxgi.dll.postproc',
-  command : [ winebuild, '--builtin', '@INPUT@' ],
+  command : [ wine_builtin_stamp, '-c', '"$1" --builtin "$2" && : > "$3"', 'stamp', winebuild, '@INPUT@', '@OUTPUT@' ],
   depends : dxgi_dll,
   build_by_default : true
 )
