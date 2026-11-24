@@ -1,3 +1,4 @@
+#include <charconv>
 #include "mullion_diag.hpp"
 #include "mullion_window.hpp"
 #include "d3d11_swapchain.hpp"
@@ -931,6 +932,36 @@ public:
     lock.unlock(); // since PresentBoundary() will and should only stall current thread
 
     cmd_queue.PresentBoundary();
+    {
+      // Pace on the game's Present() thread after PresentBoundary() so the
+      // CommandChunk queue drains instead of backing up input-to-display latency.
+      // Default 60 FPS; set MULLION_MAX_FPS=0 to disable.
+      using clock = std::chrono::steady_clock;
+      static const auto frame_interval = []() -> std::chrono::nanoseconds {
+        auto val = env::getEnvVar("MULLION_MAX_FPS");
+        long fps = 60;
+        if (!val.empty()) {
+          long parsed = 0;
+          auto [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), parsed);
+          if (ec == std::errc{} && ptr == val.data() + val.size())
+            fps = parsed;
+        }
+        if (fps <= 0)
+          return std::chrono::nanoseconds{0};
+        return std::chrono::nanoseconds{1'000'000'000LL / fps};
+      }();
+      if (frame_interval.count() > 0) {
+        thread_local clock::time_point next_present_time_{};
+        auto now = clock::now();
+        if (next_present_time_.time_since_epoch().count() != 0 && now < next_present_time_) {
+          std::this_thread::sleep_until(next_present_time_);
+          now = clock::now();
+        }
+        next_present_time_ = (next_present_time_ + frame_interval > now)
+                                 ? (next_present_time_ + frame_interval)
+                                 : (now + frame_interval);
+      }
+    }
     if (diag::profile) {
       diag::Write(diag::Line("span", "present", "", GetCurrentThreadId(), began, diag::Now() - began));
       diag::LatencyPresented(present_semaphore_);
@@ -1176,7 +1207,7 @@ private:
   wsi::MullionWindowState window_state_;
   uint32_t frame_latency;
   DXGI_COLOR_SPACE_TYPE colorspace_ = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-  DXGI_MATRIX_3X2_F matrix_transform_{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+  DXGI_MATRIX_3X2_F matrix_transform_{._11 = 1.0f, ._12 = 0.0f, ._21 = 0.0f, ._22 = 1.0f, ._31 = 0.0f, ._32 = 0.0f};
   double init_refresh_rate_ = DBL_MAX;
   int preferred_max_frame_rate = 0;
   HUDState hud;
