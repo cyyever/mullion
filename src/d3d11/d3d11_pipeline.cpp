@@ -4,9 +4,50 @@
 #include "d3d11_device.hpp"
 #include "d3d11_shader.hpp"
 #include "log/log.hpp"
+#include "airconv_public.h"
 #include <atomic>
+#include <mutex>
+#include <unordered_map>
 
 namespace mullion {
+
+static WMT::Reference<WMT::Function>
+GetFragmentDepthBiasFunction(WMT::Device device) {
+  static std::mutex mutex;
+  static std::unordered_map<uint64_t, WMT::Reference<WMT::Function>> cache;
+  std::lock_guard<std::mutex> lock(mutex);
+  auto key = device.handle;
+  if (auto it = cache.find(key); it != cache.end())
+    return it->second;
+  std::string source =
+      "#include <metal_stdlib>\nusing namespace metal;\n"
+      "struct In { float4 position [[position]]; };\n"
+      "struct Out { float z [[depth(any)]]; };\n"
+      "fragment Out fragment_depth_bias(In in [[stage_in]], uint viewport [[viewport_array_index]], "
+      "constant float *ranges [[buffer(" + std::to_string(SM50_BINDING_INDEX_DEPTH_RANGES) + ")]]) {\n"
+      "  Out out;\n"
+      "  constant float *bias = ranges + " + std::to_string(2 * SM50_VIEWPORTS + 4) + ";\n"
+      "  float z = in.position.z;\n"
+      "  float slope = max(abs(dfdx(z)), abs(dfdy(z)));\n"
+      "  float offset = bias[1] != 0 ? bias[1] * slope : 0;\n"
+      "  if (bias[3] != 0) offset += bias[0] / bias[3];\n"
+      "  if (bias[2] > 0) offset = min(offset, bias[2]);\n"
+      "  if (bias[2] < 0) offset = max(offset, bias[2]);\n"
+      "  uint range = viewport < " + std::to_string(SM50_VIEWPORTS) + "u ? 2 * viewport : 0;\n"
+      "  float biased = clamp(z + offset, ranges[range], ranges[range + 1]);\n"
+      "  out.z = bias[3] != 0 ? precise::divide(round(biased * bias[3]), bias[3]) : biased;\n"
+      "  return out;\n"
+      "}\n";
+  WMT::Reference<WMT::Error> err;
+  auto lib = device.newLibraryWithSource(source, err);
+  if (!lib) {
+    ERR("Failed to compile D3D11 fragment_depth_bias shader: ", err.description().getUTF8String());
+    return {};
+  }
+  auto fn = lib.newFunction("fragment_depth_bias");
+  cache.emplace(key, fn);
+  return fn;
+}
 
 class MTLCompiledGraphicsPipelineImpl
     : public MTLCompiledGraphicsPipeline {
@@ -18,6 +59,7 @@ public:
         topology_class(pDesc->TopologyClass), device_(pDevice),
         pBlendState(pDesc->BlendState),
         RasterizationEnabled(pDesc->RasterizationEnabled),
+        FragmentDepthBias(pDesc->FragmentDepthBias),
         SampleCount(pDesc->SampleCount) {
     uint32_t unorm_output_reg_mask = 0;
     for (unsigned i = 0; i < num_rtvs; i++) {
@@ -74,6 +116,8 @@ public:
 
     if (PixelShader) {
       info.fragment_function = ps.Function;
+    } else if (FragmentDepthBias) {
+      info.fragment_function = GetFragmentDepthBiasFunction(device_->GetMTLDevice());
     }
     info.rasterization_enabled = RasterizationEnabled;
 
@@ -135,6 +179,7 @@ private:
   IMTLD3D11BlendState *pBlendState;
   WMT::Reference<WMT::RenderPipelineState> state_;
   bool RasterizationEnabled;
+  bool FragmentDepthBias;
   UINT SampleCount;
 };
 
