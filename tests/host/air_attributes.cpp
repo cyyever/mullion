@@ -150,5 +150,5 @@ int main() {
     require(message.find("Invalid input AIR IR") != std::string::npos, "missing verifier diagnostic");
     require(bytes.empty(), "invalid IR wrote partial bitcode");
   }
-  llvm::outs() << "PASS: AIR attribute round trips and unsupported-attribute errors\n";
+  llvm::outs() << "passed: AIR attribute round trips and unsupported-attribute errors\n";
 }

@@ -205,5 +205,75 @@ int main() {
           raster::compare(c, static_cast<const char *>(mapped.pData), mapped.RowPitch, false, true);
         immediate->Unmap(staging.Get(), 0);
       }
+  {
+    step("20-byte vertex stride with non-zero cbuffer slots and unused VS varyings");
+    const char angle_hlsl[] = R"(
+      cbuffer DriverConstants : register(b1) { float4 unused0; float4 scale; };
+      cbuffer PSConstants : register(b2) { float4 pad0; float4 color; };
+      struct VSIn { float3 pos : POSITION; float2 uv : TEXCOORD0; };
+      struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
+      VSOut vs_angle(VSIn v) {
+        VSOut o;
+        o.pos = float4(v.pos * scale.xyz, 1.0);
+        o.uv = v.uv;
+        return o;
+      }
+      float4 ps_angle(float4 pos : SV_Position) : SV_Target {
+        return color;
+      }
+    )";
+    auto vs_blob = compile(angle_hlsl, "vs_angle", "vs");
+    auto ps_blob = compile(angle_hlsl, "ps_angle", "ps");
+    if (expect(vs_blob && ps_blob, "ANGLE-pattern shaders compiled")) {
+      ComPtr<ID3D11VertexShader> vs_angle;
+      ComPtr<ID3D11PixelShader> ps_angle;
+      CHECK(device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, &vs_angle));
+      CHECK(device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &ps_angle));
+      const D3D11_INPUT_ELEMENT_DESC elems[] = {
+          {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+          {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+      };
+      ComPtr<ID3D11InputLayout> layout_angle;
+      CHECK(device->CreateInputLayout(elems, 2, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &layout_angle));
+      struct V20 { float x, y, z, u, v; };
+      const V20 tri[3] = {{-1.f, 1.f, 0.5f, 0.f, 0.f}, {3.f, 1.f, 0.5f, 2.f, 0.f}, {-1.f, -3.f, 0.5f, 0.f, 2.f}};
+      D3D11_BUFFER_DESC vbd{sizeof(tri), D3D11_USAGE_IMMUTABLE, D3D11_BIND_VERTEX_BUFFER};
+      D3D11_SUBRESOURCE_DATA vbs{tri};
+      ComPtr<ID3D11Buffer> vb20, cb_vs, cb_ps;
+      CHECK(device->CreateBuffer(&vbd, &vbs, &vb20));
+      const float vs_consts[8] = {0, 0, 0, 0, 1, 1, 1, 1};
+      const float ps_consts[8] = {0, 0, 0, 0, 0.25f, 0.5f, 0.75f, 1.0f};
+      D3D11_BUFFER_DESC cbd{sizeof(vs_consts), D3D11_USAGE_IMMUTABLE, D3D11_BIND_CONSTANT_BUFFER};
+      D3D11_SUBRESOURCE_DATA cbs_vs{vs_consts}, cbs_ps{ps_consts};
+      CHECK(device->CreateBuffer(&cbd, &cbs_vs, &cb_vs));
+      CHECK(device->CreateBuffer(&cbd, &cbs_ps, &cb_ps));
+      immediate->ClearState();
+      const UINT stride = sizeof(V20), offset = 0;
+      immediate->IASetVertexBuffers(0, 1, vb20.GetAddressOf(), &stride, &offset);
+      immediate->IASetInputLayout(layout_angle.Get());
+      immediate->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+      immediate->VSSetShader(vs_angle.Get(), nullptr, 0);
+      immediate->VSSetConstantBuffers(1, 1, cb_vs.GetAddressOf());
+      immediate->PSSetShader(ps_angle.Get(), nullptr, 0);
+      immediate->PSSetConstantBuffers(2, 1, cb_ps.GetAddressOf());
+      for (const D3D11_VIEWPORT &vp : {D3D11_VIEWPORT{0, 0, raster::width, raster::height, 0, 1},
+                                       D3D11_VIEWPORT{-float(raster::width), 0,
+                                                      D3D11_VIEWPORT_BOUNDS_MAX, raster::height, 0, 1}}) {
+        immediate->RSSetViewports(1, &vp);
+        immediate->OMSetRenderTargets(1, rtv.GetAddressOf(), nullptr);
+        const float clear[raster::lanes] = {};
+        immediate->ClearRenderTargetView(rtv.Get(), clear);
+        immediate->Draw(3, 0);
+        immediate->CopyResource(staging.Get(), target.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        CHECK(immediate->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped));
+        const auto *px = static_cast<const float *>(mapped.pData);
+        expect(px[0] == 0.25f && px[1] == 0.5f && px[2] == 0.75f && px[3] == 1.0f,
+               "20-byte stride pixel (vp.w=%g) = (%g, %g, %g, %g), want (0.25, 0.5, 0.75, 1)",
+               vp.Width, px[0], px[1], px[2], px[3]);
+        immediate->Unmap(staging.Get(), 0);
+      }
+    }
+  }
   return verdict();
 }

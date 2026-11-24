@@ -375,6 +375,14 @@ public:
 
   uint32_t RootSignatureArgumentIndex = ~0u;
   uint32_t StaticSamplerArgumentIndex = ~0u;
+
+  void
+  TouchIndirectBuffers(llvm::Function *Fn, llvm::IRBuilder<> &Builder) override {
+    if (~RootSignatureArgumentIndex != 0 && RootArgumentsType && RootArgumentsType->getNumElements() > 0)
+      Builder.CreateLoad(Builder.getInt32Ty(), Fn->getArg(RootSignatureArgumentIndex), /*isVolatile=*/true);
+    if (~StaticSamplerArgumentIndex != 0)
+      Builder.CreateLoad(Builder.getInt32Ty(), Fn->getArg(StaticSamplerArgumentIndex), /*isVolatile=*/true);
+  }
   uint32_t AtomicLocksArgIndex = ~0u;
   llvm::StructType *RootArgumentsType = nullptr;
   llvm::Value *RootArguments = nullptr;
@@ -847,6 +855,12 @@ public:
   llvm::Value *
   GetSparseBufferMappings(llvm::air::AIRBuilder &Builder) override {
     return First([&](BindingMap &map) { return map.GetSparseBufferMappings(Builder); });
+  }
+  void
+  TouchIndirectBuffers(llvm::Function *Fn, llvm::IRBuilder<> &Builder) override {
+    for (auto &map : maps)
+      if (map)
+        map->TouchIndirectBuffers(Fn, Builder);
   }
 };
 

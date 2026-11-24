@@ -984,6 +984,9 @@ convert_dxbc_geometry_shader(
   );
   air.RasterScale = function->getArg(raster_scale);
   setup_metal_version(module, metal_version);
+  binding_map->TouchIndirectBuffers(function, builder);
+  if (domain_binding)
+    domain_binding->TouchIndirectBuffers(function, builder);
 
   auto [warp_vertex_count, warp_primitive_count, vertex_per_primitive] =
       get_vertex_primitive_count_in_warp(pShaderInternal->gs_input_primitive, is_strip, pVertexStage->max_output_register);
@@ -3239,6 +3242,7 @@ convert_dxbc_vertex_for_geometry_shader(
   );
 
   setup_metal_version(module, metal_version);
+  binding_map->TouchIndirectBuffers(function, builder);
 
   auto active = llvm::BasicBlock::Create(context, "active", function);
   auto will_dispatch = llvm::BasicBlock::Create(context, "will_dispatch", function);

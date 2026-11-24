@@ -76,6 +76,8 @@ public:
   GetSparseBufferMappings(llvm::air::AIRBuilder &Builder) {
     return nullptr;
   }
+  virtual void
+  TouchIndirectBuffers(llvm::Function *, llvm::IRBuilder<> &) {}
 };
 
 } // namespace mullion::dxbc

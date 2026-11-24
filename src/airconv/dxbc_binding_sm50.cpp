@@ -144,6 +144,13 @@ public:
     return CounterDescriptor{Handle};
   }
 
+  void
+  TouchIndirectBuffers(llvm::Function *Fn, llvm::IRBuilder<> &Builder) override {
+    for (auto idx : {BindingTableIndex, ConstantBufferTableIndex})
+      if (~idx != 0)
+        Builder.CreateLoad(Builder.getInt32Ty(), Fn->getArg(idx), /*isVolatile=*/true);
+  }
+
   uint32_t ConstantBufferTableIndex = ~0u;
   uint32_t BindingTableIndex = ~0u;
   llvm::StructType *ConstantBufferTableType = nullptr;

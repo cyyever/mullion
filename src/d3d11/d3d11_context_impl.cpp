@@ -3704,10 +3704,13 @@ public:
          memcmp(state_.Rasterizer.viewports, pViewports, NumViewports * sizeof(D3D11_VIEWPORT)) == 0)) {
       return;
     }
+    const auto was_oversized = HasOversizedViewport();
     state_.Rasterizer.NumViewports = NumViewports;
     for (auto i = 0u; i < NumViewports; i++) {
       state_.Rasterizer.viewports[i] = pViewports[i];
     }
+    if (HasOversizedViewport() != was_oversized)
+      InvalidateRenderPipeline();
     // there is a scissor for each viewport
     dirty_state.set(DirtyState::Viewport, DirtyState::Scissors);
   }
@@ -5693,6 +5696,18 @@ public:
     D3D11_RASTERIZER_DESC2 rs_desc{};
   };
 
+  bool
+  HasOversizedViewport() const {
+    for (auto i = 0u; i < state_.Rasterizer.NumViewports; i++) {
+      const auto &[x, y, w, h, min_d, max_d] = state_.Rasterizer.viewports[i];
+      for (auto [origin, size] : {std::pair{x, w}, std::pair{y, h}})
+        if (size > 0 && std::abs(2.0 * origin + size - D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION) + 1.5 * size >
+                            1.5 * D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
+          return true;
+    }
+    return false;
+  }
+
   MeshRasterState
   GetMeshRasterState() {
     MeshRasterState out;
@@ -5733,6 +5748,7 @@ public:
         (plain ? !VS->reflection().ClipDistances && !VS->reflection().CullDistances && is_tri
                : GS->reflection().GeometryShader.ConservativeFits && !GS->reflection().ClipDistances && !GS->reflection().CullDistances);
     out.local_triangles = plain && is_tri && out.rs_desc.FillMode == D3D11_FILL_SOLID &&
+        HasOversizedViewport() &&
         !VS->reflection().ClipDistances && !VS->reflection().CullDistances && PS &&
         no_ps_varyings && !PS->reflection().PixelShader.Barycentrics && !PS->reflection().PixelShader.EarlyTests &&
         state_.OutputMerger.SampleCount == 1 && !out.rs_desc.ForcedSampleCount &&
@@ -5953,8 +5969,7 @@ public:
         ->GetDesc(&ds_desc);
     if (!ds_desc.DepthEnable)
       return out;
-    IMTLD3D11RasterizerState *rs =
-        state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
+    auto *rs = state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
     rs->GetDesc2(&out.rs_desc);
     if (!out.rs_desc.DepthBias && !out.rs_desc.SlopeScaledDepthBias)
       return out;
@@ -6224,15 +6239,14 @@ public:
         cmd.stencil_ref = cmd.back_stencil_ref = stencil_ref;
       });
     }
-    auto fdb = GetFragmentDepthBiasState(
+    const auto &[fdb_active, fdb_clamp_hw, fdb_unorm_max, fdb_rs_desc] = GetFragmentDepthBiasState(
         state_.OutputMerger.SampleCount,
         state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
             state_.InputAssembler.Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-    auto mr = GetMeshRasterState();
-    if (dirty_state.any(DirtyState::RasterizerState) || fdb.active || mr.wire_slope) {
-      IMTLD3D11RasterizerState *state =
-          state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
-      EmitST([state, lines = quad_lines_, zero_bias = (fdb.active && !fdb.clamp_hw) || mr.wire_slope](ArgumentEncodingContext& enc) {
+    const auto &[aliased_lines, quad_lines, wire_slope, wire_snap, local_triangles, mr_rs_desc] = GetMeshRasterState();
+    if (dirty_state.any(DirtyState::RasterizerState) || fdb_active || wire_slope) {
+      auto *state = state_.Rasterizer.RasterizerState ? state_.Rasterizer.RasterizerState.ptr() : default_rasterizer_state;
+      EmitST([state, lines = quad_lines_, zero_bias = (fdb_active && !fdb_clamp_hw) || wire_slope](ArgumentEncodingContext &enc) {
         auto &cmd = enc.encodeRenderCommand<wmtcmd_render_setrasterizerstate>();
         cmd.type = WMTRenderCommandSetRasterizerState;
         state->SetupRasterizerState(cmd);
@@ -6266,14 +6280,7 @@ public:
     // has there. with no viewport set at all, Metal has its one, and takes one scissor
     const UINT viewport_count =
         state_.Rasterizer.NumViewports ? D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE : 1;
-    bool oversized_local_vp = false;
-    if (mr.local_triangles)
-      for (UINT i = 0; i < state_.Rasterizer.NumViewports; i++)
-        for (auto [origin, size] : {std::pair{state_.Rasterizer.viewports[i].TopLeftX, state_.Rasterizer.viewports[i].Width},
-                                    std::pair{state_.Rasterizer.viewports[i].TopLeftY, state_.Rasterizer.viewports[i].Height}})
-          if (size > 0 && std::abs(2.0 * origin + size - D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION) + 1.5 * size >
-                              1.5 * D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
-            oversized_local_vp = true;
+    const auto oversized_local_vp = local_triangles;
     if (std::exchange(oversized_local_vp_, oversized_local_vp) != oversized_local_vp)
       dirty_state.set(DirtyState::Viewport);
     float scale = 1;
@@ -6302,18 +6309,18 @@ public:
     static_assert(SM50_VIEWPORTS == D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
     // with no viewport set, Metal's own has the range 0 to 1. a pixel shader that blends itself reads the blend factor
     // after all the viewports' ranges (SM50_SHADER_BLEND)
-    if (mr.aliased_lines || mr.wire_snap || mr.local_triangles) {
+    if (aliased_lines || wire_snap || local_triangles) {
       auto data = AllocateCommandData<SM50_CONSERVATIVE_VIEWPORTS>(1);
       memset(data.data(), 0, sizeof(SM50_CONSERVATIVE_VIEWPORTS));
       for (UINT i = 0; i < std::min<UINT>(state_.Rasterizer.NumViewports, std::size(data[0].viewports)); i++) {
-        auto &vp = state_.Rasterizer.viewports[i];
-        data[0].viewports[i][0] = vp.TopLeftX;
-        data[0].viewports[i][1] = vp.TopLeftY;
-        data[0].viewports[i][2] = vp.Width;
-        data[0].viewports[i][3] = vp.Height;
+        const auto &[x, y, w, h, min_d, max_d] = state_.Rasterizer.viewports[i];
+        data[0].viewports[i][0] = x;
+        data[0].viewports[i][1] = y;
+        data[0].viewports[i][2] = w;
+        data[0].viewports[i][3] = h;
       }
-      data[0].state[0] = (mr.rs_desc.DepthClipEnable ? 1u : 0u) | (oversized_local_vp ? 2u : 0u);
-      data[0].state[1] = mr.rs_desc.FrontCounterClockwise ? 1u : 0u;
+      data[0].state[0] = (mr_rs_desc.DepthClipEnable ? 1u : 0u) | (oversized_local_vp ? 2u : 0u);
+      data[0].state[1] = mr_rs_desc.FrontCounterClockwise ? 1u : 0u;
       data[0].state[2] = render_pass_width_;
       data[0].state[3] = render_pass_height_;
       EmitST([data = std::move(data)](ArgumentEncodingContext &enc) {
@@ -6325,35 +6332,35 @@ public:
       });
     }
     if (dirty_state.any(DirtyState::Viewport) || (shader_blend_ && dirty_state.any(DirtyState::BlendFactorAndStencilRef)) ||
-        fdb.active || mr.wire_slope) {
+        fdb_active || wire_slope) {
       auto &factor = state_.OutputMerger.BlendFactor;
-      auto ranges = AllocateCommandData<float>(mr.wire_slope     ? 2 * SM50_VIEWPORTS + 4 + 4 * SM50_VIEWPORTS
-                                               : fdb.active      ? 2 * SM50_VIEWPORTS + 8
-                                               : shader_blend_   ? 2 * SM50_VIEWPORTS + std::size(factor)
-                                                                 : 2 * viewport_count);
-      for (unsigned i = 0; i < ((fdb.active || mr.wire_slope) ? SM50_VIEWPORTS : viewport_count); i++) {
+      auto ranges = AllocateCommandData<float>(wire_slope     ? 2 * SM50_VIEWPORTS + 4 + 4 * SM50_VIEWPORTS
+                                               : fdb_active   ? 2 * SM50_VIEWPORTS + 8
+                                               : shader_blend_ ? 2 * SM50_VIEWPORTS + std::size(factor)
+                                                               : 2 * viewport_count);
+      for (unsigned i = 0; i < ((fdb_active || wire_slope) ? SM50_VIEWPORTS : viewport_count); i++) {
         auto &d3dViewport = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
         ranges[2 * i] = state_.Rasterizer.NumViewports ? std::min(d3dViewport.MinDepth, d3dViewport.MaxDepth) : 0;
         ranges[2 * i + 1] = state_.Rasterizer.NumViewports ? std::max(d3dViewport.MinDepth, d3dViewport.MaxDepth) : 1;
       }
       if (shader_blend_)
         std::copy_n(factor, std::size(factor), ranges.data() + 2 * SM50_VIEWPORTS);
-      if (mr.wire_slope) {
-        float *bias = ranges.data() + 2 * SM50_VIEWPORTS + 4;
-        for (UINT i = 0; i < SM50_VIEWPORTS; ++i) {
-          const auto &vp = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
-          float span = state_.Rasterizer.NumViewports ? 2 * std::abs(vp.MaxDepth - vp.MinDepth) : 0;
-          bias[4 * i] = state_.Rasterizer.NumViewports && vp.Width ? span / vp.Width : 0;
-          bias[4 * i + 1] = state_.Rasterizer.NumViewports && vp.Height ? span / vp.Height : 0;
-          bias[4 * i + 2] = mr.rs_desc.SlopeScaledDepthBias;
-          bias[4 * i + 3] = mr.rs_desc.DepthBiasClamp;
+      if (wire_slope) {
+        auto *bias = ranges.data() + 2 * SM50_VIEWPORTS + 4;
+        for (auto i = 0u; i < SM50_VIEWPORTS; ++i) {
+          const auto &[x, y, w, h, min_d, max_d] = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
+          auto span = state_.Rasterizer.NumViewports ? 2 * std::abs(max_d - min_d) : 0.f;
+          bias[4 * i] = state_.Rasterizer.NumViewports && w ? span / w : 0;
+          bias[4 * i + 1] = state_.Rasterizer.NumViewports && h ? span / h : 0;
+          bias[4 * i + 2] = mr_rs_desc.SlopeScaledDepthBias;
+          bias[4 * i + 3] = mr_rs_desc.DepthBiasClamp;
         }
-      } else if (fdb.active) {
-        float *bias = ranges.data() + 2 * SM50_VIEWPORTS + 4;
-        bias[0] = float(fdb.rs_desc.DepthBias);
-        bias[1] = fdb.clamp_hw ? 0.0f : fdb.rs_desc.SlopeScaledDepthBias;
-        bias[2] = fdb.clamp_hw ? 0.0f : fdb.rs_desc.DepthBiasClamp;
-        bias[3] = fdb.unorm_max;
+      } else if (fdb_active) {
+        auto *bias = ranges.data() + 2 * SM50_VIEWPORTS + 4;
+        bias[0] = float(fdb_rs_desc.DepthBias);
+        bias[1] = fdb_clamp_hw ? 0.0f : fdb_rs_desc.SlopeScaledDepthBias;
+        bias[2] = fdb_clamp_hw ? 0.0f : fdb_rs_desc.DepthBiasClamp;
+        bias[3] = fdb_unorm_max;
       }
       EmitST([ranges = std::move(ranges)](ArgumentEncodingContext &enc) {
         auto &cmd = enc.encodeRenderCommand<wmtcmd_render_setbytes>();

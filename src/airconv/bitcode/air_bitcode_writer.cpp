@@ -177,19 +177,22 @@ writeTypedBitcode(const llvm::Module &module, llvm::SmallVectorImpl<char> &outpu
         if (!array || !array->getElementType()->isIntegerTy(8))
           continue;
         auto bytes = array->getNumElements();
-        if (bytes == 16) {
-          auto *element = llvm::IntegerType::get(m->getContext(), 32);
-          llvm::IRBuilder<> builder(gep);
-          gep->setOperand(1, builder.CreateShl(gep->getOperand(1), 2, "air.element.offset"));
+        if (bytes == 2 || bytes == 4 || bytes == 8) {
+          auto *element = llvm::IntegerType::get(m->getContext(), bytes * 8);
           gep->setSourceElementType(element);
           gep->setResultElementType(element);
           continue;
         }
-        if (bytes != 2 && bytes != 4 && bytes != 8)
+        if (bytes > 0 && (bytes % 4 == 0 || bytes % 2 == 0)) {
+          const auto [unit, count] = bytes % 4 == 0 ? std::pair{4u, bytes / 4} : std::pair{2u, bytes / 2};
+          auto *element = llvm::IntegerType::get(m->getContext(), unit * 8);
+          llvm::IRBuilder<> builder(gep);
+          auto *scale = llvm::ConstantInt::get(gep->getOperand(1)->getType(), count);
+          gep->setOperand(1, builder.CreateMul(gep->getOperand(1), scale, "air.element.offset"));
+          gep->setSourceElementType(element);
+          gep->setResultElementType(element);
           continue;
-        auto *element = llvm::IntegerType::get(m->getContext(), bytes * 8);
-        gep->setSourceElementType(element);
-        gep->setResultElementType(element);
+        }
       }
 
   verification.clear();

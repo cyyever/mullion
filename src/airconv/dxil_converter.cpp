@@ -5110,14 +5110,9 @@ convert_dxil_mesh_stage(
       builder, nulldbg
   );
   air.RasterScale = function->getArg(raster_scale);
-  // AGXMetalG14G's backend compiler crashes (XPC_ERROR_CONNECTION_INTERRUPTED) when a mesh shader combines
+  // AGXMetalG14G's backend compiler crashes (XPC_ERROR_CONNECTION_INTERRUPTED) when an object or mesh shader combines
   // air.payload with an air.indirect_buffer whose offset 0 is never loaded; touch offset 0 with a volatile load
-  if (mesh && link && link->amplified && rootsig && raster_scale > 0) {
-    auto *rootsig_arg = function->getArg(raster_scale - 1);
-    if (rootsig_arg->getType()->isPointerTy() &&
-        rootsig_arg->getType()->getPointerAddressSpace() == (unsigned)air::AddressSpace::constant)
-      builder.CreateLoad(builder.getInt32Ty(), rootsig_arg, /*isVolatile=*/true);
-  }
+  binding_map->TouchIndirectBuffers(function, builder);
 
   setup_metal_version(module, metal_version);
   setup_temp_register(shader_info, resource_map, types, module, builder);

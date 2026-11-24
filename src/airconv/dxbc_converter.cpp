@@ -2347,11 +2347,11 @@ static int SM50InitializeUncached(
         pRefl->PixelShader.UintRenderTargets |=
             uint32_t(out.componentType() == RegisterComponentType::Uint) << out.reg();
       }
-      D3D11_SIGNATURE_PARAMETER const *ps_params = nullptr;
+      const D3D11_SIGNATURE_PARAMETER *ps_params = nullptr;
       if (inputParser.GetParameters(&ps_params) == S_OK && ps_params)
-        for (UINT i = 0; i < inputParser.GetNumParameters(); i++)
+        for (auto i = 0u; i < inputParser.GetNumParameters(); i++)
           if (ps_params[i].SystemValue == microsoft::D3D10_SB_NAME_UNDEFINED)
-            pRefl->PixelShader.UserVaryings += std::popcount(static_cast<unsigned>(ps_params[i].Mask));
+            pRefl->PixelShader.UserVaryings += std::popcount(unsigned(ps_params[i].Mask));
     }
     pRefl->ShadingRateOutput = 0;
     for (auto &out : sm50_shader->output_signature)
