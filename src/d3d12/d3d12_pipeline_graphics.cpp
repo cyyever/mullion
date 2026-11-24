@@ -1896,7 +1896,7 @@ public:
     // a hull's that tests the depth bounds or keeps a sample mask discards, so it writes the depth as a conservative
     // pixel shader that discards does
     // A UNORM depth bias is measured in fixed units of the Direct3D attachment format.
-    if (!ps_func && !mesh && !conservative && !culls && !depth_bounds_emulated &&
+    if (!ps_func && !mesh_shader && !conservative && !culls && !depth_bounds_emulated &&
         !pDesc->GS.BytecodeLength && !pDesc->HS.BytecodeLength && raster_samples == 1 && sample_mask == ~0u &&
         pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE &&
         pDesc->DepthStencilState.DepthEnable &&
