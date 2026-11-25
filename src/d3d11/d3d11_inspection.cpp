@@ -85,6 +85,7 @@ MTLD3D11Inspection::MTLD3D11Inspection(WMT::Device pDevice)
   // (SM50_SAMPLER_REDUCTION)
   m_d3d11Options1.MinMaxFiltering = TRUE;
   m_d3d11Options1.TiledResourcesTier = D3D11_TILED_RESOURCES_NOT_SUPPORTED;
+  m_d3d9SimpleInstancing.SimpleInstancingSupported = TRUE;
 
   m_d3d11Options2.TiledResourcesTier = D3D11_TILED_RESOURCES_NOT_SUPPORTED;
   m_d3d11Options2.ConservativeRasterizationTier =
@@ -128,9 +129,8 @@ HRESULT MTLD3D11Inspection::GetFeatureData(D3D11_FEATURE Feature,
     return GetTypedFeatureData(FeatureDataSize, pFeatureData, &m_d3d9Shadow);
   case D3D11_FEATURE_D3D11_OPTIONS1:
     return GetTypedFeatureData(FeatureDataSize, pFeatureData, &m_d3d11Options1);
-    //   case D3D11_FEATURE_D3D9_SIMPLE_INSTANCING_SUPPORT:
-    //     return GetTypedFeatureData(FeatureDataSize, pFeatureData,
-    //                                &m_d3d9SimpleInstancing);
+  case D3D11_FEATURE_D3D9_SIMPLE_INSTANCING_SUPPORT:
+    return GetTypedFeatureData(FeatureDataSize, pFeatureData, &m_d3d9SimpleInstancing);
     //   case D3D11_FEATURE_MARKER_SUPPORT:
     //     return GetTypedFeatureData(FeatureDataSize, pFeatureData, &m_marker);
     //   case D3D11_FEATURE_D3D9_OPTIONS1:

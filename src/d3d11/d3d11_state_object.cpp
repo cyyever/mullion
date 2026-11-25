@@ -861,7 +861,7 @@ StateObjectCache<D3D11_BLEND_DESC1, IMTLD3D11BlendState>::CreateStateObject(
   unsigned num_blend_target = pBlendStateDesc->IndependentBlendEnable ? 8 : 1;
   for (unsigned i = 0; i < num_blend_target; i++) {
     auto &blend_target = pBlendStateDesc->RenderTarget[i];
-    if (blend_target.BlendEnable && blend_target.LogicOpEnable) {
+    if (blend_target.LogicOpEnable && (blend_target.BlendEnable || pBlendStateDesc->IndependentBlendEnable)) {
       return E_INVALIDARG;
     }
   }

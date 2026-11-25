@@ -452,6 +452,31 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     auto stage = Stage(pShaderBytecode, BytecodeLength);
     if (!stage || device->GetFeatureLevel() < D3D_FEATURE_LEVEL_10_0)
       return E_INVALIDARG;
+    // FL10.x only supports stream 0, rasterized stream 0, at most 1 stride, and either all entries in slot 0 or one
+    // non-gap entry per slot
+    if (device->GetFeatureLevel() < D3D_FEATURE_LEVEL_11_0) {
+      if (RasterizedStream != 0 || NumStrides > 1)
+        return E_INVALIDARG;
+      uint32_t slot_mask = 0;
+      uint32_t slot_entries[D3D11_SO_BUFFER_SLOT_COUNT] = {};
+      bool has_gap = false;
+      for (UINT i = 0; i < NumEntries; i++) {
+        auto &entry = pEntries[i];
+        if (entry.Stream != 0 || entry.OutputSlot >= D3D11_SO_BUFFER_SLOT_COUNT)
+          return E_INVALIDARG;
+        slot_mask |= 1u << entry.OutputSlot;
+        slot_entries[entry.OutputSlot]++;
+        if (!entry.SemanticName)
+          has_gap = true;
+      }
+      if (slot_mask & ~1u) {
+        if (has_gap)
+          return E_INVALIDARG;
+        for (auto count : slot_entries)
+          if (count > 1)
+            return E_INVALIDARG;
+      }
+    }
     if (*stage == D3D10_SB_GEOMETRY_SHADER && !(desc.GeometryShader = CreateShader(pShaderBytecode, BytecodeLength)))
       return E_INVALIDARG;
     if (HRESULT hr = ExtractStreamOutputElements(

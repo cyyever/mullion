@@ -2425,7 +2425,7 @@ public:
   SwapDeviceContextState(ID3DDeviceContextState *pState, ID3DDeviceContextState **ppPreviousState) override {
     std::lock_guard<mutex_t> lock(mutex);
     InitReturnPtr(ppPreviousState);
-    if (!pState)
+    if (GetType() == D3D11_DEVICE_CONTEXT_DEFERRED || !pState)
       return;
     // the state so far goes to the object that was current, which the context makes when none was set yet
     Com<MTLD3D11DeviceContextState> next = static_cast<MTLD3D11DeviceContextState *>(pState),

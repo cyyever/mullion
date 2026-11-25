@@ -452,7 +452,8 @@ public:
     if ((desc.BindFlags & ~(input | (kD3D11OutputBindFlags & ~D3D11_BIND_DEPTH_STENCIL))) ||
         ((desc.BindFlags & D3D11_BIND_UNORDERED_ACCESS) && (desc.BindFlags & D3D11_BIND_STREAM_OUTPUT)) ||
         !ValidUsage(desc.Usage, desc.BindFlags, desc.CPUAccessFlags, pInitialData) ||
-        (desc.MiscFlags & (D3D11_RESOURCE_MISC_TILE_POOL | D3D11_RESOURCE_MISC_TILED)))
+        (desc.MiscFlags &
+         (D3D11_RESOURCE_MISC_TILE_POOL | D3D11_RESOURCE_MISC_TILED | D3D11_RESOURCE_MISC_GENERATE_MIPS)))
       return E_INVALIDARG;
     // GDI draws on textures only (Wine's d3d10core test_create_buffer has Windows refuse a buffer of it)
     if (desc.MiscFlags & D3D11_RESOURCE_MISC_GDI_COMPATIBLE)
@@ -889,7 +890,8 @@ public:
     if (feature_level_ < D3D_FEATURE_LEVEL_10_0) {
       support1 &= ~(D3D11_FORMAT_SUPPORT_BUFFER | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE_COMPARISON);
       // Microsoft Learn, format support for feature level 9.3: these formats disallow display scan-out
-      if (Format == DXGI_FORMAT_R16G16B16A16_FLOAT || Format == DXGI_FORMAT_R10G10B10A2_UNORM)
+      if (Format == DXGI_FORMAT_R16G16B16A16_FLOAT || Format == DXGI_FORMAT_R10G10B10A2_UNORM ||
+          Format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM)
         support1 &= ~D3D11_FORMAT_SUPPORT_DISPLAY;
     }
     if (feature_level_ < D3D_FEATURE_LEVEL_10_1)
@@ -1558,6 +1560,17 @@ private:
   ValidateTexture(const Desc *pDesc, const D3D11_SUBRESOURCE_DATA *pInitialData) {
     if (!ValidUsage(pDesc->Usage, pDesc->BindFlags, pDesc->CPUAccessFlags, pInitialData))
       return E_INVALIDARG;
+    if ((pDesc->MiscFlags & D3D11_RESOURCE_MISC_GENERATE_MIPS) &&
+        (pDesc->BindFlags & (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE)) !=
+            (D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE))
+      return E_INVALIDARG;
+    if (pDesc->MiscFlags & D3D11_RESOURCE_MISC_GDI_COMPATIBLE) {
+      if (!std::is_same_v<Desc, D3D11_TEXTURE2D_DESC1> || pDesc->Usage != D3D11_USAGE_DEFAULT ||
+          !(pDesc->BindFlags & D3D11_BIND_RENDER_TARGET) ||
+          (pDesc->Format != DXGI_FORMAT_B8G8R8A8_UNORM && pDesc->Format != DXGI_FORMAT_B8G8R8A8_TYPELESS &&
+           pDesc->Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))
+        return E_INVALIDARG;
+    }
     Desc desc;
     WMTTextureInfo info{};
     if (FAILED(CreateMTLTextureDescriptor(this, pDesc, &desc, &info)))
@@ -1832,7 +1845,7 @@ MTLD3D11Device::PrepareFormatView(Texture *texture, WMTPixelFormat format) {
   if (!texture->castsWithoutFormatView(format))
     return true;
   // a second view of the texture returns only once the first view's move can be taken
-  std::lock_guard<mullion::mutex> lock(format_view_mutex_);
+  std::scoped_lock lock(format_view_mutex_);
   auto moved = texture->formatViewMove();
   if (!moved)
     return true;
@@ -1845,7 +1858,7 @@ MTLD3D11Device::PrepareFormatView(Texture *texture, WMTPixelFormat format) {
 
 std::vector<std::pair<Rc<Texture>, Rc<TextureAllocation>>>
 MTLD3D11Device::TakeFormatViewMoves() {
-  std::lock_guard<mullion::mutex> lock(format_view_mutex_);
+  std::scoped_lock lock(format_view_mutex_);
   format_view_pending_.store(false, std::memory_order_relaxed);
   return std::exchange(format_view_moves_, {});
 }

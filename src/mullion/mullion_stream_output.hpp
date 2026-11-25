@@ -65,9 +65,12 @@ ExtractStreamOutputElements(
       offsets[entry.OutputSlot] += sizeof(uint32_t);
     }
   }
+  if (Strides.size() > std::size(offsets))
+    return E_INVALIDARG;
   for (uint32_t slot = 0; slot < std::size(offsets); slot++)
-    if (offsets[slot] && (!takes[slot] || (slot < Strides.size() &&
-                                           (Strides[slot] % sizeof(uint32_t) || Strides[slot] < offsets[slot]))))
+    if (offsets[slot] &&
+        (!takes[slot] ||
+         (slot < Strides.size() && (Strides[slot] < offsets[slot] || Strides[slot] % sizeof(uint32_t)))))
       return E_INVALIDARG;
   return S_OK;
 }
