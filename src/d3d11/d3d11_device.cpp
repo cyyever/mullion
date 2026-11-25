@@ -891,15 +891,32 @@ public:
         GetMTLDevice(), Format, [this](WMTPixelFormat f) { return GetMTLPixelFormatCapability(f); }, support1, support2
     );
     // format queries describe the requested feature level (D3D11.3 19.1.4), not everything Metal can do
+    if (feature_level_ < D3D_FEATURE_LEVEL_9_2 && Format == DXGI_FORMAT_R32_UINT)
+      support1 &= ~D3D11_FORMAT_SUPPORT_IA_INDEX_BUFFER;
+    if (feature_level_ < D3D_FEATURE_LEVEL_9_3 && Format == DXGI_FORMAT_R16G16B16A16_FLOAT)
+      support1 &= ~D3D11_FORMAT_SUPPORT_BLENDABLE;
     if (feature_level_ < D3D_FEATURE_LEVEL_10_0) {
       support1 &= ~(D3D11_FORMAT_SUPPORT_BUFFER | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE_COMPARISON);
       // Microsoft Learn, format support for feature level 9.3: these formats disallow display scan-out
       if (Format == DXGI_FORMAT_R16G16B16A16_FLOAT || Format == DXGI_FORMAT_R10G10B10A2_UNORM ||
           Format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM)
         support1 &= ~D3D11_FORMAT_SUPPORT_DISPLAY;
+      if (Format == DXGI_FORMAT_R8G8_UINT || Format == DXGI_FORMAT_R11G11B10_FLOAT || Format == DXGI_FORMAT_R16_FLOAT)
+        support1 &= ~D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER;
+      if (Format == DXGI_FORMAT_R16G16B16A16_UNORM || Format == DXGI_FORMAT_R16G16_UNORM ||
+          Format == DXGI_FORMAT_R16_UNORM || Format == DXGI_FORMAT_R32G32B32A32_FLOAT ||
+          Format == DXGI_FORMAT_R32G32_FLOAT || Format == DXGI_FORMAT_R32_FLOAT ||
+          Format == DXGI_FORMAT_R10G10B10A2_UNORM || Format == DXGI_FORMAT_R11G11B10_FLOAT ||
+          Format == DXGI_FORMAT_R16_FLOAT)
+        support1 &= ~D3D11_FORMAT_SUPPORT_BLENDABLE;
     }
-    if (feature_level_ < D3D_FEATURE_LEVEL_10_1)
+    if (feature_level_ < D3D_FEATURE_LEVEL_10_1) {
       support1 &= ~(D3D11_FORMAT_SUPPORT_SHADER_GATHER | D3D11_FORMAT_SUPPORT_SHADER_GATHER_COMPARISON);
+      if (Format == DXGI_FORMAT_R16G16B16A16_SNORM || Format == DXGI_FORMAT_R16G16_SNORM ||
+          Format == DXGI_FORMAT_R16_SNORM || Format == DXGI_FORMAT_R8G8B8A8_SNORM ||
+          Format == DXGI_FORMAT_R8G8_SNORM || Format == DXGI_FORMAT_R8_SNORM)
+        support1 &= ~D3D11_FORMAT_SUPPORT_BLENDABLE;
+    }
     if (pFormatSupport && SUCCEEDED(hr))
       *pFormatSupport = support1;
     return hr;

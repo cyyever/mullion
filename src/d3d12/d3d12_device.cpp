@@ -3232,7 +3232,10 @@ PipelineStateStream::Parse(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc) {
 
   // a stream may list every shader, the unused ones empty (as D3DX12's stream helper does): the shaders present
   // choose the pipeline
-  if (desc_cs.CS.pShaderBytecode && desc_graphics.VS.pShaderBytecode) {
+  if (desc_cs.CS.pShaderBytecode &&
+      (desc_graphics.VS.pShaderBytecode || desc_graphics.PS.pShaderBytecode || desc_graphics.GS.pShaderBytecode ||
+       desc_graphics.HS.pShaderBytecode || desc_graphics.DS.pShaderBytecode || desc_as.pShaderBytecode ||
+       desc_ms.pShaderBytecode)) {
     ERR("CreatePipelineState: invalid compute pipeline state stream");
     return E_INVALIDARG;
   }

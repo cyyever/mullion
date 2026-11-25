@@ -1484,10 +1484,13 @@ public:
     stream_output = pDesc->StreamOutput.NumEntries;
     mesh_shader = MS.pShaderBytecode;
     // a pipeline with a mesh shader "must not have any other shader types attached (VS, GS, HS, DS)" (DirectX-Specs,
-    // Mesh Shader, CreatePipelineState); its input layout and topology type are ignored (vkd3d-proton's
+    // Mesh Shader, CreatePipelineState); an amplification shader requires a mesh shader, and stream output is
+    // disallowed with mesh shaders; input layout and topology type are ignored (vkd3d-proton's
     // test_mesh_shader_create_pipeline, on Windows)
+    if (AS.pShaderBytecode && !mesh_shader)
+      return FAIL(E_INVALIDARG);
     if (mesh_shader && (pDesc->VS.pShaderBytecode || pDesc->HS.pShaderBytecode || pDesc->DS.pShaderBytecode ||
-                        pDesc->GS.pShaderBytecode))
+                        pDesc->GS.pShaderBytecode || stream_output))
       return FAIL(E_INVALIDARG);
     pixel_shader = pDesc->PS.pShaderBytecode;
     strip_cut = pDesc->IBStripCutValue;

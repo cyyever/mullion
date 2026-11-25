@@ -6346,6 +6346,7 @@ public:
     const auto oversized_local_vp = local_triangles;
     if (std::exchange(oversized_local_vp_, oversized_local_vp) != oversized_local_vp)
       dirty_state.set(DirtyState::Viewport);
+    const bool integer_viewport = device->GetFeatureLevel() < D3D_FEATURE_LEVEL_11_0;
     float scale = 1;
     if (dirty_state.any(DirtyState::Viewport) && state_.Rasterizer.NumViewports) {
       auto viewports = AllocateCommandData<WMTViewport>(viewport_count);
@@ -6353,6 +6354,10 @@ public:
         auto &d3dViewport = state_.Rasterizer.viewports[i < state_.Rasterizer.NumViewports ? i : 0];
         if (oversized_local_vp)
           viewports[i] = {0, 0, double(render_pass_width_), double(render_pass_height_),
+                          d3dViewport.MinDepth, d3dViewport.MaxDepth};
+        else if (integer_viewport)
+          viewports[i] = {std::trunc(d3dViewport.TopLeftX), std::trunc(d3dViewport.TopLeftY),
+                          std::trunc(d3dViewport.Width), std::trunc(d3dViewport.Height),
                           d3dViewport.MinDepth, d3dViewport.MaxDepth};
         else
           viewports[i] = {d3dViewport.TopLeftX, d3dViewport.TopLeftY, d3dViewport.Width,

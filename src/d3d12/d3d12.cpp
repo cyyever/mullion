@@ -240,8 +240,7 @@ D3D12EnableExperimentalFeatures(UINT NumFeatures, const IID *pIIDs, void *pConfi
     return FAIL(E_INVALIDARG);
   if (!std::all_of(pIIDs, pIIDs + NumFeatures, [](REFIID iid) { return iid == shader_models; }))
     return E_NOINTERFACE;
-  if (NumFeatures)
-    experimental_shader_models = true;
+  experimental_shader_models = NumFeatures != 0;
   return S_OK;
 }
 

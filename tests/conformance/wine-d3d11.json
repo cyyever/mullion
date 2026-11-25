@@ -215,9 +215,7 @@
   "verdict": "passed"
  },
  "test_format_support": {
-  "verdict": "failed",
-  "failed": 63,
-  "first": "d3d11.c:21338: Test failed: Feature level 0xa000: Format 0xd - blendable supported."
+  "verdict": "passed"
  },
  "test_fp_specials": {
   "verdict": "passed"
