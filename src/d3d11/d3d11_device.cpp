@@ -1116,8 +1116,9 @@ public:
       return E_INVALIDARG;
 
     if (ppContextState) {
+      bool emulates_d3d10 = EmulatedInterface == __uuidof(ID3D10Device) || EmulatedInterface == __uuidof(ID3D10Device1);
       try {
-        *ppContextState = ref(new MTLD3D11DeviceContextState(this));
+        *ppContextState = ref(new MTLD3D11DeviceContextState(this, emulates_d3d10));
       } catch (const std::bad_alloc &) {
         return E_OUTOFMEMORY;
       }

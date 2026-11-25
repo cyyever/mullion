@@ -168,9 +168,7 @@
   "verdict": "passed"
  },
  "test_device_context_state": {
-  "verdict": "failed",
-  "failed": 47,
-  "first": "d3d11.c:8183: Test failed: Got unexpected buffer 00000000007527B0."
+  "verdict": "passed"
  },
  "test_device_interfaces": {
   "verdict": "passed"

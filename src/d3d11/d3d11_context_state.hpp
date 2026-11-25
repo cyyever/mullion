@@ -188,11 +188,12 @@ class MTLD3D11DeviceContextState
     : public MTLD3D11DeviceChild<ID3DDeviceContextState> {
 
 public:
-  MTLD3D11DeviceContextState(MTLD3D11Device *pDevice)
-      : MTLD3D11DeviceChild<ID3DDeviceContextState>(pDevice) {}
+  MTLD3D11DeviceContextState(MTLD3D11Device *pDevice, bool emulates_d3d10 = false)
+      : MTLD3D11DeviceChild<ID3DDeviceContextState>(pDevice), emulates_d3d10(emulates_d3d10) {}
 
   ~MTLD3D11DeviceContextState() {}
 
+  bool emulates_d3d10 = false;
   D3D11ContextState state;
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppvObject) {

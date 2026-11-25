@@ -2405,10 +2405,17 @@ public:
 
   }
 
+  bool
+  EmulatesD3D10() const {
+    return context_state_ && context_state_->emulates_d3d10;
+  }
+
   void
   STDMETHODCALLTYPE
   SetPredication(ID3D11Predicate *pPredicate, BOOL PredicateValue) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
 
     // a predicate is a query of ours (CreatePredicate)
@@ -2455,6 +2462,8 @@ public:
   STDMETHODCALLTYPE
   IASetInputLayout(ID3D11InputLayout *pInputLayout) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     auto expected = com_cast<IMTLD3D11InputLayout>(pInputLayout);
     // the layout the context has changes no pipeline
@@ -2483,6 +2492,8 @@ public:
       UINT StartSlot, UINT NumBuffers, ID3D11Buffer *const *ppVertexBuffers, const UINT *pStrides, const UINT *pOffsets
   ) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     SetVertexBuffers(StartSlot, NumBuffers, ppVertexBuffers, pStrides, pOffsets);
   }
@@ -2500,6 +2511,8 @@ public:
   STDMETHODCALLTYPE
   IASetIndexBuffer(ID3D11Buffer *pIndexBuffer, DXGI_FORMAT Format, UINT Offset) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     auto pBuffer = GetResourceCommon(pIndexBuffer);
     // the buffer, format and offset the context has are bound already
@@ -2539,6 +2552,8 @@ public:
   STDMETHODCALLTYPE
   IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY Topology) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     if (state_.InputAssembler.Topology != Topology) {
       state_.InputAssembler.Topology = Topology;
@@ -2664,7 +2679,8 @@ public:
   void
   STDMETHODCALLTYPE
   PSGetSamplers(UINT StartSlot, UINT NumSamplers, ID3D11SamplerState **ppSamplers) override {
-
+    if (EmulatesD3D10())
+      return;
     GetSamplers<PipelineStage::Pixel>(StartSlot, NumSamplers, ppSamplers);
   }
 
@@ -2792,6 +2808,8 @@ public:
   STDMETHODCALLTYPE
   SOSetTargets(UINT NumBuffers, ID3D11Buffer *const *ppSOTargets, const UINT *pOffsets) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     if (!ValidateMultiSOTargets(NumBuffers, ppSOTargets))
       return;
@@ -3031,6 +3049,8 @@ public:
       const UINT *pUAVInitialCounts
   ) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     if (StartSlot + NumUAVs > D3D11_1_UAV_SLOT_COUNT)
       return;
@@ -3370,6 +3390,8 @@ public:
       const UINT *pUAVInitialCounts
   ) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     if (!ValidateMultiOutput(NumRTVs, ppRenderTargetViews, NumUAVs, ppUnorderedAccessViews))
       return;
@@ -3592,6 +3614,8 @@ public:
   STDMETHODCALLTYPE
   OMSetBlendState(ID3D11BlendState *pBlendState, const FLOAT BlendFactor[4], UINT SampleMask) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     bool should_invalidate_pipeline = false;
     if (auto expected = com_cast<IMTLD3D11BlendState>(pBlendState)) {
@@ -3645,6 +3669,8 @@ public:
   STDMETHODCALLTYPE
   OMSetDepthStencilState(ID3D11DepthStencilState *pDepthStencilState, UINT StencilRef) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     auto expected = com_cast<IMTLD3D11DepthStencilState>(pDepthStencilState);
     // the state and reference the context has are encoded already, as RSSetState's are: every pass starts with them
@@ -3684,6 +3710,8 @@ public:
   STDMETHODCALLTYPE
   RSSetState(ID3D11RasterizerState *pRasterizerState) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     if (pRasterizerState) {
       if (auto expected = com_cast<IMTLD3D11RasterizerState>(pRasterizerState)) {
@@ -3742,6 +3770,8 @@ public:
   STDMETHODCALLTYPE
   RSSetViewports(UINT NumViewports, const D3D11_VIEWPORT *pViewports) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     if (NumViewports > std::size(state_.Rasterizer.viewports))
       return;
@@ -3798,6 +3828,8 @@ public:
   STDMETHODCALLTYPE
   RSSetScissorRects(UINT NumRects, const D3D11_RECT *pRects) override {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     if (NumRects > 16)
       return;
@@ -4190,6 +4222,8 @@ public:
   void
   SetShader(IShader *pShader, ID3D11ClassInstance *const *ppClassInstances, UINT NumClassInstances) {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     auto &ShaderStage = state_.ShaderStages[stage];
 
@@ -4269,6 +4303,8 @@ public:
         return;
 
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     auto &ShaderStage = state_.ShaderStages[Stage];
 
@@ -4396,6 +4432,8 @@ public:
   void
   SetShaderResource(UINT StartSlot, UINT NumViews, ID3D11ShaderResourceView *const *ppShaderResourceViews) {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
 
     auto &ShaderStage = state_.ShaderStages[Stage];
@@ -4450,6 +4488,8 @@ public:
   void
   SetSamplers(UINT StartSlot, UINT NumSamplers, ID3D11SamplerState *const *ppSamplers) {
     std::lock_guard<mutex_t> lock(mutex);
+    if (EmulatesD3D10())
+      return;
 
     bool was_minmax = false;
     if constexpr (Stage == PipelineStage::Pixel)
