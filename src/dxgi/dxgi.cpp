@@ -6,7 +6,9 @@
 #include "config/config.hpp"
 #include <algorithm>
 #include "winemetal.h"
+#include <memory>
 #include <mutex>
+#include <type_traits>
 #include <utility>
 
 namespace mullion {
@@ -60,7 +62,6 @@ static void InitializeVendorExtensionNV() {
 #endif
   if (!NvidiaExtensionRequested())
     return;
-  HKEY key1 = nullptr, key2 = nullptr, key3 = nullptr, key4 = nullptr;
   auto name1 = L"{41FCC608-8496-4DEF-B43E-7D9BD675A6FF}";
   WCHAR folder[MAX_PATH] = L"C:\\Windows\\System32";
   HMODULE self = nullptr;
@@ -74,34 +75,28 @@ static void InitializeVendorExtensionNV() {
       wcscpy(folder, path);
     }
   }
-  if (RegCreateKeyExW(HKEY_LOCAL_MACHINE,
-                      L"SOFTWARE\\NVIDIA Corporation\\Global", 0, nullptr, 0,
-                      KEY_ALL_ACCESS, nullptr, &key1, nullptr) ||
-      RegCreateKeyExW(HKEY_LOCAL_MACHINE,
-                      L"SYSTEM\\ControlSet001\\Services\\nvlddmkm", 0, nullptr,
-                      0, KEY_ALL_ACCESS, nullptr, &key2, nullptr) ||
-      RegCreateKeyExW(HKEY_LOCAL_MACHINE,
-                      L"SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore", 0,
-                      nullptr, 0, KEY_ALL_ACCESS, nullptr, &key3, nullptr) ||
-      RegCreateKeyExW(HKEY_LOCAL_MACHINE,
-                      L"SYSTEM\\ControlSet001\\Services\\nvlddmkm\\NGXCore", 0,
-                      nullptr, 0, KEY_ALL_ACCESS, nullptr, &key4, nullptr)) {
-    goto cleanup;
-  }
-  {
-    DWORD _1 = 1, size = DWORD((wcslen(folder) + 1) * sizeof(WCHAR));
-    RegSetValueExW(key1, name1, 0, REG_DWORD, (const BYTE *)&_1, sizeof(_1));
-    RegSetValueExW(key2, name1, 0, REG_DWORD, (const BYTE *)&_1, sizeof(_1));
-    RegSetValueExW(key3, L"FullPath", 0, REG_SZ, (const BYTE *)folder, size);
-    RegSetValueExW(key4, L"NGXPath", 0, REG_SZ, (const BYTE *)folder, size);
-    Logger::info("Vendor extension enabled: NVEXT");
-    g_extension_enabled = VendorExtension::Nvidia;
-  }
-  cleanup:
-  if (key1) RegCloseKey(key1);
-  if (key2) RegCloseKey(key2);
-  if (key3) RegCloseKey(key3);
-  if (key4) RegCloseKey(key4);
+  struct CloseRegKey {
+    void operator()(HKEY k) const { RegCloseKey(k); }
+  };
+  using UniqueRegKey = std::unique_ptr<std::remove_pointer_t<HKEY>, CloseRegKey>;
+  auto open_key = [](const WCHAR *subkey) {
+    HKEY raw = nullptr;
+    RegCreateKeyExW(HKEY_LOCAL_MACHINE, subkey, 0, nullptr, 0, KEY_ALL_ACCESS, nullptr, &raw, nullptr);
+    return UniqueRegKey(raw);
+  };
+  auto k1 = open_key(L"SOFTWARE\\NVIDIA Corporation\\Global");
+  auto k2 = open_key(L"SYSTEM\\ControlSet001\\Services\\nvlddmkm");
+  auto k3 = open_key(L"SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore");
+  auto k4 = open_key(L"SYSTEM\\ControlSet001\\Services\\nvlddmkm\\NGXCore");
+  if (!k1 || !k2 || !k3 || !k4)
+    return;
+  DWORD _1 = 1, size = DWORD((wcslen(folder) + 1) * sizeof(WCHAR));
+  RegSetValueExW(k1.get(), name1, 0, REG_DWORD, (const BYTE *)&_1, sizeof(_1));
+  RegSetValueExW(k2.get(), name1, 0, REG_DWORD, (const BYTE *)&_1, sizeof(_1));
+  RegSetValueExW(k3.get(), L"FullPath", 0, REG_SZ, (const BYTE *)folder, size);
+  RegSetValueExW(k4.get(), L"NGXPath", 0, REG_SZ, (const BYTE *)folder, size);
+  Logger::info("Vendor extension enabled: NVEXT");
+  g_extension_enabled = VendorExtension::Nvidia;
 };
 
 static void InitializeMetalCachePath() {

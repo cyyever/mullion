@@ -147,7 +147,7 @@ struct TextureShare {
   }
 
   [[nodiscard]] HANDLE legacyHandle() const {
-    return reinterpret_cast<HANDLE>(static_cast<uintptr_t>(data.share_id | legacy_handle_marker));
+    return reinterpret_cast<HANDLE>(static_cast<uintptr_t>(data.share_id | legacy_handle_marker)); // NOLINT(performance-no-int-to-ptr)
   }
 
   [[nodiscard]] const char *
@@ -972,24 +972,33 @@ ImportSharedTexture(MTLD3D11Device *pDevice, HANDLE hResource, REFIID riid, void
 
   // the marshalled handle names its share's mapping, so it resolves in this process as it did in the one that
   // made it, for as long as any device anywhere still holds a resource of the share
+  struct CloseWinHandle {
+    void operator()(HANDLE h) const { CloseHandle(h); }
+  };
+  struct UnmapView {
+    void operator()(const void *p) const { UnmapViewOfFile(p); }
+  };
+  using UniqueHandle = std::unique_ptr<void, CloseWinHandle>;
+  using UniqueMappedView = std::unique_ptr<const void, UnmapView>;
+
   char mapping_name[64];
   ShareMappingName(uint64_t(uintptr_t(hResource)) & ~legacy_handle_marker, mapping_name);
-  HANDLE mapping = OpenFileMappingA(FILE_MAP_READ, FALSE, mapping_name);
+  UniqueHandle mapping(OpenFileMappingA(FILE_MAP_READ, FALSE, mapping_name));
   if (!mapping) {
     // "released sharing chain retained its handle": no resource of the share exists anywhere any more
     WARN("ImportSharedTexture: shared handle is no longer valid");
     return E_INVALIDARG;
   }
   SharedTextureData data = {};
-  void *view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, sizeof(SharedTextureData));
-  if (!view) {
-    WARN("ImportSharedTexture: shared handle is unreadable: ", GetLastError());
-    CloseHandle(mapping);
-    return E_INVALIDARG;
+  {
+    UniqueMappedView view(MapViewOfFile(mapping.get(), FILE_MAP_READ, 0, 0, sizeof(SharedTextureData)));
+    if (!view) {
+      WARN("ImportSharedTexture: shared handle is unreadable: ", GetLastError());
+      return E_INVALIDARG;
+    }
+    memcpy(&data, view.get(), sizeof(data));
   }
-  memcpy(&data, view, sizeof(data));
-  UnmapViewOfFile(view);
-  CloseHandle(mapping);
+  mapping.reset();
   if (memcmp(data.tag, shared_texture_tag, sizeof(shared_texture_tag)) ||
       data.mach_port_name[sizeof(data.mach_port_name) - 1] || data.mutex_name[sizeof(data.mutex_name) - 1]) {
     WARN("ImportSharedTexture: handle is not a shared texture");
@@ -1024,13 +1033,19 @@ ImportSharedTextureFromNtHandle(MTLD3D11Device *pDevice, HANDLE hResource, REFII
     return S_FALSE;
 
   SharedTextureData data = {};
-  void *view = hResource ? MapViewOfFile(hResource, FILE_MAP_READ, 0, 0, sizeof(SharedTextureData)) : nullptr;
-  if (!view) {
-    WARN("ImportSharedTextureFromNtHandle: handle is not a shared texture");
-    return E_INVALIDARG;
+  {
+    struct UnmapView {
+      void operator()(const void *p) const { UnmapViewOfFile(p); }
+    };
+    std::unique_ptr<const void, UnmapView> view(
+        hResource ? MapViewOfFile(hResource, FILE_MAP_READ, 0, 0, sizeof(SharedTextureData)) : nullptr
+    );
+    if (!view) {
+      WARN("ImportSharedTextureFromNtHandle: handle is not a shared texture");
+      return E_INVALIDARG;
+    }
+    memcpy(&data, view.get(), sizeof(data));
   }
-  memcpy(&data, view, sizeof(data));
-  UnmapViewOfFile(view);
   if (memcmp(data.tag, shared_texture_tag, sizeof(shared_texture_tag)) ||
       data.mach_port_name[sizeof(data.mach_port_name) - 1] || data.mutex_name[sizeof(data.mutex_name) - 1]) {
     WARN("ImportSharedTextureFromNtHandle: handle is not a shared texture");
@@ -1061,32 +1076,36 @@ ImportSharedTextureByName(
   // "opens a shared resource using a name of a shared resource that was created with the NT handle sharing flag"
   // (Microsoft Learn, IDXGIResource1::OpenSharedResourceByName): the name a CreateSharedHandle published resolves
   // to the share's identity, which names the carrier that holds the share's keyed mutex state
-  HANDLE mapping = nullptr;
-  if (FAILED(openHandleByName(lpName, MappingAccess(dwDesiredAccess), &mapping))) {
+  struct CloseWinHandle {
+    void operator()(HANDLE h) const { CloseHandle(h); }
+  };
+  struct UnmapView {
+    void operator()(const void *p) const { UnmapViewOfFile(p); }
+  };
+  HANDLE raw_mapping = nullptr;
+  if (FAILED(openHandleByName(lpName, MappingAccess(dwDesiredAccess), &raw_mapping))) {
     WARN("ImportSharedTextureByName: Failed to open shared texture by name");
     return E_INVALIDARG;
   }
+  std::unique_ptr<void, CloseWinHandle> mapping(raw_mapping);
 
   SharedTextureData data = {};
-  void *view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, sizeof(SharedTextureData));
-  if (!view) {
-    WARN("ImportSharedTextureByName: the name is unreadable: ", GetLastError());
-    CloseHandle(mapping);
-    return E_INVALIDARG;
+  {
+    std::unique_ptr<const void, UnmapView> view(MapViewOfFile(mapping.get(), FILE_MAP_READ, 0, 0, sizeof(SharedTextureData)));
+    if (!view) {
+      WARN("ImportSharedTextureByName: the name is unreadable: ", GetLastError());
+      return E_INVALIDARG;
+    }
+    memcpy(&data, view.get(), sizeof(data));
   }
-  memcpy(&data, view, sizeof(data));
-  UnmapViewOfFile(view);
   // "returns E_ACCESSDENIED if permissions to access the resource are invalid": the access the share was published
   // with is what an open that asks for more is refused with
   if (WriteRequested(dwDesiredAccess) && !WriteRequested(data.granted_access)) {
     WARN("ImportSharedTextureByName: the share was not published for writing");
-    CloseHandle(mapping);
     return E_ACCESSDENIED;
   }
 
-  HRESULT res = ImportSharedTextureFromNtHandle(pDevice, mapping, riid, ppTexture);
-  CloseHandle(mapping);
-  return res;
+  return ImportSharedTextureFromNtHandle(pDevice, mapping.get(), riid, ppTexture);
 }
 
 #pragma endregion
