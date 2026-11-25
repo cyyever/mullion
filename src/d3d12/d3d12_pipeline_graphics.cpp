@@ -1199,12 +1199,11 @@ public:
       return FAIL(E_INVALIDARG);
     HRESULT hr;
     MTL_DXGI_FORMAT_DESC format_desc;
-    uint32_t effective_dual_source_rtvs = 0;
+    uint32_t non_unknown_rtvs = 0;
     for (unsigned i = 0; i < pDesc->NumRenderTargets; i++) {
       if (pDesc->RTVFormats[i] == DXGI_FORMAT_UNKNOWN)
         continue;
-      if (i >= 2 && dual_source_blending)
-        break;
+      non_unknown_rtvs++;
       auto &rt = info.colors[i];
       auto Format = pDesc->RTVFormats[i];
       if (FAILED(hr = MTLQueryDXGIFormat(device_->GetMTLDevice(), Format, format_desc))) {
@@ -1217,6 +1216,15 @@ public:
 
       if (pDesc->BlendState.IndependentBlendEnable && renderTarget.LogicOpEnable)
         return FAIL(E_INVALIDARG);
+
+      bool rt_dual_source = renderTarget.BlendEnable &&
+          (BlendFactorIsDualSource(renderTarget.SrcBlendAlpha) || BlendFactorIsDualSource(renderTarget.SrcBlend) ||
+           BlendFactorIsDualSource(renderTarget.DestBlendAlpha) || BlendFactorIsDualSource(renderTarget.DestBlend));
+      if (rt_dual_source) {
+        if (i != 0)
+          return FAIL(E_INVALIDARG);
+        dual_source_blending = true;
+      }
 
       // Windows accepts non-renderable formats as null slots (vkd3d-proton test_render_target_support_validation).
       if (!any_bit_set(device_->GetMTLPixelFormatCapability(format_desc.PixelFormat) & FormatCapability::Color))
@@ -1238,10 +1246,6 @@ public:
           WARN("CreateGraphicsPipelineState: pixel format ", rt.pixel_format, " is not blendable");
           return E_INVALIDARG;
         }
-        if (BlendFactorIsDualSource(renderTarget.SrcBlendAlpha) || BlendFactorIsDualSource(renderTarget.SrcBlend) ||
-            BlendFactorIsDualSource(renderTarget.DestBlendAlpha) || BlendFactorIsDualSource(renderTarget.DestBlend)) {
-          dual_source_blending = true;
-        }
         rt.alpha_blend_operation = kBlendOpMap[renderTarget.BlendOpAlpha];
         rt.rgb_blend_operation = kBlendOpMap[renderTarget.BlendOp];
         rt.blending_enabled = renderTarget.BlendEnable;
@@ -1252,11 +1256,9 @@ public:
       }
       if (ref_ps.PixelShader.ValidRenderTargets & (1u << i))
         blend[i] = ShaderBlend(rt, renderTarget, renderTarget.LogicOpEnable);
-      if (i < 2)
-        effective_dual_source_rtvs++;
     }
 
-    if (dual_source_blending && effective_dual_source_rtvs > 1)
+    if (dual_source_blending && non_unknown_rtvs > 1)
       return FAIL(E_INVALIDARG);
 
     if (pDesc->DSVFormat != DXGI_FORMAT_UNKNOWN) {
@@ -2219,7 +2221,7 @@ public:
 
   HRESULT STDMETHODCALLTYPE
   GetCachedBlob(ID3DBlob **blob) override {
-    return GetCachedPipelineBlob(blob);
+    return GetCachedPipelineBlob(library_key, blob);
   }
 
   WMT::RenderPipelineState
@@ -2356,8 +2358,6 @@ CreateGraphicsPipelineState(
     const D3D12_DEPTH_STENCIL_DESC2 *depth_stencil2
 ) {
   InitReturnPtr(ppPipelineState);
-  if (HRESULT hr = CheckCachedPipeline(pDesc->CachedPSO); FAILED(hr))
-    return hr;
   auto desc = *pDesc;
   Com<ID3D12RootSignature> embedded;
   if (!desc.pRootSignature) {
@@ -2394,6 +2394,8 @@ CreateGraphicsPipelineState(
   }
   auto pso = Com(new MTLD3D12GraphicsPipelineStateImpl(pDevice));
   if (HRESULT hr = PipelineKey(*pDesc, pso->library_key, depth_bounds, AS, MS, depth_stencil2); FAILED(hr))
+    return hr;
+  if (HRESULT hr = CheckCachedPipeline(pDesc->CachedPSO, pso->library_key); FAILED(hr))
     return hr;
   PipelineStateStream stream{.desc_graphics = *pDesc, .desc_as = AS, .desc_ms = MS, .depth_bounds = depth_bounds};
   if (depth_stencil2)

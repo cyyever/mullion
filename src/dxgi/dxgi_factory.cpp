@@ -51,6 +51,47 @@ public:
   }
 };
 
+class MTLDXGIFactory;
+
+// tracks window swap chains for Alt+Enter fullscreen toggling without modifying GWLP_WNDPROC.
+class SwapChainWindowHook final : public ComObjectWithInitialRef<IUnknown> {
+  struct ThreadHook {
+    HHOOK hook = nullptr;
+    uint32_t refs = 0;
+  };
+  struct Entry {
+    MTLDXGIFactory *factory;
+    IDXGISwapChain *swapchain;
+  };
+  inline static mullion::mutex mutex_;
+  inline static std::unordered_map<HWND, std::vector<Entry>> windows_;
+  inline static std::unordered_map<DWORD, ThreadHook> hooks_;
+
+  static LRESULT CALLBACK
+  GetMsgProc(int code, WPARAM wparam, LPARAM lparam);
+
+  HWND window_;
+  DWORD thread_id_;
+  Com<MTLDXGIFactory> factory_;
+  IDXGISwapChain *swapchain_;
+  Com<FlipWindow> flip_window_;
+
+public:
+  SwapChainWindowHook(HWND window, MTLDXGIFactory *factory, IDXGISwapChain *swapchain, Com<FlipWindow> flip_window);
+  ~SwapChainWindowHook() override;
+
+  HRESULT STDMETHODCALLTYPE
+  QueryInterface(REFIID riid, void **object) final {
+    InitReturnPtr(object);
+    if (!object)
+      return E_POINTER;
+    if (riid != __uuidof(IUnknown))
+      return E_NOINTERFACE;
+    *object = ref(this);
+    return S_OK;
+  }
+};
+
 // status notifications belong to the process, as the windows whose status they report.
 // occlusion is a window's minimization (DXGI_STATUS_OCCLUDED from Present); stereo never changes, as no output has it.
 class StatusNotifications {
@@ -299,10 +340,13 @@ public:
       HRESULT hr = swapchain_factory->CreateSwapChain(this, hWnd, &desc, &fsDesc, &chain);
       if (FAILED(hr))
         return hr;
-      if (window) {
+      if (hWnd) {
         Com<IMTLDXGISwapChain> owned;
+        auto hook = Com<SwapChainWindowHook>::transfer(
+            new SwapChainWindowHook(hWnd, this, chain.ptr(), std::move(window))
+        );
         if (FAILED(hr = chain->QueryInterface(IID_PPV_ARGS(&owned))) ||
-            FAILED(hr = owned->SetWindowReservation(window.ptr())))
+            FAILED(hr = owned->SetWindowReservation(hook.ptr())))
           return hr;
       }
       *ppSwapChain = chain.takeOwnership();
@@ -413,10 +457,18 @@ public:
                                                   UINT Flags) final {
     if ((Flags & ~DXGI_MWA_VALID) || (WindowHandle && !wsi::isWindow(WindowHandle)))
       return FAIL(DXGI_ERROR_INVALID_CALL);
-    if (Flags) {
-      WARN("MakeWindowAssociation: Ignoring flags ", Flags);
-    }
+    std::scoped_lock lock(window_flags_mutex_);
+    if (WindowHandle)
+      window_flags_[WindowHandle] = Flags;
+    else
+      window_flags_.clear();
     return S_OK;
+  }
+
+  UINT GetWindowAssociationFlags(HWND WindowHandle) {
+    std::scoped_lock lock(window_flags_mutex_);
+    auto it = window_flags_.find(WindowHandle);
+    return it != window_flags_.end() ? it->second : 0;
   }
 
   BOOL STDMETHODCALLTYPE IsCurrent() final { return TRUE; }
@@ -514,7 +566,69 @@ public:
 private:
   UINT flags_;
   bool extended_;
+  mullion::mutex window_flags_mutex_;
+  std::unordered_map<HWND, UINT> window_flags_;
 };
+
+SwapChainWindowHook::SwapChainWindowHook(
+    HWND window, MTLDXGIFactory *factory, IDXGISwapChain *swapchain, Com<FlipWindow> flip_window
+)
+    : window_(window), thread_id_(GetWindowThreadProcessId(window, nullptr)), factory_(factory),
+      swapchain_(swapchain), flip_window_(std::move(flip_window)) {
+  std::scoped_lock lock(mutex_);
+  windows_[window_].emplace_back(factory_.ptr(), swapchain_);
+  if (thread_id_) {
+    auto &th = hooks_[thread_id_];
+    if (!th.refs++)
+      th.hook = SetWindowsHookExW(WH_GETMESSAGE, GetMsgProc, nullptr, thread_id_);
+  }
+}
+
+SwapChainWindowHook::~SwapChainWindowHook() {
+  HHOOK to_unhook = nullptr;
+  {
+    std::scoped_lock lock(mutex_);
+    if (auto it = windows_.find(window_); it != windows_.end()) {
+      std::erase_if(it->second, [&](const Entry &e) { return e.swapchain == swapchain_; });
+      if (it->second.empty())
+        windows_.erase(it);
+    }
+    if (thread_id_) {
+      if (auto it = hooks_.find(thread_id_); it != hooks_.end() && !--it->second.refs) {
+        to_unhook = it->second.hook;
+        hooks_.erase(it);
+      }
+    }
+  }
+  if (to_unhook)
+    UnhookWindowsHookEx(to_unhook);
+}
+
+LRESULT CALLBACK
+SwapChainWindowHook::GetMsgProc(int code, WPARAM wparam, LPARAM lparam) {
+  if (code == HC_ACTION && wparam == PM_REMOVE) {
+    auto *msg = reinterpret_cast<MSG *>(lparam); // NOLINT(performance-no-int-to-ptr)
+    if (msg && msg->message == WM_SYSKEYDOWN && msg->wParam == VK_RETURN && (msg->lParam & (1L << 29)) &&
+        !(msg->lParam & (1L << 30))) {
+      Com<IDXGISwapChain> target;
+      {
+        std::scoped_lock lock(mutex_);
+        if (auto it = windows_.find(msg->hwnd); it != windows_.end() && !it->second.empty()) {
+          auto &entry = it->second.back();
+          UINT flags = entry.factory->GetWindowAssociationFlags(msg->hwnd);
+          if (!(flags & (DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER)))
+            target = entry.swapchain;
+        }
+      }
+      if (target) {
+        BOOL fullscreen = FALSE;
+        if (SUCCEEDED(target->GetFullscreenState(&fullscreen, nullptr)))
+          target->SetFullscreenState(!fullscreen, nullptr);
+      }
+    }
+  }
+  return CallNextHookEx(nullptr, code, wparam, lparam);
+}
 
 static HRESULT CreateFactory(UINT Flags, bool Extended, REFIID riid, void **ppFactory) {
   InitializeVendorExtension();

@@ -18,9 +18,7 @@
   "verdict": "passed"
  },
  "test_create_swapchain": {
-  "verdict": "failed",
-  "failed": 3,
-  "first": "dxgi.c:1815: Test failed: Got unexpected refcount 3."
+  "verdict": "passed"
  },
  "test_cursor_clipping": {
   "verdict": "failed",
@@ -138,9 +136,7 @@
   "verdict": "passed"
  },
  "test_window_association": {
-  "verdict": "failed",
-  "failed": 6,
-  "first": "dxgi.c:6989: Test failed: d3d10: Test 0: Got unexpected fullscreen 0."
+  "verdict": "passed"
  },
  "test_zero_size": {
   "verdict": "passed"

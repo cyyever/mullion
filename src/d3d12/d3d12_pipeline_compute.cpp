@@ -159,7 +159,7 @@ public:
 
   HRESULT STDMETHODCALLTYPE
   GetCachedBlob(ID3DBlob **blob) override {
-    return GetCachedPipelineBlob(blob);
+    return GetCachedPipelineBlob(library_key, blob);
   }
 };
 
@@ -168,8 +168,6 @@ CreateComputePipelineState(
     MTLD3D12Device *pDevice, const D3D12_COMPUTE_PIPELINE_STATE_DESC *pDesc, REFIID riid, void **ppPipelineState,
     const PipelineShaderCache *cached
 ) {
-  if (HRESULT hr = CheckCachedPipeline(pDesc->CachedPSO); FAILED(hr))
-    return hr;
   auto desc = *pDesc;
   Com<ID3D12RootSignature> embedded;
   if (!desc.pRootSignature) {
@@ -185,6 +183,8 @@ CreateComputePipelineState(
   }
   auto pso = Com(new MTLD3D12ComputePipelineStateImpl(pDevice));
   if (HRESULT hr = PipelineKey(*pDesc, pso->library_key); FAILED(hr))
+    return hr;
+  if (HRESULT hr = CheckCachedPipeline(pDesc->CachedPSO, pso->library_key); FAILED(hr))
     return hr;
   Lean(*pso.ptr(), pDevice, {.desc_cs = *pDesc});
   if (cached)

@@ -169,21 +169,40 @@ public:
 // a pipeline's cached blob (ID3D12PipelineState::GetCachedBlob, D3D12_CACHED_PIPELINE_STATE). what makes a pipeline
 // quick to create again is kept by the shader cache and by Metal's, by the shaders themselves, so a blob says only
 // that it is one of these: a cache another driver gave is told apart, and the application drops it
-inline constexpr char kCachedPipeline[] = "Mullion pipeline 1";
+inline constexpr char kCachedPipeline[] = "Mullion pipeline 2";
+
+struct CachedPipelineHeader {
+  char magic[sizeof(kCachedPipeline)];
+  Sha1Digest key;
+};
 
 inline HRESULT
-GetCachedPipelineBlob(ID3DBlob **ppBlob) {
-  HRESULT hr = CreateBlobFromMalloc(sizeof(kCachedPipeline), ppBlob);
-  if (SUCCEEDED(hr))
-    memcpy((*ppBlob)->GetBufferPointer(), kCachedPipeline, sizeof(kCachedPipeline));
+GetCachedPipelineBlob(const Sha1Digest &key, ID3DBlob **ppBlob) {
+  if (!ppBlob)
+    return E_INVALIDARG;
+  HRESULT hr = CreateBlobFromMalloc(sizeof(CachedPipelineHeader), ppBlob);
+  if (SUCCEEDED(hr)) {
+    CachedPipelineHeader header{};
+    memcpy(header.magic, kCachedPipeline, sizeof(kCachedPipeline));
+    header.key = key;
+    memcpy((*ppBlob)->GetBufferPointer(), &header, sizeof(header));
+  }
   return hr;
 }
 
 inline HRESULT
-CheckCachedPipeline(const D3D12_CACHED_PIPELINE_STATE &Cached) {
-  bool ours = Cached.CachedBlobSizeInBytes == sizeof(kCachedPipeline) &&
-              !memcmp(Cached.pCachedBlob, kCachedPipeline, sizeof(kCachedPipeline));
-  return ours || !Cached.CachedBlobSizeInBytes ? S_OK : D3D12_ERROR_DRIVER_VERSION_MISMATCH;
+CheckCachedPipeline(const D3D12_CACHED_PIPELINE_STATE &Cached, const Sha1Digest &expected_key) {
+  if (!Cached.CachedBlobSizeInBytes)
+    return S_OK;
+  if (!Cached.pCachedBlob)
+    return E_INVALIDARG;
+  if (Cached.CachedBlobSizeInBytes != sizeof(CachedPipelineHeader))
+    return D3D12_ERROR_DRIVER_VERSION_MISMATCH;
+  CachedPipelineHeader header{};
+  memcpy(&header, Cached.pCachedBlob, sizeof(header));
+  if (memcmp(header.magic, kCachedPipeline, sizeof(kCachedPipeline)) != 0 || header.key != expected_key)
+    return D3D12_ERROR_DRIVER_VERSION_MISMATCH;
+  return S_OK;
 }
 
 } // namespace mullion
