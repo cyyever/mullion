@@ -55,8 +55,12 @@ class MTLDXGIFactory;
 
 // tracks window swap chains for Alt+Enter fullscreen toggling without modifying GWLP_WNDPROC.
 class SwapChainWindowHook final : public ComObjectWithInitialRef<IUnknown> {
+  struct Unhook {
+    void operator()(HHOOK hook) const { UnhookWindowsHookEx(hook); }
+  };
+  using UniqueHook = std::unique_ptr<std::remove_pointer_t<HHOOK>, Unhook>;
   struct ThreadHook {
-    HHOOK hook = nullptr;
+    UniqueHook hook;
     uint32_t refs = 0;
   };
   struct Entry {
@@ -580,28 +584,24 @@ SwapChainWindowHook::SwapChainWindowHook(
   if (thread_id_) {
     auto &th = hooks_[thread_id_];
     if (!th.refs++)
-      th.hook = SetWindowsHookExW(WH_GETMESSAGE, GetMsgProc, nullptr, thread_id_);
+      th.hook.reset(SetWindowsHookExW(WH_GETMESSAGE, GetMsgProc, nullptr, thread_id_));
   }
 }
 
 SwapChainWindowHook::~SwapChainWindowHook() {
-  HHOOK to_unhook = nullptr;
-  {
-    std::scoped_lock lock(mutex_);
-    if (auto it = windows_.find(window_); it != windows_.end()) {
-      std::erase_if(it->second, [&](const Entry &e) { return e.swapchain == swapchain_; });
-      if (it->second.empty())
-        windows_.erase(it);
-    }
-    if (thread_id_) {
-      if (auto it = hooks_.find(thread_id_); it != hooks_.end() && !--it->second.refs) {
-        to_unhook = it->second.hook;
-        hooks_.erase(it);
-      }
+  UniqueHook released;
+  std::scoped_lock lock(mutex_);
+  if (auto it = windows_.find(window_); it != windows_.end()) {
+    std::erase_if(it->second, [&](const Entry &e) { return e.swapchain == swapchain_; });
+    if (it->second.empty())
+      windows_.erase(it);
+  }
+  if (thread_id_) {
+    if (auto it = hooks_.find(thread_id_); it != hooks_.end() && !--it->second.refs) {
+      released = std::move(it->second.hook);
+      hooks_.erase(it);
     }
   }
-  if (to_unhook)
-    UnhookWindowsHookEx(to_unhook);
 }
 
 LRESULT CALLBACK

@@ -2,6 +2,8 @@
 
 #include "dxgi1_3.h"
 #include "mullion_presenter.hpp"
+#include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace mullion {
@@ -13,29 +15,29 @@ PresentCopies(const DXGI_PRESENT_PARAMETERS *parameters, UINT width, UINT height
   std::vector<PresentCopy> copies;
   if (!parameters || !parameters->DirtyRectsCount || !parameters->pDirtyRects)
     return copies;
-  HRGN kept = CreateRectRgn(0, 0, width, height), scrolled = CreateRectRgn(0, 0, 0, 0);
+  struct DeleteGdiObject {
+    void operator()(HGDIOBJ obj) const { DeleteObject(obj); }
+  };
+  using UniqueRgn = std::unique_ptr<std::remove_pointer_t<HRGN>, DeleteGdiObject>;
+  UniqueRgn kept(CreateRectRgn(0, 0, width, height)), scrolled(CreateRectRgn(0, 0, 0, 0));
   for (UINT i = 0; i < parameters->DirtyRectsCount; i++) {
-    HRGN dirty = CreateRectRgnIndirect(&parameters->pDirtyRects[i]);
-    CombineRgn(kept, kept, dirty, RGN_DIFF);
-    DeleteObject(dirty);
+    UniqueRgn dirty(CreateRectRgnIndirect(&parameters->pDirtyRects[i]));
+    CombineRgn(kept.get(), kept.get(), dirty.get(), RGN_DIFF);
   }
   POINT offset = parameters->pScrollRect && parameters->pScrollOffset ? *parameters->pScrollOffset : POINT{};
   if (parameters->pScrollRect && parameters->pScrollOffset) {
-    HRGN scroll = CreateRectRgnIndirect(parameters->pScrollRect),
-         source = CreateRectRgn(offset.x, offset.y, width + offset.x, height + offset.y);
-    CombineRgn(scrolled, kept, scroll, RGN_AND);
-    CombineRgn(scrolled, scrolled, source, RGN_AND);
-    CombineRgn(kept, kept, scroll, RGN_DIFF);
-    DeleteObject(scroll);
-    DeleteObject(source);
+    UniqueRgn scroll(CreateRectRgnIndirect(parameters->pScrollRect)),
+        source(CreateRectRgn(offset.x, offset.y, width + offset.x, height + offset.y));
+    CombineRgn(scrolled.get(), kept.get(), scroll.get(), RGN_AND);
+    CombineRgn(scrolled.get(), scrolled.get(), source.get(), RGN_AND);
+    CombineRgn(kept.get(), kept.get(), scroll.get(), RGN_DIFF);
   }
-  for (auto [region, from] : {std::pair{kept, POINT{}}, std::pair{scrolled, POINT{-offset.x, -offset.y}}}) {
+  for (auto [region, from] : {std::pair{kept.get(), POINT{}}, std::pair{scrolled.get(), POINT{-offset.x, -offset.y}}}) {
     std::vector<char> data(GetRegionData(region, 0, nullptr));
     auto rects = reinterpret_cast<RGNDATA *>(data.data());
     if (!data.empty() && GetRegionData(region, data.size(), rects))
       for (DWORD i = 0; i < rects->rdh.nCount; i++)
-        copies.push_back({reinterpret_cast<RECT *>(rects->Buffer)[i], from});
-    DeleteObject(region);
+        copies.emplace_back(reinterpret_cast<RECT *>(rects->Buffer)[i], from);
   }
   return copies;
 }

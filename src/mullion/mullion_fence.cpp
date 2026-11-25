@@ -19,6 +19,7 @@
 #include "mullion_fence.hpp"
 #include "log/log.hpp"
 #include <array>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -106,6 +107,14 @@ sessionName(const WCHAR *name, std::wstring &buffer, UNICODE_STRING &string, OBJ
 }
 
 namespace {
+struct CloseWinHandle {
+  void operator()(HANDLE h) const { CloseHandle(h); }
+};
+struct UnmapView {
+  void operator()(const void *p) const { UnmapViewOfFile(p); }
+};
+using UniqueHandle = std::unique_ptr<void, CloseWinHandle>;
+using UniqueMappedView = std::unique_ptr<const void, UnmapView>;
 
 struct RetainedSharedFence {
   HANDLE handle;
@@ -115,16 +124,12 @@ struct RetainedSharedFence {
 
 bool
 sharedHandleAlive(HANDLE handle, const std::array<char, 54> &name) {
-  auto *data = handle ? static_cast<const SharedFenceData *>(
-                            MapViewOfFile(handle, FILE_MAP_READ, 0, 0, sizeof(SharedFenceData))
-                        )
-                      : nullptr;
-  if (!data)
+  UniqueMappedView view(handle ? MapViewOfFile(handle, FILE_MAP_READ, 0, 0, sizeof(SharedFenceData)) : nullptr);
+  if (!view)
     return false;
-  bool alive = !memcmp(data->tag, shared_fence_tag, sizeof(shared_fence_tag)) &&
-               !memcmp(data->mach_port_name, name.data(), name.size());
-  UnmapViewOfFile(data);
-  return alive;
+  const auto *data = static_cast<const SharedFenceData *>(view.get());
+  return !memcmp(data->tag, shared_fence_tag, sizeof(shared_fence_tag)) &&
+         !memcmp(data->mach_port_name, name.data(), name.size());
 }
 
 std::mutex retained_fences_mutex;
@@ -143,9 +148,8 @@ retainSharedFence(HANDLE handle, WMT::SharedEvent event, const char (&event_name
   sweepRetainedSharedFencesLocked();
   std::array<char, 54> name{};
   memcpy(name.data(), event_name, name.size());
-  retained_fences.push_back(RetainedSharedFence{handle, WMT::Reference<WMT::SharedEvent>(event), name});
+  retained_fences.emplace_back(handle, WMT::Reference<WMT::SharedEvent>(event), name);
 }
-
 } // namespace
 
 HRESULT
@@ -155,30 +159,27 @@ shareHandle(
 ) {
   if (name && wcslen(name) > MAX_PATH)
     return DXGI_ERROR_INVALID_CALL;
-  HANDLE mapping = CreateFileMappingW(
+  UniqueHandle mapping(CreateFileMappingW(
       INVALID_HANDLE_VALUE, const_cast<SECURITY_ATTRIBUTES *>(attributes), PAGE_READWRITE, 0, sizeof(SharedFenceData),
       name
-  );
+  ));
   if (!mapping) {
     ERR("shareHandle: Failed to create shared handle: ", GetLastError());
     return E_FAIL;
   }
   // "If Name matches the name of an existing resource, CreateSharedHandle fails with DXGI_ERROR_NAME_ALREADY_EXISTS"
   // (ID3D12Device::CreateSharedHandle)
-  if (name && GetLastError() == ERROR_ALREADY_EXISTS) {
-    CloseHandle(mapping);
+  if (name && GetLastError() == ERROR_ALREADY_EXISTS)
     return DXGI_ERROR_NAME_ALREADY_EXISTS;
-  }
-  auto data = static_cast<SharedFenceData *>(MapViewOfFile(mapping, FILE_MAP_WRITE, 0, 0, sizeof(SharedFenceData)));
-  if (!data) {
+  UniqueMappedView view(MapViewOfFile(mapping.get(), FILE_MAP_WRITE, 0, 0, sizeof(SharedFenceData)));
+  if (!view) {
     ERR("shareHandle: Failed to write shared handle: ", GetLastError());
-    CloseHandle(mapping);
     return E_FAIL;
   }
+  auto *data = const_cast<SharedFenceData *>(static_cast<const SharedFenceData *>(view.get()));
   memcpy(data->tag, shared_fence_tag, sizeof(shared_fence_tag));
   memcpy(data->mach_port_name, event_name, sizeof(event_name));
-  UnmapViewOfFile(data);
-  *handle = mapping;
+  *handle = mapping.release();
   // Keep the underlying MTLSharedEvent (and its bootstrap mach port registration) alive while the shared handle is
   // open, even if the original ID3D12Fence/ID3D11Fence is released before OpenSharedHandle is called.
   retainSharedFence(*handle, event, event_name);
@@ -187,17 +188,15 @@ shareHandle(
 
 WMT::Reference<WMT::SharedEvent>
 openSharedEvent(WMT::Device mtl, HANDLE handle, char (&event_name)[54]) {
-  auto data = handle ? static_cast<const SharedFenceData *>(
-                           MapViewOfFile(handle, FILE_MAP_READ, 0, 0, sizeof(SharedFenceData))
-                       )
-                     : nullptr;
-  if (!data) {
+  UniqueMappedView view(handle ? MapViewOfFile(handle, FILE_MAP_READ, 0, 0, sizeof(SharedFenceData)) : nullptr);
+  if (!view) {
     WARN("openSharedEvent: handle is not a shared fence");
     return {};
   }
+  auto *data = static_cast<const SharedFenceData *>(view.get());
   bool fence = !memcmp(data->tag, shared_fence_tag, sizeof(shared_fence_tag));
   memcpy(event_name, data->mach_port_name, sizeof(event_name));
-  UnmapViewOfFile(data);
+  view.reset();
   if (!fence || event_name[sizeof(event_name) - 1]) {
     WARN("openSharedEvent: handle is not a shared fence");
     return {};

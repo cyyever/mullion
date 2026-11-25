@@ -138,13 +138,19 @@ public:
     if (gdi_->dc)
       return DXGI_ERROR_INVALID_CALL;
     // top-down, as a texture's rows are
+    struct DeleteDc {
+      void operator()(HDC h) const { DeleteDC(h); }
+    };
+    struct DeleteGdiObj {
+      void operator()(HGDIOBJ h) const { DeleteObject(h); }
+    };
+    using UniqueDC = std::unique_ptr<std::remove_pointer_t<HDC>, DeleteDc>;
+    using UniqueBitmap = std::unique_ptr<std::remove_pointer_t<HBITMAP>, DeleteGdiObj>;
     BITMAPINFO info{{sizeof(BITMAPINFOHEADER), LONG(desc.Width), -LONG(desc.Height), 1, WORD(8 * texel), BI_RGB}};
-    HDC dc = CreateCompatibleDC(nullptr);
-    HBITMAP bitmap = dc ? CreateDIBSection(dc, &info, DIB_RGB_COLORS, &gdi_->bits, nullptr, 0) : nullptr;
-    if (!bitmap) {
-      DeleteDC(dc);
+    UniqueDC dc(CreateCompatibleDC(nullptr));
+    UniqueBitmap bitmap(dc ? CreateDIBSection(dc.get(), &info, DIB_RGB_COLORS, &gdi_->bits, nullptr, 0) : nullptr);
+    if (!bitmap)
       return E_OUTOFMEMORY;
-    }
     if (!Discard) {
       Com<ID3D11Device> device;
       resource_->GetDevice(&device);
@@ -157,18 +163,15 @@ public:
         context_->CopySubresourceRegion(staging.ptr(), 0, 0, 0, 0, resource_, subresource_, nullptr);
         hr = context_->Map(staging.ptr(), 0, D3D11_MAP_READ, 0, &mapped);
       }
-      if (FAILED(hr)) {
-        DeleteObject(bitmap);
-        DeleteDC(dc);
+      if (FAILED(hr))
         return hr;
-      }
       for (UINT y = 0; y < desc.Height; y++)
         memcpy(static_cast<char *>(gdi_->bits) + size_t(y) * desc.Width * texel,
                static_cast<char *>(mapped.pData) + size_t(y) * mapped.RowPitch, size_t(desc.Width) * texel);
       context_->Unmap(staging.ptr(), 0);
     }
     ID3D11RenderTargetView *targets[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];
-    ID3D11DepthStencilView *depth;
+    Com<ID3D11DepthStencilView> depth;
     context_->OMGetRenderTargets(std::size(targets), targets, &depth);
     bool bound = false;
     for (auto &target : targets) {
@@ -183,16 +186,14 @@ public:
     }
     if (bound)
       context_->OMSetRenderTargetsAndUnorderedAccessViews(
-          std::size(targets), targets, depth, 0, D3D11_KEEP_UNORDERED_ACCESS_VIEWS, nullptr, nullptr
+          std::size(targets), targets, depth.ptr(), 0, D3D11_KEEP_UNORDERED_ACCESS_VIEWS, nullptr, nullptr
       );
     for (auto target : targets)
       if (target)
         target->Release();
-    if (depth)
-      depth->Release();
-    gdi_->old = SelectObject(dc, bitmap);
-    gdi_->dc = dc;
-    *phdc = dc;
+    gdi_->old = SelectObject(dc.get(), bitmap.release());
+    gdi_->dc = dc.release();
+    *phdc = gdi_->dc;
     return S_OK;
   }
 
