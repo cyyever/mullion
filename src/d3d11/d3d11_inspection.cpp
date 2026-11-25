@@ -79,8 +79,7 @@ MTLD3D11Inspection::MTLD3D11Inspection(WMT::Device pDevice)
   m_d3d9Shadow.SupportsDepthAsTextureWithLessEqualComparisonFilter = TRUE;
 
   m_d3d11Options1.ClearViewAlsoSupportsDepthOnlyFormats = TRUE;
-  // a default resource's memory is the GPU's alone
-  m_d3d11Options1.MapOnDefaultBuffers = FALSE;
+  m_d3d11Options1.MapOnDefaultBuffers = TRUE;
   // minimum and maximum filters: Metal's reductionMode where the device honours it, else the shader's
   // (SM50_SAMPLER_REDUCTION)
   m_d3d11Options1.MinMaxFiltering = TRUE;

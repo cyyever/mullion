@@ -149,6 +149,7 @@ struct D3D11ResourceCommon : ID3D11Resource {
   virtual Rc<DynamicBuffer> dynamicBuffer(UINT *pBufferLength, UINT *pBindFlags) = 0;
   virtual Rc<DynamicLinearTexture> dynamicLinearTexture(UINT *pBytesPerRow, UINT *pBytesPerImage) = 0;
   virtual Rc<DynamicBuffer> dynamicTexture(UINT Subresource, UINT *pBytesPerRow, UINT *pBytesPerImage) = 0;
+  virtual Buffer *defaultMappableBuffer(UINT &byte_width) { return nullptr; }
   virtual bool CanMap(UINT Subresource, D3D11_MAP MapType, UINT MapFlags, D3D11_DEVICE_CONTEXT_TYPE ContextType) = 0;
 
   Com<ID3D12Resource> wrapped_resource;
@@ -336,7 +337,10 @@ public:
       if (MapType < D3D11_MAP_WRITE_DISCARD ||
           (MapType == D3D11_MAP_WRITE_NO_OVERWRITE && tag::dimension != D3D11_RESOURCE_DIMENSION_BUFFER))
         return false;
-    } else if ((desc.Usage != D3D11_USAGE_STAGING && !this->wrapped_state) ||
+    } else if (((desc.Usage != D3D11_USAGE_STAGING &&
+                 !(desc.Usage == D3D11_USAGE_DEFAULT && tag::dimension == D3D11_RESOURCE_DIMENSION_BUFFER &&
+                   desc.CPUAccessFlags)) &&
+                !this->wrapped_state) ||
                MapType > D3D11_MAP_READ_WRITE) {
       return false;
     }

@@ -15,7 +15,7 @@ WMT::Reference<WMT::Function>
 GetFragmentDepthBiasFunction(WMT::Device device) {
   static std::mutex mutex;
   static std::unordered_map<uint64_t, WMT::Reference<WMT::Function>> cache;
-  std::lock_guard lock(mutex);
+  std::scoped_lock lock(mutex);
   auto key = device.handle;
   if (auto it = cache.find(key); it != cache.end())
     return it->second;

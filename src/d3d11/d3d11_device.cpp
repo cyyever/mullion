@@ -451,7 +451,10 @@ public:
                            D3D11_BIND_SHADER_RESOURCE;
     if ((desc.BindFlags & ~(input | (kD3D11OutputBindFlags & ~D3D11_BIND_DEPTH_STENCIL))) ||
         ((desc.BindFlags & D3D11_BIND_UNORDERED_ACCESS) && (desc.BindFlags & D3D11_BIND_STREAM_OUTPUT)) ||
-        !ValidUsage(desc.Usage, desc.BindFlags, desc.CPUAccessFlags, pInitialData) ||
+        !ValidUsage(desc.Usage, desc.BindFlags, desc.CPUAccessFlags, pInitialData, true) ||
+        (desc.CPUAccessFlags &&
+         (desc.MiscFlags &
+          (D3D11_RESOURCE_MISC_SHARED | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX | D3D11_RESOURCE_MISC_SHARED_NTHANDLE))) ||
         (desc.MiscFlags &
          (D3D11_RESOURCE_MISC_TILE_POOL | D3D11_RESOURCE_MISC_TILED | D3D11_RESOURCE_MISC_GENERATE_MIPS)))
       return E_INVALIDARG;
@@ -1490,9 +1493,10 @@ public:
   FormatCapability
   GetMTLPixelFormatCapability(WMTPixelFormat Format) final {
     auto original = WMTPixelFormat(ORIGINAL_FORMAT(Format));
-    if (!format_inspector_.textureCapabilities.contains(original))
+    auto it = format_inspector_.textureCapabilities.find(original);
+    if (it == format_inspector_.textureCapabilities.end())
       return FormatCapability(0);
-    auto capability = format_inspector_.textureCapabilities.at(original);
+    auto capability = it->second;
     // blending takes the stored channels as they are: rotated ones would blend red with alpha's factors
     if (RenderTargetChannels(Format) != RenderTargetChannels(original))
       capability = capability & ~FormatCapability::Blend;
@@ -1538,13 +1542,17 @@ public:
 
 private:
   // usage, CPU access and bind flags, as Windows takes them (Wine's d3d11 test_resource_access): a default resource
-  // has no CPU access (MapOnDefaultBuffers is not offered), an immutable one has initial data and binds as an input
-  // only, a dynamic one as well and the CPU writes it, and a staging one only copies
-  static bool
-  ValidUsage(D3D11_USAGE usage, UINT bind, UINT cpu, bool initial) {
+  // has no CPU access except FL11+ SRV/UAV default buffers (MapOnDefaultBuffers), an immutable one has initial data
+  // and binds as an input only, a dynamic one as well and the CPU writes it, and a staging one only copies
+  bool
+  ValidUsage(D3D11_USAGE usage, UINT bind, UINT cpu, bool initial, bool is_buffer = false) const {
     switch (usage) {
     case D3D11_USAGE_DEFAULT:
-      return !cpu;
+      if (!cpu)
+        return true;
+      return is_buffer && feature_level_ >= D3D_FEATURE_LEVEL_11_0 &&
+             !(cpu & ~(D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)) && bind &&
+             !(bind & ~(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS));
     case D3D11_USAGE_IMMUTABLE:
       return initial && !cpu && bind && !(bind & kD3D11OutputBindFlags);
     case D3D11_USAGE_DYNAMIC:

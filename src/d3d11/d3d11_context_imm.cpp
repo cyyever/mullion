@@ -260,6 +260,18 @@ public:
       pMappedResource->DepthPitch = depth_pitch;
       return S_OK;
     }
+    if (auto default_buf = GetResourceCommon(pResource)->defaultMappableBuffer(buffer_length)) {
+      Flush();
+      auto wait_seq = cmd_queue.CurrentSeqId() - 1;
+      if ((MapFlags & D3D11_MAP_FLAG_DO_NOT_WAIT) && cmd_queue.CoherentSeqId() < wait_seq) {
+        return DXGI_ERROR_WAS_STILL_DRAWING;
+      }
+      cmd_queue.WaitCPUFence(wait_seq);
+      pMappedResource->pData = default_buf->current()->mappedMemory(0);
+      pMappedResource->RowPitch = buffer_length;
+      pMappedResource->DepthPitch = buffer_length;
+      return S_OK;
+    }
     if (auto staging = GetStagingResource(pResource, Subresource)) {
       if (ignore_map_flag_no_wait_)
         MapFlags &= ~D3D11_MAP_FLAG_DO_NOT_WAIT;

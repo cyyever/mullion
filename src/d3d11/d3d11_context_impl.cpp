@@ -5979,7 +5979,10 @@ public:
       out.unorm_max = float(UINT16_MAX);
     bool float_depth = dsv_desc.Format == DXGI_FORMAT_D32_FLOAT ||
                        dsv_desc.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-    out.clamp_hw = float_depth && out.rs_desc.DepthBias && std::isfinite(out.rs_desc.SlopeScaledDepthBias);
+    bool d24_hw_slope = dsv_desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT && !out.rs_desc.DepthBias &&
+                        std::isfinite(out.rs_desc.SlopeScaledDepthBias);
+    out.clamp_hw = (float_depth && out.rs_desc.DepthBias && std::isfinite(out.rs_desc.SlopeScaledDepthBias)) ||
+                   d24_hw_slope;
     out.active = (out.unorm_max != 0.0f) || out.clamp_hw ||
                  (float_depth && !out.rs_desc.DepthBias && !std::isfinite(out.rs_desc.SlopeScaledDepthBias));
     return out;

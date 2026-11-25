@@ -117,7 +117,10 @@ public:
     // if (pDesc->Usage != D3D11_USAGE_DEFAULT)
     if (pDesc->Usage == D3D11_USAGE_IMMUTABLE)
       flags.set(BufferAllocationFlag::GpuReadonly);
-    if (pDesc->Usage == D3D11_USAGE_DYNAMIC ||
+    if (pDesc->Usage == D3D11_USAGE_DEFAULT && pDesc->CPUAccessFlags) {
+      if (!(pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && !m_parent->IsTraced())
+        flags.set(BufferAllocationFlag::CpuWriteCombined);
+    } else if (pDesc->Usage == D3D11_USAGE_DYNAMIC ||
         (pDesc->Usage == D3D11_USAGE_DEFAULT && !(pDesc->BindFlags & kD3D11OutputBindFlags))) {
       if (!m_parent->IsTraced())
         flags.set(BufferAllocationFlag::CpuWriteCombined);
@@ -141,7 +144,7 @@ public:
     D3D11_ASSERT(_.ptr() == nullptr);
     structured = pDesc->MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
     allow_raw_view = pDesc->MiscFlags & D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-    if (!(desc.BindFlags & kD3D11OutputBindFlags)) {
+    if (!(desc.BindFlags & kD3D11OutputBindFlags) && !(desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags)) {
       dynamic_ = new DynamicBuffer(buffer_.ptr(), flags);
     }
   }
@@ -181,6 +184,14 @@ public:
   dynamicTexture(UINT , UINT *, UINT *) final {
     return {};
   };
+  Buffer *
+  defaultMappableBuffer(UINT &byte_width) final {
+    if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags) {
+      byte_width = desc.ByteWidth;
+      return buffer_.ptr();
+    }
+    return nullptr;
+  }
 
   HRESULT
   STDMETHODCALLTYPE
