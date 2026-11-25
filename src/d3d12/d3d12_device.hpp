@@ -510,8 +510,10 @@ public:
 class MTLD3D12QueryHeap : public ID3D12QueryHeap {
 public:
   D3D12_QUERY_HEAP_DESC desc;
+  D3D12_QUERY_HEAP_FLAGS flags = D3D12_QUERY_HEAP_FLAG_NONE;
   // occlusion results, one 64-bit value per query, stream output statistics (two) or pipeline statistics
   WMT::Reference<WMT::Buffer> results;
+  void *results_cpu = nullptr;
   uint64_t results_address = 0;
   uint32_t result_size = sizeof(uint64_t);
   // a timestamp heap's queries: the clock each sampled, which the queue reads from its counter sample buffers when
@@ -1113,7 +1115,10 @@ HRESULT CreateReservedTexture(
 HRESULT CreateReservedBuffer(MTLD3D12Device *pDevice, const D3D12_RESOURCE_DESC *pDesc, REFIID riid, void **ppResource);
 
 HRESULT
-CreateQueryHeap(MTLD3D12Device *pDevice, const D3D12_QUERY_HEAP_DESC *pDesc, REFIID riid, void **ppQueryHeap);
+CreateQueryHeap(
+    MTLD3D12Device *pDevice, const D3D12_QUERY_HEAP_DESC *pDesc, REFIID riid, void **ppQueryHeap,
+    D3D12_QUERY_HEAP_FLAGS Flags = D3D12_QUERY_HEAP_FLAG_NONE
+);
 
 HRESULT
 CreateClosedCommandList(MTLD3D12Device *pDevice, D3D12_COMMAND_LIST_TYPE Type, REFIID riid, void **ppCommandList);

@@ -36,22 +36,29 @@ public:
   }
 
   HRESULT
-  Initialize(const D3D12_QUERY_HEAP_DESC *pDesc) {
+  Initialize(const D3D12_QUERY_HEAP_DESC *pDesc, D3D12_QUERY_HEAP_FLAGS Flags) {
+    if (!pDesc)
+      return FAIL(E_INVALIDARG);
     desc = *pDesc;
+    flags = Flags;
     auto metal = this->device_->GetMTLDevice();
+    bool cpu_resolve = (Flags & D3D12_QUERY_HEAP_FLAG_CPU_RESOLVE) != 0;
+    WMTResourceOptions storage = cpu_resolve ? WMTResourceStorageModeShared : WMTResourceStorageModePrivate;
     switch (pDesc->Type) {
     case D3D12_QUERY_HEAP_TYPE_OCCLUSION: {
-      WMTBufferInfo info{.length=pDesc->Count * sizeof(uint64_t), .options=WMTResourceStorageModePrivate};
+      WMTBufferInfo info{.length=pDesc->Count * sizeof(uint64_t), .options=storage};
       results = metal.newBuffer(info);
+      results_cpu = info.memory.get();
       return results ? S_OK : FAIL(E_OUTOFMEMORY);
     }
     // stream output's last pass adds to these by address (dxbc_converter_gs.cpp)
     case D3D12_QUERY_HEAP_TYPE_SO_STATISTICS: {
       result_size = sizeof(D3D12_QUERY_DATA_SO_STATISTICS);
-      WMTBufferInfo info{.length=pDesc->Count * result_size, .options=WMTResourceStorageModePrivate};
+      WMTBufferInfo info{.length=pDesc->Count * result_size, .options=storage};
       results = metal.newBuffer(info);
       if (!results)
         return FAIL(E_OUTOFMEMORY);
+      results_cpu = info.memory.get();
       results_address = info.gpu_address;
       return this->device_->RegisterResidency(results);
     }
@@ -70,6 +77,7 @@ public:
         return FAIL(E_OUTOFMEMORY);
       WMTBufferInfo info{.length=uint64_t(pDesc->Count) * result_size, .options=WMTResourceStorageModeShared};
       results = metal.newBuffer(info);
+      results_cpu = info.memory.get();
       return results ? S_OK : FAIL(E_OUTOFMEMORY);
     }
     default:
@@ -101,9 +109,12 @@ public:
 };
 
 HRESULT
-CreateQueryHeap(MTLD3D12Device *pDevice, const D3D12_QUERY_HEAP_DESC *pDesc, REFIID riid, void **ppQueryHeap) {
+CreateQueryHeap(
+    MTLD3D12Device *pDevice, const D3D12_QUERY_HEAP_DESC *pDesc, REFIID riid, void **ppQueryHeap,
+    D3D12_QUERY_HEAP_FLAGS Flags
+) {
   auto heap = Com(new MTLD3D12QueryHeapImpl(pDevice));
-  HRESULT hr = heap->Initialize(pDesc);
+  HRESULT hr = heap->Initialize(pDesc, Flags);
   if (FAILED(hr))
     return hr;
   if (!ppQueryHeap)

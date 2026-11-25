@@ -2217,23 +2217,72 @@ public:
     );
   }
 
-  // a query heap's results the CPU resolves (D3D12_QUERY_HEAP_FLAG_CPU_RESOLVE) are not kept: such a heap is refused,
-  // and ResolveQueryData has none to read
   HRESULT STDMETHODCALLTYPE
   CreateQueryHeap1(const D3D12_QUERY_HEAP_DESC *pDesc, D3D12_QUERY_HEAP_FLAGS Flags, REFIID riid, void **ppHeap) final {
-    if (Flags & ~D3D12_QUERY_HEAP_FLAG_NONE) {
+    if (Flags & ~D3D12_QUERY_HEAP_FLAG_CPU_RESOLVE) {
       InitReturnPtr(ppHeap);
-      WARN("CreateQueryHeap1: flags ", uint32_t(Flags), " not supported");
-      return E_NOTIMPL;
+      return FAIL(E_INVALIDARG);
     }
-    return CreateQueryHeap(pDesc, riid, ppHeap);
+    return mullion::CreateQueryHeap(this, pDesc, riid, ppHeap, Flags);
   }
 
   HRESULT STDMETHODCALLTYPE
   ResolveQueryData(
       ID3D12QueryHeap *pQueryHeap, D3D12_QUERY_TYPE Type, UINT StartIndex, UINT NumQueries, void *pResolvedQueryData
   ) final {
-    return E_INVALIDARG;
+    auto *heap = static_cast<MTLD3D12QueryHeap *>(pQueryHeap);
+    if (!heap || !(heap->flags & D3D12_QUERY_HEAP_FLAG_CPU_RESOLVE))
+      return FAIL(E_INVALIDARG);
+    D3D12_QUERY_HEAP_TYPE expected_type;
+    switch (Type) {
+    case D3D12_QUERY_TYPE_OCCLUSION:
+    case D3D12_QUERY_TYPE_BINARY_OCCLUSION:
+      expected_type = D3D12_QUERY_HEAP_TYPE_OCCLUSION;
+      break;
+    case D3D12_QUERY_TYPE_TIMESTAMP:
+      expected_type = heap->desc.Type == D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP
+                          ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP
+                          : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+      break;
+    case D3D12_QUERY_TYPE_PIPELINE_STATISTICS:
+      expected_type = D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
+      break;
+    case D3D12_QUERY_TYPE_PIPELINE_STATISTICS1:
+      expected_type = D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS1;
+      break;
+    case D3D12_QUERY_TYPE_SO_STATISTICS_STREAM0:
+    case D3D12_QUERY_TYPE_SO_STATISTICS_STREAM1:
+    case D3D12_QUERY_TYPE_SO_STATISTICS_STREAM2:
+    case D3D12_QUERY_TYPE_SO_STATISTICS_STREAM3:
+      expected_type = D3D12_QUERY_HEAP_TYPE_SO_STATISTICS;
+      break;
+    default:
+      return FAIL(E_INVALIDARG);
+    }
+    if (heap->desc.Type != expected_type || StartIndex > heap->desc.Count ||
+        NumQueries > heap->desc.Count - StartIndex || (NumQueries && !pResolvedQueryData))
+      return FAIL(E_INVALIDARG);
+    if (!NumQueries)
+      return S_OK;
+    if (Type == D3D12_QUERY_TYPE_TIMESTAMP) {
+      memcpy(pResolvedQueryData, heap->timestamps.data() + StartIndex, size_t(NumQueries) * sizeof(uint64_t));
+      return S_OK;
+    }
+    if (!heap->results_cpu)
+      return FAIL(E_INVALIDARG);
+    if (Type == D3D12_QUERY_TYPE_BINARY_OCCLUSION) {
+      auto *src = static_cast<const uint64_t *>(heap->results_cpu) + StartIndex;
+      auto *dst = static_cast<uint64_t *>(pResolvedQueryData);
+      for (UINT i = 0; i < NumQueries; i++)
+        dst[i] = src[i] != 0 ? 1ull : 0ull;
+      return S_OK;
+    }
+    memcpy(
+        pResolvedQueryData,
+        static_cast<const uint8_t *>(heap->results_cpu) + size_t(StartIndex) * heap->result_size,
+        size_t(NumQueries) * heap->result_size
+    );
+    return S_OK;
   }
 
   HRESULT STDMETHODCALLTYPE
