@@ -2,6 +2,7 @@ mullion_src = [
   'mullion_format.cpp',
   'mullion_names.cpp',
   'mullion_command_queue.cpp',
+  'mullion_queue_profiler.cpp',
   'mullion_command.cpp',
   'mullion_capture.cpp',
   'mullion_info.cpp',

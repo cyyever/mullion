@@ -25,20 +25,25 @@
 #include "mullion_command.hpp"
 #include "mullion_command_list.hpp"
 #include "mullion_context.hpp"
-#include "mullion_diag.hpp"
 #include "mullion_counter.hpp"
+#include "mullion_diag.hpp"
+#include "mullion_frame_pacer.hpp"
 #include "mullion_query.hpp"
+#include "mullion_queue_allocators.hpp"
+#include "mullion_queue_profiler.hpp"
 #include "mullion_resource_initializer.hpp"
-#include "mullion_ring_bump_allocator.hpp"
 #include "mullion_statistics.hpp"
 #include "log/log.hpp"
 #include "thread.hpp"
 #include "util_cpu_fence.hpp"
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
+#include <functional>
 #include <span>
+#include <tuple>
+#include <utility>
 
 namespace mullion {
 
@@ -89,16 +94,13 @@ private:
   size_t size_;
 };
 
-constexpr uint32_t kCommandChunkCount = 32;
-
 class CommandQueue;
 
 class CommandChunk {
 public:
   CommandChunk(const CommandChunk &) = delete; // delete copy constructor
 
-  void *
-  allocate_cpu_heap(size_t size, size_t alignment);
+  void *allocate_cpu_heap(size_t size, size_t alignment);
 
   template <CommandWithContext<ArgumentEncodingContext> F>
   void
@@ -108,11 +110,8 @@ public:
 
   void
   encode(WMT::CommandBuffer cmdbuf, ArgumentEncodingContext &enc, const bool &cancelled) {
-    enc.$$setEncodingContext(
-      chunk_id,
-      frame_
-    );
-    auto& statistics = enc.currentFrameStatistics();
+    enc.$$setEncodingContext(chunk_id, frame_);
+    auto &statistics = enc.currentFrameStatistics();
     auto t0 = clock::now();
     list_enc.execute(enc);
     if (cancelled)
@@ -120,7 +119,7 @@ public:
     attached_cmdbuf = cmdbuf;
     auto t1 = clock::now();
     readback = diag::profile ? enc.flushCommands<true>(cmdbuf, chunk_id, chunk_event_id)
-                            : enc.flushCommands<false>(cmdbuf, chunk_id, chunk_event_id);
+                             : enc.flushCommands<false>(cmdbuf, chunk_id, chunk_event_id);
     auto t2 = clock::now();
     statistics.encode_prepare_interval += (t1 - t0);
     statistics.encode_flush_interval += (t2 - t1);
@@ -137,7 +136,7 @@ public:
 private:
   CommandQueue *queue;
   WMT::Reference<WMT::CommandBuffer> attached_cmdbuf;
-  
+
   CommandList<ArgumentEncodingContext> list_enc;
   AllocationRefTracking ref_tracker;
 
@@ -158,45 +157,10 @@ public:
 };
 
 class CommandQueue {
-
 private:
   void CommitChunkInternal(CommandChunk &chunk, uint64_t seq);
-
   uint32_t EncodingThread();
-
   uint32_t WaitForFinishThread();
-
-  std::atomic_uint64_t ready_for_encode = 1; // we start from 1, so 0 is always coherent
-  std::atomic_uint64_t ready_for_commit = 1;
-  std::atomic_uint64_t chunk_ongoing = 0;
-  CpuFence cpu_coherent;
-  CpuFence frame_latency_fence_;
-  std::atomic_bool stopped;
-  std::atomic_bool draining_ = false;
-  uint64_t drain_last_seq_ = 0;
-  bool encoding_cancelled_ = false;
-
-  std::array<CommandChunk, kCommandChunkCount> chunks;
-  uint64_t encoder_seq = 1;
-  uint64_t frame_count = 0;
-  // DXGI's default (IDXGIDevice1::SetMaximumFrameLatency)
-  static constexpr uint32_t kDefaultLatency = 3;
-  uint32_t max_latency_ = kDefaultLatency;
-
-  struct ProfileQueue {
-    static inline std::atomic_uint64_t queues{0};
-    std::string id = str::format("d3d11:", ++queues);
-    std::array<diag::ProfileBuffer, kCommandChunkCount> buffers;
-  };
-  std::unique_ptr<ProfileQueue> profile_ = diag::profile ? std::make_unique<ProfileQueue>() : nullptr;
-
-  mullion::thread encodeThread;
-  mullion::thread finishThread;
-  WMT::Device device;
-  WMT::Reference<WMT::CommandQueue> commandQueue;
-
-  obj_handle_t shared_event_listener;
-  mullion::thread event_listener_thread;
 
   friend class CommandChunk;
   uint64_t
@@ -204,31 +168,64 @@ private:
     return encoder_seq++;
   }
 
-  RingBumpState<StagingBufferBlockAllocator> staging_allocator;
-  RingBumpState<GpuPrivateBufferBlockAllocator> copy_temp_allocator;
-  RingBumpState<StagingBufferBlockAllocator, kCommandChunkGPUHeapSize> argbuf_allocator;
-  RingBumpState<HostBufferBlockAllocator, kCommandChunkCPUHeapSize, mullion::null_mutex> cpu_command_allocator;
-  RingBumpState<HostBufferBlockAllocator, 0x1000 /* 4kB */> reftracker_storage_allocator;
-  CaptureState capture_state;
+  // Layer 1: Device & Metal primitives (longest lifetime)
+  WMT::Device device;
+  WMT::Reference<WMT::CommandQueue> commandQueue;
 
 public:
-  InternalCommandLibrary cmd_library;
-  ArgumentEncodingContext argument_encoding_ctx;
   WMT::Reference<WMT::SharedEvent> event;
-  std::uint64_t current_event_seq_id = 0;
-  FrameStatisticsContainer statistics;
-  ResourceInitializer initializer;
+
+private:
+  obj_handle_t shared_event_listener;
+
+  // Layer 2: Long-lived device pools, capture & frame pacing
+public:
+  InternalCommandLibrary cmd_library;
   CounterPool counter_pool;
+  ResourceInitializer initializer;
   diag::TimestampSamples timestamp_samples;
 
-  CommandQueue(WMT::Device device);
+private:
+  CaptureState capture_state;
+  FramePacer frame_pacer_;
 
+  // Layer 3: Ring-bump allocators & profiler (outlive chunks and argument_encoding_ctx)
+  CommandQueueAllocators allocators_;
+  CommandQueueProfiler profiler_;
+
+  // Layer 4: Chunk ring & synchronization state
+  std::atomic_uint64_t ready_for_encode = 1; // we start from 1, so 0 is always coherent
+  std::atomic_uint64_t ready_for_commit = 1;
+  std::atomic_uint64_t chunk_ongoing = 0;
+  CpuFence cpu_coherent;
+  std::atomic_bool stopped = false;
+  std::atomic_bool draining_ = false;
+  uint64_t drain_last_seq_ = 0;
+  bool encoding_cancelled_ = false;
+  uint64_t encoder_seq = 1;
+  std::array<CommandChunk, kCommandChunkCount> chunks;
+
+public:
+  std::uint64_t current_event_seq_id = 0;
+
+  // Layer 5: Stateful encoder context (destroyed before chunks, allocators & pools)
+  ArgumentEncodingContext argument_encoding_ctx;
+
+private:
+  // Layer 6: Worker threads (declared last: started after all state is ready, joined first)
+  mullion::thread event_listener_thread;
+  mullion::thread encodeThread;
+  mullion::thread finishThread;
+
+public:
+  explicit CommandQueue(WMT::Device device);
   ~CommandQueue();
 
   void Shutdown();
   void Drain();
 
-  void WaitSharedEvent(WMT::SharedEvent event, uint64_t value) {
+  void
+  WaitSharedEvent(WMT::SharedEvent event, uint64_t value) {
     while (event.signaledValue() < value) {
       if (stopped.load(std::memory_order_acquire) || draining_.load(std::memory_order_acquire)) {
         encoding_cancelled_ = true;
@@ -238,7 +235,8 @@ public:
     }
   }
 
-  void OnCompletion(uint64_t seq, std::function<void()> &&action) {
+  void
+  OnCompletion(uint64_t seq, std::function<void()> &&action) {
     auto &completed = chunks[seq % kCommandChunkCount].completed;
     completed = [previous = std::move(completed), action = std::move(action)] {
       if (previous)
@@ -247,82 +245,84 @@ public:
     };
   }
 
-
   CommandChunk *
   CurrentChunk() {
     auto id = ready_for_encode.load(std::memory_order_relaxed);
     return &chunks[id % kCommandChunkCount];
-  };
+  }
 
   uint64_t
   CoherentSeqId() {
     return cpu_coherent.signaledValue();
-  };
+  }
 
   uint64_t
   CurrentSeqId() {
     return ready_for_encode.load(std::memory_order_relaxed);
-  };
+  }
 
   uint64_t
   GetNextEventSeqId() {
     return ++current_event_seq_id;
-  };
+  }
 
   uint64_t
   GetCurrentEventSeqId() {
     return current_event_seq_id;
-  };
-
+  }
 
   uint64_t
   SignaledEventSeqId() {
     return event.signaledValue();
-  };
+  }
 
-  obj_handle_t GetSharedEventListener() {
+  obj_handle_t
+  GetSharedEventListener() {
     return shared_event_listener;
   }
 
   /**
-  This is not thread-safe!
-  CurrentChunk & CommitCurrentChunk should be called on the same thread
-
-  */
+   * This is not thread-safe!
+   * CurrentChunk & CommitCurrentChunk should be called on the same thread
+   */
   void CommitCurrentChunk();
 
-  WMTSampleBufferAttachmentInfo ProfilePass(EncoderData *pass, diag::ProfileBuffer *&buffer);
-
-  uint64_t CurrentFrameSeq() {
-    return frame_count + 1;
+  WMTSampleBufferAttachmentInfo
+  ProfilePass(EncoderData *pass, diag::ProfileBuffer *&buffer) {
+    return profiler_.ProfilePass(
+        argument_encoding_ctx.currentSeqId(), pass, argument_encoding_ctx.emulated_cmd, buffer
+    );
   }
 
-  FrameStatistics& CurrentFrameStatistics() {
-    return statistics.at(frame_count);
+  FrameStatisticsContainer &
+  Statistics() {
+    return frame_pacer_.Statistics();
+  }
+
+  uint64_t
+  CurrentFrameSeq() const {
+    return frame_pacer_.CurrentFrameSeq();
+  }
+
+  FrameStatistics &
+  CurrentFrameStatistics() {
+    return frame_pacer_.CurrentFrameStatistics();
   }
 
   void
   PresentBoundary() {
-    statistics.compute(frame_count);
-    frame_count++;
-    statistics.at(frame_count).reset();
-    // After present N-th frame (N starts from 1), wait for (N - max_latency)-th frame to finish rendering 
-    if (likely(frame_count > max_latency_)) {
-      auto t0 = clock::now();
-      auto began = diag::profile && frame_latency_fence_.signaledValue() < frame_count - max_latency_ ? diag::Now() : 0;
-      frame_latency_fence_.wait(frame_count - max_latency_);
-      if (began)
-        diag::Waited("latency", began);
-      auto t1 = clock::now();
-      statistics.at(frame_count).present_latency_interval += (t1 - t0);
-    }
-    statistics.at(frame_count).latency = max_latency_;
+    frame_pacer_.PresentBoundary();
   }
 
-  uint32_t GetMaxLatency() { return max_latency_; }
+  uint32_t
+  GetMaxLatency() const {
+    return frame_pacer_.GetMaxLatency();
+  }
 
-  // 0 is the default again
-  void SetMaxLatency(uint32_t value) { max_latency_ = value ? value : kDefaultLatency; };
+  void
+  SetMaxLatency(uint32_t value) {
+    frame_pacer_.SetMaxLatency(value);
+  }
 
   void
   WaitCPUFence(uint64_t seq) {
@@ -330,44 +330,36 @@ public:
     cpu_coherent.wait(seq);
     if (began)
       diag::Waited("cpu", began);
-  };
+  }
 
   std::tuple<WMT::Buffer, uint64_t>
   AllocateStagingBuffer(size_t size, size_t alignment) {
-    auto [block, offset] = staging_allocator.allocate(ready_for_encode, cpu_coherent.signaledValue(), size, alignment);
-    return {block.buffer, offset};
+    return allocators_.AllocateStagingBuffer(ready_for_encode, cpu_coherent.signaledValue(), size, alignment);
   }
 
   std::pair<WMT::Buffer, uint64_t>
   AllocateTempBuffer(uint64_t seq, size_t size, size_t alignment) {
-    auto [block, offset] = copy_temp_allocator.allocate(seq, cpu_coherent.signaledValue(), size, alignment);
-    return {block.buffer, offset};
+    return allocators_.AllocateTempBuffer(seq, cpu_coherent.signaledValue(), size, alignment);
   }
 
   AllocatedTempBufferSlice
   AllocateTempBuffer1(uint64_t seq, size_t size, size_t alignment) {
-    auto [block, offset] = copy_temp_allocator.allocate(seq, cpu_coherent.signaledValue(), size, alignment);
-    return {block.buffer, offset, block.gpu_address};
+    return allocators_.AllocateTempBuffer1(seq, cpu_coherent.signaledValue(), size, alignment);
   }
 
   std::tuple<void *, WMT::Buffer, uint64_t>
   AllocateArgumentBuffer(uint64_t seq, size_t size) {
-    auto [block, offset] = argbuf_allocator.allocate(seq, cpu_coherent.signaledValue(), size, 64);
-    return {ptr_add(block.mapped_address, offset), block.buffer, offset};
+    return allocators_.AllocateArgumentBuffer(seq, cpu_coherent.signaledValue(), size);
   }
 
-  // an argument buffer the GPU reaches by address too: its mapping, buffer, offset and GPU address
   std::tuple<void *, WMT::Buffer, uint64_t, uint64_t>
   AllocateAddressedArgumentBuffer(uint64_t seq, size_t size) {
-    auto [block, offset] = argbuf_allocator.allocate(seq, cpu_coherent.signaledValue(), size, 64);
-    return {ptr_add(block.mapped_address, offset), block.buffer, offset, block.gpu_address + offset};
+    return allocators_.AllocateAddressedArgumentBuffer(seq, cpu_coherent.signaledValue(), size);
   }
 
   void *
   AllocateCommandData(size_t size, size_t alignment) {
-    auto [block, offset] =
-        cpu_command_allocator.allocate(ready_for_encode, cpu_coherent.signaledValue(), size, alignment);
-    return ptr_add(block.ptr, offset);
+    return allocators_.AllocateCommandData(ready_for_encode, cpu_coherent.signaledValue(), size, alignment);
   }
 
   void Retain(uint64_t seq, Allocation *allocation);

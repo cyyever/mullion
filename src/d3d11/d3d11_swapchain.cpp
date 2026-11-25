@@ -896,7 +896,7 @@ public:
         if (diag::profile)
           diag::LatencyReleased(present_semaphore_);
         ReleaseSemaphore(present_semaphore_, 1, nullptr);
-        this->UpdateStatistics(ctx.queue().statistics, ctx.currentFrameId());
+        this->UpdateStatistics(ctx.queue().Statistics(), ctx.currentFrameId());
       });
     } else {
       chunk->emitcc([
@@ -908,7 +908,7 @@ public:
         if (diag::profile)
           diag::LatencyReleased(present_semaphore_);
         ReleaseSemaphore(present_semaphore_, 1, nullptr);
-        this->UpdateStatistics(ctx.queue().statistics, ctx.currentFrameId());
+        this->UpdateStatistics(ctx.queue().Statistics(), ctx.currentFrameId());
       });
     }
     if (!(PresentFlags & DXGI_PRESENT_DO_NOT_SEQUENCE)) {

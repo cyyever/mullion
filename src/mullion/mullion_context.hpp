@@ -42,6 +42,7 @@
 
 namespace mullion {
 
+constexpr uint32_t kCommandChunkCount = 32;
 constexpr size_t kCommandChunkCPUHeapSize = 0x400000;
 constexpr size_t kCommandChunkGPUHeapSize = 0x400000;
 constexpr size_t kEncodingContextCPUHeapSize = 0x100000;
@@ -603,6 +604,7 @@ public:
     resview_ = {{}};
     om_uav_ = {{}};
     cs_uav_ = {{}};
+    so_ = {{}};
   }
 
   template <PipelineKind kind> void encodeVertexBuffers(uint32_t ia_slot_mask, uint64_t argument_buffer_offset);

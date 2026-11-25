@@ -18,7 +18,7 @@
 
 #include "mullion_counter.hpp"
 #include "mullion_buffer.hpp"
-#include "util_bit.hpp"
+#include <bit>
 
 namespace mullion {
 
@@ -49,7 +49,7 @@ CounterSet::tryAllocate(uint32_t initial_value) {
     uint64_t free_mask = ~used;
     if (free_mask == 0)
       return {};
-    uint32_t index = bit::tzcnt(free_mask);
+    uint32_t index = std::countr_zero(free_mask);
     uint64_t new_used = used | (1ull << index);
     if (used_counter_.compare_exchange_weak(used, new_used, std::memory_order_acquire, std::memory_order_relaxed)) {
       live_refs_.fetch_add(1u, std::memory_order_relaxed);

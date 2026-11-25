@@ -239,8 +239,10 @@ private:
   std::unordered_map<uint32_t, Unbound> unbound_textures_;
 };
 
+class CommandQueueProfiler;
+
 class EmulatedCommandContext {
-  friend class CommandQueue;
+  friend class CommandQueueProfiler;
 public:
   EmulatedCommandContext(WMT::Device device, InternalCommandLibrary &lib, ArgumentEncodingContext &ctx);
 

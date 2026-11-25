@@ -1044,7 +1044,7 @@ ArgumentEncodingContext::bumpVisibilityResultOffset() {
 
 FrameStatistics&
 ArgumentEncodingContext::currentFrameStatistics() {
-  return queue_.statistics.at(frame_id_);
+  return queue_.Statistics().at(frame_id_);
 }
 
 void
