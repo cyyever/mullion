@@ -97,7 +97,7 @@ def main():
     parser.add_argument('--build', default=os.environ.get('MULLION_TIDY_BUILD'))
     parser.add_argument('--list', action='store_true', help='show affected compilation units without running checks')
     args = parser.parse_args()
-    staged = {ROOT / os.fsdecode(path) for path in git('diff', '--cached', '--name-only', '--diff-filter=ACMRD', '-z').split(b'\0') if path}
+    staged = {ROOT / os.fsdecode(path) for path in git('diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z').split(b'\0') if path}
     changed = {path for path in staged if owned(path) and path.suffix in SOURCE | HEADER and path != FIXTURE}
     if not changed:
         return 0

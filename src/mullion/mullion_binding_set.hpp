@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util_bit.hpp"
+#include <bit>
 
 namespace mullion {
 
@@ -94,7 +95,7 @@ public:
   constexpr uint32_t
   max_binding_64() const noexcept {
     uint64_t qword = dirty.qword(0);
-    return 64u - bit::tzcnt(qword);
+    return 64u - uint32_t(std::countr_zero(qword));
   }
 
   inline void
@@ -174,7 +175,7 @@ public:
     advance_to_next() {
       while (current < NumElements) {
         auto qword_index = current / 64;
-        auto tz = bit::tzcnt(uint64_t(bits.qword(qword_index) & ~((1ull << (current % 64)) - 1ull)));
+        auto tz = std::countr_zero(uint64_t(bits.qword(qword_index) & ~((1ull << (current % 64)) - 1ull)));
         if (tz < 64) {
           current = qword_index * 64 + tz;
           return;

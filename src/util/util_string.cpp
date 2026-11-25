@@ -9,7 +9,6 @@
  */
 
 #include "util_string.hpp"
-
 namespace mullion::str {
 
 std::string fromws(const WCHAR *ws) {

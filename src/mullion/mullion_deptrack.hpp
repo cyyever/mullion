@@ -1,9 +1,9 @@
 #pragma once
 #include <array>
+#include <bit>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-#include "util_bit.hpp"
 
 namespace mullion {
 
@@ -169,7 +169,7 @@ public:
     for (int P = 0; P < kParity; P++) {
       auto lanes = storage_[P];
       while (lanes) {
-        auto lane = bit::tzcnt(lanes);
+        auto lane = std::countr_zero(lanes);
         fn(P * kLane + lane);
         lanes &= ~(1ull << lane);
       }
@@ -183,7 +183,7 @@ public:
       auto lanes = storage_[P];
       auto lanes_prior = prior.storage_[P];
       while (auto lanes_combine = lanes | lanes_prior) {
-        auto lane = bit::tzcnt(lanes_combine);
+        auto lane = std::countr_zero(lanes_combine);
         if (lanes_prior & (1ull << lane))
           fnPrior(P * kLane + lane);
         else

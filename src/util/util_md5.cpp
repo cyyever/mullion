@@ -5,9 +5,9 @@
  * MIT License, Copyright (c) 2025 Philip Rebohle
  */
 #include "util_md5.hpp"
-#include "util_bit.hpp"
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 
 namespace mullion::md5 {
 
@@ -58,7 +58,7 @@ Digest Hasher::getDigest() {
     auto dw = m_state.at(i);
 
     for (uint32_t j = 0u; j < sizeof(dw); j++)
-      digest.data.at(sizeof(dw) * i + j) = bit::bextract(dw, 8u * j, 8u);
+      digest.data.at(sizeof(dw) * i + j) = uint8_t(dw >> (8u * j));
   }
 
   return digest;
@@ -154,7 +154,7 @@ void Hasher::padBlock() {
   std::array<uint8_t, sizeof(bitCount)> finalPadding = {};
 
   for (uint32_t i = 0u; i < finalPadding.size(); i++)
-    finalPadding.at(i) = uint8_t(bit::bextract(bitCount, 8u * i, 8u));
+    finalPadding.at(i) = uint8_t(bitCount >> (8u * i));
 
   update(finalPadding.data(), finalPadding.size());
 

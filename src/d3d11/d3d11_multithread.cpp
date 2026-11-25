@@ -1,6 +1,5 @@
 #include "d3d11_multithread.hpp"
 #include "thread.hpp"
-#include "util_bit.hpp"
 #include "util_likely.hpp"
 #include <atomic>
 
@@ -16,9 +15,9 @@ void d3d11_device_mutex::lock() {
       break;
     // better to spin here
     while (owner_.load(std::memory_order_relaxed)) {
-#if defined(MULLION_ARCH_X86)
-      _mm_pause();
-#elif defined(MULLION_ARCH_ARM64)
+#if (defined(__x86_64__) && !defined(__arm64ec__)) || defined(__i386__)
+      __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(_M_ARM64) || defined(_M_ARM64EC)
       __asm__ __volatile__("yield");
 #else
 // do nothing

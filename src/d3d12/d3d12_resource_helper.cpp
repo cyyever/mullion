@@ -17,7 +17,7 @@
  */
 
 #include "d3d12_device.hpp"
-#include "util_bit.hpp"
+#include <bit>
 
 namespace mullion {
 
@@ -279,7 +279,7 @@ ValidateResourceStates(D3D12_RESOURCE_STATES State, const D3D12_HEAP_PROPERTIES 
   if (State & kExclusiveWrite) {
     if (State & ~kExclusiveWrite)
       return FAIL(E_INVALIDARG);
-    if (bit::popcnt(State) != 1)
+    if (!std::has_single_bit(uint32_t(State)))
       return FAIL(E_INVALIDARG);
   }
 
@@ -466,7 +466,7 @@ DecomposeSubresource(
     ExtentOr |= Desc.Height | Desc.DepthOrArraySize;
     break;
   }
-  auto MaxMipLevels = 32 - bit::lzcnt(ExtentOr);
+  auto MaxMipLevels = uint32_t(std::bit_width(uint32_t(ExtentOr)));
   auto MipLevels = Desc.MipLevels ? Desc.MipLevels : MaxMipLevels;
 
   if (pMipSlice)

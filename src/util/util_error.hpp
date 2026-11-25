@@ -10,29 +10,17 @@
 
 #pragma once
 
+#include <stdexcept>
 #include <string>
-#include <exception>
 
 namespace mullion {
 
-/**
- * \brief Mullion error
- *
- * A generic exception class that stores a
- * message. Exceptions should be logged.
- */
-class MTLD3DError : public std::exception {
-
+class MTLD3DError : public std::runtime_error {
 public:
-  MTLD3DError() {}
-  MTLD3DError(std::string &&message) : m_message(std::move(message)) {}
+  MTLD3DError() : std::runtime_error("") {}
+  using std::runtime_error::runtime_error;
 
-  const std::string &message() const { return m_message; }
-
-  const char *what() const noexcept { return m_message.c_str(); }
-
-private:
-  std::string m_message;
+  std::string message() const { return what(); }
 };
 
 } // namespace mullion
