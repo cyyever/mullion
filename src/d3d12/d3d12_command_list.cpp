@@ -3734,6 +3734,11 @@ public:
       D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle, D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle, ID3D12Resource *pResource,
       const UINT Values[4], UINT RectCount, const D3D12_RECT *pRects
   ) override {
+    if (in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetShaderVisibleDescriptorHeap(device_, CpuHandle);
     auto &Descriptor = Heap->GetDescriptor(Index);
@@ -3778,6 +3783,11 @@ public:
       D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle, D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle, ID3D12Resource *pResource,
       const float Values[4], UINT RectCount, const D3D12_RECT *pRects
   ) override {
+    if (in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetShaderVisibleDescriptorHeap(device_, CpuHandle);
     auto &Descriptor = Heap->GetDescriptor(Index);
