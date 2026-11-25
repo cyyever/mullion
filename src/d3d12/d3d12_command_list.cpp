@@ -138,6 +138,7 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
   Flags<DirtyState> dirty_state_;
   D3D12_COMMAND_LIST_TYPE type_;
   HRESULT recording_error_ = S_OK;
+  bool in_render_pass_ = false;
   // the resolves the render pass runs when it ends
   std::vector<std::pair<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_PARAMETERS, D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>>
       pass_resolves_;
@@ -878,6 +879,7 @@ public:
       allocator_ = allocator;
 
     ResetState(pInitialPipelineState);
+    in_render_pass_ = false;
     bundle_.clear();
     clears_.clear();
     discarded_.clear();
@@ -950,6 +952,11 @@ public:
   Close() override {
     if (encoder_count < std::numeric_limits<size_t>::max())
       return FAIL(E_FAIL);
+    if (in_render_pass_) {
+      in_render_pass_ = false;
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+    }
     WriteMarkers();
     SumOcclusion();
     SumStatistics();
@@ -2221,6 +2228,11 @@ public:
 
   void STDMETHODCALLTYPE
   Dispatch(UINT X, UINT Y, UINT Z) override {
+    if (in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     if (Bundled() && Record([=](auto *l) { l->Dispatch(X, Y, Z); }))
       return;
     if (pso_compute_ && pso_compute_->groups_work_together) {
@@ -3060,6 +3072,11 @@ public:
   }
 
   void STDMETHODCALLTYPE ResourceBarrier(UINT Count, const D3D12_RESOURCE_BARRIER *barriers) override {
+    if (in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     WriteMarkers();
     constexpr auto pixels = D3D12_RESOURCE_STATE_RENDER_TARGET | D3D12_RESOURCE_STATE_DEPTH_WRITE |
                             D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -3362,6 +3379,11 @@ public:
       UINT NumRTV, const D3D12_CPU_DESCRIPTOR_HANDLE *RTVs, WINBOOL SingleDescriptor,
       const D3D12_CPU_DESCRIPTOR_HANDLE *DSV
   ) override {
+    if (in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     bool changed = num_rtvs != NumRTV;
     // the views as they are now: a descriptor written over after this call is not the bound one
     auto bind = [&](MTL_RENDER_TARGET_DESC &bound, D3D12_CPU_DESCRIPTOR_HANDLE handle) {
@@ -3387,6 +3409,11 @@ public:
       D3D12_CPU_DESCRIPTOR_HANDLE DSV, D3D12_CLEAR_FLAGS Flags, FLOAT Depth, UINT8 Stencil, UINT RectCount,
       const D3D12_RECT *Rects
   ) override {
+    if (in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetRenderTargetHeap(device_, DSV);
     auto AttachmentDesc = Heap->GetRenderTarget(Index);
@@ -3450,6 +3477,11 @@ public:
   ClearRenderTargetView(
       D3D12_CPU_DESCRIPTOR_HANDLE RTV, const FLOAT Color[4], UINT RectCount, const D3D12_RECT *Rects
   ) override {
+    if (in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     PredicatedPasses predicated(this);
     auto [Heap, Index] = GetRenderTargetHeap(device_, RTV);
     auto AttachmentDesc = Heap->GetRenderTarget(Index);
@@ -4877,6 +4909,12 @@ public:
       UINT NumRenderTargets, const D3D12_RENDER_PASS_RENDER_TARGET_DESC *pRenderTargets,
       const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC *pDepthStencil, D3D12_RENDER_PASS_FLAGS Flags
   ) override {
+    if (in_render_pass_ || NumRenderTargets > D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT ||
+        (NumRenderTargets && !pRenderTargets)) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE targets[D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT];
     UINT target_count = 0;
     pass_resolves_.clear();
@@ -4957,27 +4995,31 @@ public:
         ClearRenderTargetView(
             pRenderTargets[i].cpuDescriptor, pRenderTargets[i].BeginningAccess.Clear.ClearValue.Color, 0, nullptr
         );
-    if (!pDepthStencil) {
-      for (auto texture : begin_discards)
-        DiscardTexture(texture);
-      return;
+    if (pDepthStencil) {
+      auto &depth = pDepthStencil->DepthBeginningAccess, &stencil = pDepthStencil->StencilBeginningAccess;
+      auto flags = (depth.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR ? D3D12_CLEAR_FLAG_DEPTH : 0) |
+                   (stencil.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR ? D3D12_CLEAR_FLAG_STENCIL : 0);
+      if (clears && flags)
+        ClearDepthStencilView(
+            pDepthStencil->cpuDescriptor, (D3D12_CLEAR_FLAGS)flags, depth.Clear.ClearValue.DepthStencil.Depth,
+            stencil.Clear.ClearValue.DepthStencil.Stencil, 0, nullptr
+        );
+      resolve(pDepthStencil->DepthEndingAccess);
+      resolve(pDepthStencil->StencilEndingAccess);
     }
-    auto &depth = pDepthStencil->DepthBeginningAccess, &stencil = pDepthStencil->StencilBeginningAccess;
-    auto flags = (depth.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR ? D3D12_CLEAR_FLAG_DEPTH : 0) |
-                 (stencil.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR ? D3D12_CLEAR_FLAG_STENCIL : 0);
-    if (clears && flags)
-      ClearDepthStencilView(
-          pDepthStencil->cpuDescriptor, (D3D12_CLEAR_FLAGS)flags, depth.Clear.ClearValue.DepthStencil.Depth,
-          stencil.Clear.ClearValue.DepthStencil.Stencil, 0, nullptr
-      );
-    resolve(pDepthStencil->DepthEndingAccess);
-    resolve(pDepthStencil->StencilEndingAccess);
     for (auto texture : begin_discards)
       DiscardTexture(texture);
+    in_render_pass_ = true;
   }
 
   void STDMETHODCALLTYPE
   EndRenderPass() override {
+    if (!in_render_pass_) {
+      if (SUCCEEDED(recording_error_))
+        recording_error_ = E_FAIL;
+      return;
+    }
+    in_render_pass_ = false;
     for (auto &[r, sub] : pass_resolves_)
       ResolveSubresourceRegion(
           r.pDstResource, sub.DstSubresource, sub.DstX, sub.DstY, r.pSrcResource, sub.SrcSubresource,

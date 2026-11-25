@@ -2412,6 +2412,15 @@ public:
     auto &region = pDesc1->SamplerFeedbackMipRegion;
     if (!IsSamplerFeedback(desc.Format))
       return !region.Width && !region.Height && !region.Depth;
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || region.Depth > 1 ||
+        desc.Layout != D3D12_TEXTURE_LAYOUT_UNKNOWN || desc.SampleDesc.Count != 1 || desc.SampleDesc.Quality ||
+        !(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) ||
+        (desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL |
+                       D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER)))
+      return false;
+    auto max_mips = UINT(std::bit_width(std::max<UINT64>(desc.Width, desc.Height)));
+    if (desc.MipLevels > max_mips)
+      return false;
     auto regions = [](UINT64 texels, UINT region) {
       return std::has_single_bit(region) && region >= 4 && region <= texels / 2 ? (texels + region - 1) / region : 0;
     };
@@ -2419,7 +2428,7 @@ public:
     desc.Height = regions(desc.Height, region.Height);
     desc.MipLevels = 1;
     desc.Format = DXGI_FORMAT_R32_UINT;
-    return desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && desc.Width && desc.Height;
+    return desc.Width && desc.Height;
   }
 
   /* creates what ResourceDesc makes of a description. a sampler feedback map keeps the description it was asked for */
