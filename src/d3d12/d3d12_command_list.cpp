@@ -688,11 +688,13 @@ class MTLD3D12GraphicsCommandListImpl : public MTLD3D12DeviceChild<MTLD3D12Graph
     if (occlusion_sums_.empty())
       return;
     StartComputePass();
+    // an empty list still gets a buffer to bind
     auto upload = [&](const void *data, size_t length, const char *kind) {
-      auto [mapped, offset] = allocator_->AllocateGPUHeap(length, 16);
+      auto [mapped, offset] = allocator_->AllocateGPUHeap(std::max<size_t>(length, 16), 16);
       if (allocator_->records_)
-        allocator_->RecordGPUHeap(mapped, length, kind);
-      memcpy(mapped, data, length);
+        allocator_->RecordGPUHeap(mapped, std::max<size_t>(length, 16), kind);
+      if (length)
+        memcpy(mapped, data, length);
       return offset;
     };
     auto slots = upload(visibility_slots_.data(), visibility_slots_.size() * sizeof(uint64_t), "occlusion slots");
@@ -3846,6 +3848,8 @@ public:
 
   void STDMETHODCALLTYPE
   BeginQuery(ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT Index) override {
+    if (!pHeap)
+      return;
     // a bundle's query is the calling list's: it counts that list's draws, the bundle's among them
     if (Bundled() &&
         Record([=, heap = Com<ID3D12QueryHeap>(pHeap)](auto *l) { l->BeginQuery(heap.ptr(), Type, Index); }))
@@ -3891,6 +3895,8 @@ public:
 
   void STDMETHODCALLTYPE
   EndQuery(ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT Index) override {
+    if (!pHeap)
+      return;
     if (Bundled() && Record([=, heap = Com<ID3D12QueryHeap>(pHeap)](auto *l) { l->EndQuery(heap.ptr(), Type, Index); }))
       return;
     OrderingPoint();
@@ -3973,6 +3979,8 @@ public:
       ID3D12QueryHeap *pHeap, D3D12_QUERY_TYPE Type, UINT StartIndex, UINT QueryCount, ID3D12Resource *pDstBuffer,
       UINT64 AlignedDstBufferOffset
   ) override {
+    if (!pHeap || !pDstBuffer)
+      return;
     OrderingPoint();
     auto heap = static_cast<MTLD3D12QueryHeap *>(pHeap);
     auto resource = static_cast<MTLD3D12Resource *>(pDstBuffer);

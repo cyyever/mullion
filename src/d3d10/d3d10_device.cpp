@@ -1079,7 +1079,7 @@ MTLD3D10Device::CreateGeometryShaderWithStreamOutput(
     UINT NumEntries, UINT OutputStreamStride, ID3D10GeometryShader **ppGeometryShader
 ) {
   InitReturnPtr(ppGeometryShader);
-  if (NumEntries && !pSODeclaration)
+  if (!pSODeclaration != !NumEntries)
     return E_INVALIDARG;
   // a declaration whose entries are all on slot 0, the one case that takes the stride: "only used when the output slot
   // is 0 for all entries", and Windows refuses one otherwise (Wine's test_stream_output)
@@ -1101,13 +1101,12 @@ MTLD3D10Device::CreateGeometryShaderWithStreamOutput(
   }
 
   Com<ID3D11GeometryShader> d3d11_shader = nullptr;
-
   HRESULT hr = d3d11_device_->CreateGeometryShaderWithStreamOutput(
       // Direct3D 10 has one stream, which is rasterized while a pixel shader or the depth test takes it
       // ("Stream-Output Stage"). the stride is "only used when the output slot is 0 for all entries"; each of several
       // slots has its one element's
-      pShaderBytecode, BytecodeLength, entries.data(), entries.size(), &OutputStreamStride, one_slot, 0, nullptr,
-      ppGeometryShader ? &d3d11_shader : nullptr
+      pShaderBytecode, BytecodeLength, entries.data(), entries.size(), one_slot ? &OutputStreamStride : nullptr,
+      one_slot ? 1u : 0u, 0, nullptr, ppGeometryShader ? &d3d11_shader : nullptr
   );
 
   if (hr != S_OK)

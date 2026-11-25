@@ -23,6 +23,11 @@ DEFINE_COM_INTERFACE("3a3f085a-d0fe-4324-b0ae-fe04de18571c",
   virtual void WaitUntilGPUIdle() = 0;
   virtual void PrepareFlush() = 0;
   virtual void UnbindResource(ID3D11Resource *pResource) = 0;
+  virtual void UnbindSampler(ID3D11SamplerState *pSampler) = 0;
+  virtual void UnbindShaderResourceView(ID3D11ShaderResourceView *pSRV) = 0;
+  virtual void UnbindRenderTargetView(ID3D11RenderTargetView *pRTV) = 0;
+  virtual void UnbindDepthStencilView(ID3D11DepthStencilView *pDSV) = 0;
+  virtual void UnbindPredicate(ID3D11Predicate *pPredicate) = 0;
   virtual void Commit() = 0;
   virtual HRESULT WaitEvent(WMT::SharedEvent event, UINT64 value, ID3D12Fence *fence) = 0;
   virtual HRESULT SignalFence(ID3D12Fence *fence, UINT64 value) = 0;

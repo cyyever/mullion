@@ -2701,9 +2701,11 @@ public:
     auto state = presenter->synchronizeLayerProperties();
     state.layer_props.display_sync_enabled = after > 0;
     if (Holding() &&
-        Hold([this, swapchain = Com(swapchain), presenter, backbuffer = Com(backbuffer), view, hLantecyWaitable, after,
-              id, number, state, previous = Com(previous), copies, scaler = Rc(scaler),
-              upscaled = WMT::Reference<WMT::Texture>(upscaled)] {
+        Hold([this, swapchain = Com(swapchain), presenter,
+              backbuffer = Com<MTLD3D12Resource, false>(static_cast<MTLD3D12Resource *>(backbuffer)), view,
+              hLantecyWaitable, after, id, number, state,
+              previous = Com<MTLD3D12Resource, false>(static_cast<MTLD3D12Resource *>(previous)), copies,
+              scaler = Rc(scaler), upscaled = WMT::Reference<WMT::Texture>(upscaled)] {
           Commit(
               presenter, backbuffer.ptr(), view, state, hLantecyWaitable, after, id, number, previous.ptr(), copies,
               scaler.ptr(), upscaled

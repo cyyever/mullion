@@ -27,9 +27,7 @@
   "verdict": "passed"
  },
  "test_clear_state": {
-  "verdict": "failed",
-  "failed": 4,
-  "first": "d3d10core.c:5938: Test failed: Got unexpected stream output offset 16 in slot 0."
+  "verdict": "passed"
  },
  "test_clip_distance": {
   "verdict": "passed"
@@ -53,9 +51,7 @@
   "verdict": "passed"
  },
  "test_create_buffer": {
-  "verdict": "failed",
-  "failed": 1,
-  "first": "d3d10core.c:2564: Test failed: Got unexpected hr 0."
+  "verdict": "passed"
  },
  "test_create_depthstencil_state": {
   "verdict": "passed"
@@ -100,9 +96,7 @@
   "verdict": "passed"
  },
  "test_depth_bias": {
-  "verdict": "failed",
-  "failed": 205,
-  "first": "d3d10core.c:16198: Test failed: Format 0x2d: z 0.125000, bias -10000, clamp 0.000000: Got 0x1ff63c, expected 0x1fd8f0 at (0, 0), sub-resource 0."
+  "verdict": "passed"
  },
  "test_depth_clip": {
   "verdict": "passed"
@@ -153,9 +147,7 @@
   "verdict": "passed"
  },
  "test_generate_mips": {
-  "verdict": "failed",
-  "failed": 15,
-  "first": "d3d10core.c:17454: Test failed: Test 2: unexpectedly succeeded to create shader resource view, hr 0."
+  "verdict": "passed"
  },
  "test_geometry_shader": {
   "verdict": "passed"
@@ -182,9 +174,7 @@
   "verdict": "passed"
  },
  "test_input_layout_alignment": {
-  "verdict": "failed",
-  "failed": 6,
-  "first": "d3d10core.c:12650: Test failed: Test 1: Got unexpected hr 0, expected 0x80070057."
+  "verdict": "passed"
  },
  "test_instanced_draw": {
   "verdict": "passed"
@@ -280,9 +270,7 @@
   "verdict": "passed"
  },
  "test_state_refcounting": {
-  "verdict": "failed",
-  "failed": 4,
-  "first": "d3d10core.c:8986: Test failed: Got unexpected pointer 00000000007301F0, expected NULL."
+  "verdict": "passed"
  },
  "test_stencil_only_write_after_clear": {
   "verdict": "passed"
@@ -291,9 +279,7 @@
   "verdict": "passed"
  },
  "test_stream_output": {
-  "verdict": "failed",
-  "failed": 28,
-  "first": "d3d10core.c:15676: Test failed: Test 15: Got unexpected hr 0."
+  "verdict": "passed"
  },
  "test_stream_output_resume": {
   "verdict": "passed"

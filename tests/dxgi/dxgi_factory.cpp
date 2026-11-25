@@ -177,7 +177,7 @@ main() {
         step("factory entry %u flags %#x tearing data size %u", entry, flags, size);
         data.fill(std::numeric_limits<BYTE>::max());
         hr = factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, data.data(), size);
-        expect(hr == (size == sizeof(BOOL) ? S_OK : E_INVALIDARG), "feature size: %#lx", hr);
+        expect(hr == (size == sizeof(BOOL) ? S_OK : DXGI_ERROR_INVALID_CALL), "feature size: %#lx", hr);
         expect(data.back() == std::numeric_limits<BYTE>::max(), "feature query wrote beyond BOOL");
         if (size == sizeof(BOOL)) {
           BOOL supported;
@@ -188,7 +188,7 @@ main() {
       expect(
           factory->CheckFeatureSupport(
               DXGI_FEATURE(DXGI_FEATURE_PRESENT_ALLOW_TEARING + 1), data.data(), sizeof(BOOL)
-          ) == E_INVALIDARG,
+          ) == DXGI_ERROR_INVALID_CALL,
           "unknown feature"
       );
       for (UINT flags = 0; flags <= DXGI_MWA_VALID; flags++) {

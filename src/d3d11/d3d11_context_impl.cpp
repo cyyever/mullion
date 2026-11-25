@@ -2855,7 +2855,7 @@ public:
         if (ppSOTargets)
           state_.StreamOutput.Targets[i].Buffer->QueryInterface(riid, &ppSOTargets[i]);
         if (pOffsets)
-          pOffsets[i] = state_.StreamOutput.Targets[i].Offset;
+          pOffsets[i] = ~0u;
       } else {
         if (ppSOTargets)
           ppSOTargets[i] = nullptr;
@@ -3491,6 +3491,66 @@ public:
     };
     unbind.template operator()<PipelineStage::Pixel>(state_.OutputMerger.UAVs);
     unbind.template operator()<PipelineStage::Compute>(state_.ComputeStageUAV.UAVs);
+  }
+
+  void
+  UnbindSampler(ID3D11SamplerState *pSampler) override {
+    std::lock_guard<mutex_t> lock(mutex);
+    auto unbind = [&]<PipelineStage Stage>() {
+      auto &samplers = state_.ShaderStages[Stage].Samplers;
+      for (const auto &[slot, bound] : samplers) {
+        if (bound.RawPointer == pSampler && samplers.unbind(slot))
+          EmitST([=](ArgumentEncodingContext &enc) { enc.bindSampler<Stage>(slot, {}); });
+      }
+    };
+    unbind.template operator()<PipelineStage::Vertex>();
+    unbind.template operator()<PipelineStage::Pixel>();
+    unbind.template operator()<PipelineStage::Geometry>();
+    unbind.template operator()<PipelineStage::Hull>();
+    unbind.template operator()<PipelineStage::Domain>();
+    unbind.template operator()<PipelineStage::Compute>();
+  }
+
+  void
+  UnbindShaderResourceView(ID3D11ShaderResourceView *pSRV) override {
+    std::lock_guard<mutex_t> lock(mutex);
+    auto unbind = [&]<PipelineStage Stage>() {
+      auto &srvs = state_.ShaderStages[Stage].SRVs;
+      for (const auto &[slot, bound] : srvs) {
+        if (bound.RawPointer == pSRV && srvs.unbind(slot))
+          EmitST([=](ArgumentEncodingContext &enc) { enc.bindBuffer<Stage>(slot, {}, 0, {}); });
+      }
+    };
+    unbind.template operator()<PipelineStage::Vertex>();
+    unbind.template operator()<PipelineStage::Pixel>();
+    unbind.template operator()<PipelineStage::Geometry>();
+    unbind.template operator()<PipelineStage::Hull>();
+    unbind.template operator()<PipelineStage::Domain>();
+    unbind.template operator()<PipelineStage::Compute>();
+  }
+
+  void
+  UnbindRenderTargetView(ID3D11RenderTargetView *pRTV) override {
+    std::lock_guard<mutex_t> lock(mutex);
+    for (auto &rtv : state_.OutputMerger.RTVs)
+      if (rtv.ptr() == pRTV)
+        rtv = nullptr;
+  }
+
+  void
+  UnbindDepthStencilView(ID3D11DepthStencilView *pDSV) override {
+    std::lock_guard<mutex_t> lock(mutex);
+    if (state_.OutputMerger.DSV.ptr() == pDSV)
+      state_.OutputMerger.DSV = nullptr;
+  }
+
+  void
+  UnbindPredicate(ID3D11Predicate *pPredicate) override {
+    std::lock_guard<mutex_t> lock(mutex);
+    if (state_.predicate.ptr() == reinterpret_cast<MTLD3D11Query *>(pPredicate)) {
+      state_.predicate = nullptr;
+      state_.predicate_value = FALSE;
+    }
   }
 
   void

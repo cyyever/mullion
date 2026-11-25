@@ -732,7 +732,7 @@ public:
   STDMETHODCALLTYPE
   GetDesc1(DXGI_SWAP_CHAIN_DESC1 *pDesc) final {
     if (pDesc == nullptr) {
-      return E_POINTER;
+      return E_INVALIDARG;
     }
     *pDesc = desc_;
     return S_OK;
@@ -742,7 +742,7 @@ public:
   STDMETHODCALLTYPE
   GetFullscreenDesc(DXGI_SWAP_CHAIN_FULLSCREEN_DESC *pDesc) final {
     if (pDesc == nullptr) {
-      return E_POINTER;
+      return E_INVALIDARG;
     }
     *pDesc = fullscreen_desc_;
     return S_OK;
@@ -1161,7 +1161,8 @@ public:
                          DXGI_FORMAT Format, UINT SwapChainFlags,
                          const UINT *pCreationNodeMask,
                          IUnknown *const *ppPresentQueue) override {
-    WARN("DXGISwapChain3::ResizeBuffers1: ignoring d3d12 related parameters");
+    if (pCreationNodeMask || ppPresentQueue)
+      return DXGI_ERROR_INVALID_CALL;
     return ResizeBuffers(BufferCount, Width, Height, Format, SwapChainFlags);
   }
 
@@ -1285,6 +1286,11 @@ CreateSwapChain(
     hr = swapchain->SetFullscreenState(TRUE, nullptr);
     if (FAILED(hr))
       return hr;
+    if (!pDesc->Width || !pDesc->Height) {
+      hr = swapchain->ResizeBuffers(0, pDesc->Width, pDesc->Height, DXGI_FORMAT_UNKNOWN, pDesc->Flags);
+      if (FAILED(hr))
+        return hr;
+    }
   }
   *ppSwapChain = swapchain.takeOwnership();
   return S_OK;

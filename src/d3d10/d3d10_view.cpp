@@ -1,6 +1,40 @@
 #include "d3d10_view.hpp"
+#include "../d3d11/d3d11_device.hpp"
 
 namespace mullion {
+
+ULONG STDMETHODCALLTYPE
+MTLD3D10ShaderResourceView::Release() {
+  Com<ID3D11Device> device;
+  d3d11->GetDevice(&device);
+  auto *obj = d3d11;
+  ULONG count = obj->Release();
+  if (!count)
+    static_cast<MTLD3D11Device *>(device.ptr())->GetImmediateContextPrivate()->UnbindShaderResourceView(obj);
+  return count;
+}
+
+ULONG STDMETHODCALLTYPE
+MTLD3D10RenderTargetView::Release() {
+  Com<ID3D11Device> device;
+  d3d11->GetDevice(&device);
+  auto *obj = d3d11;
+  ULONG count = obj->Release();
+  if (!count)
+    static_cast<MTLD3D11Device *>(device.ptr())->GetImmediateContextPrivate()->UnbindRenderTargetView(obj);
+  return count;
+}
+
+ULONG STDMETHODCALLTYPE
+MTLD3D10DepthStencilView::Release() {
+  Com<ID3D11Device> device;
+  d3d11->GetDevice(&device);
+  auto *obj = d3d11;
+  ULONG count = obj->Release();
+  if (!count)
+    static_cast<MTLD3D11Device *>(device.ptr())->GetImmediateContextPrivate()->UnbindDepthStencilView(obj);
+  return count;
+}
 
 void STDMETHODCALLTYPE
 MTLD3D10ShaderResourceView::GetDesc(D3D10_SHADER_RESOURCE_VIEW_DESC *pDesc) {

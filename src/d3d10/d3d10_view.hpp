@@ -21,10 +21,7 @@ public:
     return d3d11->AddRef();
   }
 
-  ULONG STDMETHODCALLTYPE
-  Release() {
-    return d3d11->Release();
-  }
+  ULONG STDMETHODCALLTYPE Release();
 
   void STDMETHODCALLTYPE
   GetDevice(ID3D10Device **ppDevice) {
@@ -72,10 +69,7 @@ public:
     return d3d11->AddRef();
   }
 
-  ULONG STDMETHODCALLTYPE
-  Release() {
-    return d3d11->Release();
-  }
+  ULONG STDMETHODCALLTYPE Release();
 
   void STDMETHODCALLTYPE
   GetDevice(ID3D10Device **ppDevice) {
@@ -122,10 +116,7 @@ public:
     return d3d11->AddRef();
   }
 
-  ULONG STDMETHODCALLTYPE
-  Release() {
-    return d3d11->Release();
-  }
+  ULONG STDMETHODCALLTYPE Release();
 
   void STDMETHODCALLTYPE
   GetDevice(ID3D10Device **ppDevice) {

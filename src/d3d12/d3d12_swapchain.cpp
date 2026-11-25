@@ -139,7 +139,7 @@ class MTLD3D12SwapChain final : public MTLDXGISubObject<IMTLDXGISwapChain, MTLD3
   Rc<Presenter> presenter;
   uint32_t frame_latency;
   DXGI_COLOR_SPACE_TYPE colorspace_ = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-  DXGI_MATRIX_3X2_F matrix_transform_{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+  DXGI_MATRIX_3X2_F matrix_transform_{._11 = 1.0f, ._12 = 0.0f, ._21 = 0.0f, ._22 = 1.0f, ._31 = 0.0f, ._32 = 0.0f};
   float scale_factor = 1.0;
   // MetalFX spatial upscaling (d3d12.metalSpatialUpscale, or d3d11's when d3d12 has none): the shown buffer goes
   // through `metalfx_scaler_` into `upscaled_`, scale_factor times its size
@@ -820,7 +820,7 @@ public:
   STDMETHODCALLTYPE
   GetDesc1(DXGI_SWAP_CHAIN_DESC1 *pDesc) final {
     if (pDesc == nullptr) {
-      return FAIL(E_POINTER);
+      return FAIL(E_INVALIDARG);
     }
     *pDesc = desc_;
     return S_OK;
@@ -830,7 +830,7 @@ public:
   STDMETHODCALLTYPE
   GetFullscreenDesc(DXGI_SWAP_CHAIN_FULLSCREEN_DESC *pDesc) final {
     if (pDesc == nullptr) {
-      return FAIL(E_POINTER);
+      return FAIL(E_INVALIDARG);
     }
     *pDesc = fullscreen_desc_;
     return S_OK;
@@ -1130,6 +1130,10 @@ CreateSwapChain(
         return hr;
       // fullscreen unavailable at creation returns a windowed swap chain (IDXGIFactory::CreateSwapChain, Remarks).
       hr = DXGI_STATUS_OCCLUDED;
+    } else if (!pDesc->Width || !pDesc->Height) {
+      HRESULT resize_hr = swapchain->ResizeBuffers(0, pDesc->Width, pDesc->Height, DXGI_FORMAT_UNKNOWN, pDesc->Flags);
+      if (FAILED(resize_hr))
+        return resize_hr;
     }
   }
   *ppSwapChain = swapchain.takeOwnership();

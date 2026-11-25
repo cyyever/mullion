@@ -260,9 +260,6 @@ public:
     // Make sure the back buffer size is not zero
     DXGI_SWAP_CHAIN_DESC1 desc = *pDesc;
 
-    wsi::getWindowSize(hWnd, desc.Width ? nullptr : &desc.Width,
-                       desc.Height ? nullptr : &desc.Height);
-
     // If necessary, set up a default set of
     // fullscreen parameters for the swap chain
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc;
@@ -274,6 +271,15 @@ public:
       fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
       fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
       fsDesc.Windowed = TRUE;
+    }
+
+    if (fsDesc.Windowed) {
+      wsi::getWindowSize(hWnd, desc.Width ? nullptr : &desc.Width,
+                         desc.Height ? nullptr : &desc.Height);
+      if (!desc.Width)
+        desc.Width = 8;
+      if (!desc.Height)
+        desc.Height = 8;
     }
 
     try {
@@ -449,6 +455,8 @@ public:
   HRESULT STDMETHODCALLTYPE EnumAdapterByLuid(LUID luid, REFIID riid,
                                               void **ppAdapter) override {
     InitReturnPtr(ppAdapter);
+    if (!ppAdapter)
+      return FAIL(DXGI_ERROR_INVALID_CALL);
 
     Com<IDXGIAdapter1> adapter;
     for (UINT i = 0; SUCCEEDED(this->EnumAdapters1(i, &adapter)); i++) {
@@ -475,14 +483,14 @@ public:
       auto info = static_cast<BOOL *>(pFeatureSupportData);
 
       if (FeatureSupportDataSize != sizeof(*info))
-        return FAIL(E_INVALIDARG);
+        return FAIL(DXGI_ERROR_INVALID_CALL);
 
       *info = TRUE;
       return S_OK;
     }
     default: {
       ERR("DXGIFactory::CheckFeatureSupport: unknown feature ", Feature);
-      return E_INVALIDARG;
+      return DXGI_ERROR_INVALID_CALL;
     }
     }
   };

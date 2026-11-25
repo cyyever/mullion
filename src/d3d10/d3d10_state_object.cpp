@@ -1,6 +1,32 @@
 #include "d3d10_state_object.hpp"
+#include "d3d10_query.hpp"
+#include "../d3d11/d3d11_device.hpp"
 
 namespace mullion {
+
+ULONG STDMETHODCALLTYPE
+MTLD3D10SamplerState::Release() {
+  Com<ID3D11Device> device;
+  d3d11->GetDevice(&device);
+  auto *obj = d3d11;
+  ULONG count = obj->Release();
+  if (!count)
+    static_cast<MTLD3D11Device *>(device.ptr())->GetImmediateContextPrivate()->UnbindSampler(obj);
+  return count;
+}
+
+ULONG STDMETHODCALLTYPE
+MTLD3D10Query::Release() {
+  Com<ID3D11Device> device;
+  d3d11->GetDevice(&device);
+  auto *obj = d3d11;
+  ULONG count = obj->Release();
+  if (!count)
+    static_cast<MTLD3D11Device *>(device.ptr())
+        ->GetImmediateContextPrivate()
+        ->UnbindPredicate(reinterpret_cast<ID3D11Predicate *>(obj));
+  return count;
+}
 
 void STDMETHODCALLTYPE
 MTLD3D10BlendState::GetDesc(D3D10_BLEND_DESC *pDesc) {
