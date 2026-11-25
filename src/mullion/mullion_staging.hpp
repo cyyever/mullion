@@ -4,7 +4,7 @@
 #include "thread.hpp"
 #include <cstdint>
 #include <atomic>
-#include <queue>
+#include "util_ring_queue.hpp"
 
 namespace mullion {
 
@@ -73,7 +73,7 @@ private:
   uint64_t immediate_name_;
   std::vector<Rc<BufferAllocation>> buffer_pool;
   std::atomic<uint32_t> refcount_ = {0u};
-  std::queue<QueueEntry> fifo;
+  RingQueue<QueueEntry> fifo;
   mullion::mutex mutex_;
   bool mapped = false;
   // prevent read from staging before

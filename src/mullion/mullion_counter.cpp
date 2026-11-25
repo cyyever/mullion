@@ -24,7 +24,7 @@ namespace mullion {
 
 CounterSet::CounterSet(WMT::Device device, Rc<BufferAllocation> &&allocation) : allocation_(std::move(allocation)) {
   for (unsigned i = 0; i < counters_.size(); i++) {
-    counters_[i].init(this, i);
+    counters_[i].init(*this, i);
   }
 };
 

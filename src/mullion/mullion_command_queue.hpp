@@ -134,7 +134,7 @@ public:
   uint64_t resource_initializer_event_id;
 
 private:
-  CommandQueue *queue;
+  CommandQueue &queue;
   WMT::Reference<WMT::CommandBuffer> attached_cmdbuf;
 
   CommandList<ArgumentEncodingContext> list_enc;
@@ -143,7 +143,7 @@ private:
   friend class CommandQueue;
 
 public:
-  CommandChunk() {}
+  explicit CommandChunk(CommandQueue &queue) : queue(queue) { reset(); }
 
   void
   reset() noexcept {
@@ -290,7 +290,7 @@ public:
   WMTSampleBufferAttachmentInfo
   ProfilePass(EncoderData *pass, diag::ProfileBuffer *&buffer) {
     return profiler_.ProfilePass(
-        argument_encoding_ctx.currentSeqId(), pass, argument_encoding_ctx.emulated_cmd, buffer
+        argument_encoding_ctx.currentSeqId(), *pass, argument_encoding_ctx.emulated_cmd, buffer
     );
   }
 

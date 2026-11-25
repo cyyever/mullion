@@ -48,7 +48,7 @@ public:
 
   WMTSampleBufferAttachmentInfo
   ProfilePass(
-      uint64_t seq_id, EncoderData *pass, const EmulatedCommandContext &commands, diag::ProfileBuffer *&profiled
+      uint64_t seq_id, EncoderData &pass, const EmulatedCommandContext &commands, diag::ProfileBuffer *&profiled
   );
 
   void RecordSubmit(uint64_t chunk_id, uint64_t began, bool has_present);

@@ -50,8 +50,8 @@ private:
   uint32_t index_;
 
   void
-  init(CounterSet *set, uint32_t index) {
-    set_ = set;
+  init(CounterSet &set, uint32_t index) {
+    set_ = &set;
     index_ = index;
   }
 };

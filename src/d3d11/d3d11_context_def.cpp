@@ -5,7 +5,8 @@
 #include "mullion_command_queue.hpp"
 #include "mullion_dynamic.hpp"
 #include <algorithm>
-#include <unordered_set>
+#include <flat_map>
+#include <flat_set>
 
 namespace mullion {
 
@@ -21,10 +22,10 @@ struct DeferredContextInternalState {
   // the list being recorded is the context's own until FinishCommandList gives it out: a private reference, which
   // holds no reference to the device (a deferred context holds one, Wine's test_create_deferred_context)
   Com<MTLD3D11CommandList, false> current_cmdlist;
-  std::unordered_map<DynamicBuffer *, DynamicBufferAllocation> current_dynamic_buffer_allocations;
-  std::unordered_map<DynamicLinearTexture *, std::pair<TextureAllocation *, uint32_t>> current_dynamic_texture_allocations;
-  std::unordered_map<void *, std::pair<Com<MTLD3D11OcclusionQuery>, uint32_t>> building_visibility_queries;
-  std::unordered_set<uint32_t> pending_visibility_queries;
+  std::flat_map<DynamicBuffer *, DynamicBufferAllocation> current_dynamic_buffer_allocations;
+  std::flat_map<DynamicLinearTexture *, std::pair<TextureAllocation *, uint32_t>> current_dynamic_texture_allocations;
+  std::flat_map<void *, std::pair<Com<MTLD3D11OcclusionQuery>, uint32_t>> building_visibility_queries;
+  std::flat_set<uint32_t> pending_visibility_queries;
   // of building_visibility_queries, the occlusion ones
   unsigned building_occlusion_queries = 0;
 };

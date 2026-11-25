@@ -4,8 +4,8 @@
 #include "log/log.hpp"
 #include "thread.hpp"
 #include "util_math.hpp"
+#include "util_ring_queue.hpp"
 #include <mutex>
-#include <queue>
 
 namespace mullion {
 
@@ -44,7 +44,7 @@ private:
     return {allocation.block, offset};
   };
 
-  std::queue<Allocation> fifo;
+  RingQueue<Allocation> fifo;
   mutex mutex_;
   Allocator allocator_;
 };
@@ -167,7 +167,7 @@ std::pair<typename Allocator::Block &, uint64_t>
 RingBumpState<Allocator, BlockSize, mutex>::allocate(
     uint64_t seq_id, uint64_t coherent_id, size_t size, size_t alignment
 ) {
-  std::lock_guard<mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   while (!fifo.empty()) {
     auto &latest = fifo.back();
     if ((align(latest.allocated_size, alignment) + size) > latest.total_size) {
@@ -187,7 +187,7 @@ RingBumpState<Allocator, BlockSize, mutex>::allocate(
 template <typename Allocator, size_t BlockSize, class mutex>
 void
 RingBumpState<Allocator, BlockSize, mutex>::free_blocks(uint64_t coherent_id) {
-  std::lock_guard<mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   while (!fifo.empty()) {
     auto &front = fifo.front();
     if (front.last_used_seq_id > coherent_id)
@@ -220,8 +220,9 @@ RingBumpState<Allocator, BlockSize, mutex>::allocate_or_reuse_block(
         front.last_used_seq_id = seq_id;
         front.allocated_size = 0;
         front.inc_time_to_live = 0;
-        fifo.push(std::move(front));
+        auto reused = std::move(front);
         fifo.pop();
+        fifo.push(std::move(reused));
         return fifo.back();
       }
       WARN("forced to allocate new block of size ", block_size);

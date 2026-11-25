@@ -26,22 +26,22 @@ namespace mullion {
 
 WMTSampleBufferAttachmentInfo
 CommandQueueProfiler::ProfilePass(
-    uint64_t seq_id, EncoderData *pass, const EmulatedCommandContext &commands, diag::ProfileBuffer *&profiled
+    uint64_t seq_id, EncoderData &pass, const EmulatedCommandContext &commands, diag::ProfileBuffer *&profiled
 ) {
   auto &buffer = profile_->buffers[seq_id % kCommandChunkCount];
-  buffer.presents += pass->type == EncoderType::Present;
-  buffer.timestamps += pass->type == EncoderType::SampleTimestamp;
-  const char *kind = pass->type == EncoderType::Render            ? "Render"
-                     : pass->type == EncoderType::Compute         ? "Compute"
-                     : pass->type == EncoderType::Blit            ? "Blit"
-                     : pass->type == EncoderType::Clear           ? "Clear"
-                     : pass->type == EncoderType::Resolve         ? "Resolve"
-                     : pass->type == EncoderType::SpatialUpscale  ? "SpatialUpscale"
-                     : pass->type == EncoderType::TemporalUpscale ? "TemporalUpscale"
-                                                                  : nullptr;
+  buffer.presents += pass.type == EncoderType::Present;
+  buffer.timestamps += pass.type == EncoderType::SampleTimestamp;
+  const char *kind = pass.type == EncoderType::Render            ? "Render"
+                     : pass.type == EncoderType::Compute         ? "Compute"
+                     : pass.type == EncoderType::Blit            ? "Blit"
+                     : pass.type == EncoderType::Clear           ? "Clear"
+                     : pass.type == EncoderType::Resolve         ? "Resolve"
+                     : pass.type == EncoderType::SpatialUpscale  ? "SpatialUpscale"
+                     : pass.type == EncoderType::TemporalUpscale ? "TemporalUpscale"
+                                                                 : nullptr;
   if (!kind)
     return {};
-  auto seq = pass->id;
+  auto seq = pass.id;
   std::string runs, targets;
   auto target = [&](const char *binding, unsigned slot, WMT::Texture texture, unsigned level, unsigned slice) {
     if (texture)
@@ -55,49 +55,49 @@ CommandQueueProfiler::ProfilePass(
       runs += '|';
     runs += str::format("Render:", pipeline, "*1*1*0");
   };
-  if (pass->type == EncoderType::Render) {
-    auto data = static_cast<RenderEncoderData *>(pass);
-    for (unsigned i = 0; i < data->colors.size(); i++) {
-      auto &color = data->colors[i];
+  if (pass.type == EncoderType::Render) {
+    auto &data = static_cast<RenderEncoderData &>(pass);
+    for (unsigned i = 0; i < data.colors.size(); i++) {
+      auto &color = data.colors[i];
       target("color", i, color.attachment.texture(), color.level, color.slice);
       target("resolve", i, color.resolve_attachment.texture(), color.resolve_level, color.resolve_slice);
     }
-    target("depth", 0, data->depth.attachment.texture(), data->depth.level, data->depth.slice);
-    target("stencil", 0, data->stencil.attachment.texture(), data->stencil.level, data->stencil.slice);
-    if (!data->draw_auto_marshal_tasks.empty())
+    target("depth", 0, data.depth.attachment.texture(), data.depth.level, data.depth.slice);
+    target("stencil", 0, data.stencil.attachment.texture(), data.stencil.level, data.stencil.slice);
+    if (!data.draw_auto_marshal_tasks.empty())
       run(commands.draw_auto_arguments_marshal);
-    if (!data->gs_arg_marshal_tasks.empty())
+    if (!data.gs_arg_marshal_tasks.empty())
       run(commands.gs_draw_arguments_marshal);
-    if (!data->ts_arg_marshal_tasks.empty())
+    if (!data.ts_arg_marshal_tasks.empty())
       run(commands.ts_draw_arguments_marshal);
-    auto drawn = diag::PipelineRuns(data->cmd_head, [](uint64_t pipeline) { return str::format("Render:", pipeline); });
+    auto drawn = diag::PipelineRuns(data.cmd_head, [](uint64_t pipeline) { return str::format("Render:", pipeline); });
     if (!runs.empty() && !drawn.empty())
       runs += '|';
     runs += drawn;
-  } else if (pass->type == EncoderType::Compute) {
-    runs = diag::PipelineRuns(static_cast<ComputeEncoderData *>(pass)->cmd_head, [](uint64_t pipeline) {
+  } else if (pass.type == EncoderType::Compute) {
+    runs = diag::PipelineRuns(static_cast<ComputeEncoderData &>(pass).cmd_head, [](uint64_t pipeline) {
       return str::format("Compute:", pipeline);
     });
-  } else if (pass->type == EncoderType::Clear) {
-    auto data = static_cast<ClearEncoderData *>(pass);
-    target(data->clear_dsv ? "depth-stencil" : "color", 0, data->attachment.texture(), 0, 0);
-  } else if (pass->type == EncoderType::Resolve) {
-    auto data = static_cast<ResolveEncoderData *>(pass);
-    target("color", 0, data->src.texture(), 0, 0);
-    target("resolve", 0, data->dst.texture(), 0, 0);
-  } else if (pass->type == EncoderType::SpatialUpscale) {
-    auto data = static_cast<SpatialUpscaleData *>(pass);
-    target("input", 0, data->backbuffer, 0, 0);
-    target("output", 0, data->upscaled, 0, 0);
-  } else if (pass->type == EncoderType::TemporalUpscale) {
-    auto data = static_cast<TemporalUpscaleData *>(pass);
-    target("input", 0, data->input, 0, 0);
-    target("output", 0, data->output, 0, 0);
-    target("depth", 0, data->depth, 0, 0);
-    target("motion", 0, data->motion_vector, 0, 0);
-    target("exposure", 0, data->exposure, 0, 0);
+  } else if (pass.type == EncoderType::Clear) {
+    auto &data = static_cast<ClearEncoderData &>(pass);
+    target(data.clear_dsv ? "depth-stencil" : "color", 0, data.attachment.texture(), 0, 0);
+  } else if (pass.type == EncoderType::Resolve) {
+    auto &data = static_cast<ResolveEncoderData &>(pass);
+    target("color", 0, data.src.texture(), 0, 0);
+    target("resolve", 0, data.dst.texture(), 0, 0);
+  } else if (pass.type == EncoderType::SpatialUpscale) {
+    auto &data = static_cast<SpatialUpscaleData &>(pass);
+    target("input", 0, data.backbuffer, 0, 0);
+    target("output", 0, data.upscaled, 0, 0);
+  } else if (pass.type == EncoderType::TemporalUpscale) {
+    auto &data = static_cast<TemporalUpscaleData &>(pass);
+    target("input", 0, data.input, 0, 0);
+    target("output", 0, data.output, 0, 0);
+    target("depth", 0, data.depth, 0, 0);
+    target("motion", 0, data.motion_vector, 0, 0);
+    target("exposure", 0, data.exposure, 0, 0);
   }
-  const uint32_t count = pass->type == EncoderType::Render ? WMTRenderTimestampSamples : WMTTimestampSamplesPerStage;
+  const uint32_t count = pass.type == EncoderType::Render ? WMTRenderTimestampSamples : WMTTimestampSamplesPerStage;
   if (buffer.samples.empty() || count > timestamp_samples_.limit - buffer.samples.back().used)
     buffer.samples.push_back({.buffer = timestamp_samples_.Take(device_, false)});
   auto &samples = buffer.samples.back();
@@ -121,7 +121,7 @@ CommandQueueProfiler::ProfilePass(
        .buffer = uint32_t(buffer.samples.size() - 1),
        .first = first,
        .count = count,
-       .event = pass->event_path ? pass->event_path : ""}
+       .event = pass.event_path ? pass.event_path : ""}
   );
   profiled = &buffer;
   return attachment;

@@ -32,8 +32,18 @@ namespace mullion {
 
 void *
 CommandChunk::allocate_cpu_heap(size_t size, size_t alignment) {
-  return queue->AllocateCommandData(size, alignment);
+  return queue.AllocateCommandData(size, alignment);
 }
+
+namespace {
+
+template <size_t... I>
+std::array<CommandChunk, sizeof...(I)>
+MakeCommandChunks(CommandQueue &queue, std::index_sequence<I...>) {
+  return {((void)I, CommandChunk(queue))...};
+}
+
+} // namespace
 
 CommandQueue::CommandQueue(WMT::Device device) :
     device(device),
@@ -45,11 +55,8 @@ CommandQueue::CommandQueue(WMT::Device device) :
     initializer(device),
     allocators_(device),
     profiler_(device, timestamp_samples),
+    chunks(MakeCommandChunks(*this, std::make_index_sequence<kCommandChunkCount>{})),
     argument_encoding_ctx(*this, device, cmd_library) {
-  for (auto &chunk : chunks) {
-    chunk.queue = this;
-    chunk.reset();
-  }
   event_listener_thread = mullion::thread([this]() { SharedEventListener_start(shared_event_listener); });
   encodeThread = mullion::thread([this]() { EncodingThread(); });
   finishThread = mullion::thread([this]() { WaitForFinishThread(); });

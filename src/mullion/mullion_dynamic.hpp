@@ -1,7 +1,7 @@
 #pragma once
 #include "mullion_buffer.hpp"
 #include "mullion_texture.hpp"
-#include <queue>
+#include "util_ring_queue.hpp"
 
 namespace mullion {
 
@@ -46,7 +46,7 @@ public:
 private:
   Flags<BufferAllocationFlag> flags_;
   std::atomic<uint32_t> refcount_ = {0u};
-  std::queue<QueueEntry> fifo;
+  RingQueue<QueueEntry> fifo;
   mullion::mutex mutex_;
   Rc<BufferAllocation> name_;
   uint32_t name_suballocation_ = 0;
@@ -86,7 +86,7 @@ public:
 private:
   Flags<TextureAllocationFlag> flags_;
   std::atomic<uint32_t> refcount_ = {0u};
-  std::queue<QueueEntry> fifo;
+  RingQueue<QueueEntry> fifo;
   mullion::mutex mutex_;
   Rc<TextureAllocation> name_;
   bool owned_by_command_list_ = false;

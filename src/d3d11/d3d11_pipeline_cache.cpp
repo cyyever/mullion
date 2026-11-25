@@ -243,7 +243,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
       std::shared_lock<std::shared_mutex> lock(mutex_shares);
       auto result = shaders_.find(sha1);
       if (result != shaders_.end()) {
-        return shaders_.at(sha1).get();
+        return result->second.get();
       }
     }
     // the reflection of a shader seen in an earlier process leaves its bytecode unparsed, until a variant of it has to
@@ -269,7 +269,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
       std::unique_lock<std::shared_mutex> lock(mutex_shares);
       auto result = shaders_.find(sha1);
       if (result != shaders_.end()) {
-        return shaders_.at(sha1).get();
+        return result->second.get();
       }
       if (trace::Heavy(trace::Shader)) {
         shader->dump_bytecode_.assign((const char *)pBytecode, BytecodeLength);

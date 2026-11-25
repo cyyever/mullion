@@ -4,7 +4,7 @@
 
 #include "Metal.hpp"
 #include "dxgi.h"
-#include <map>
+#include <flat_map>
 
 namespace mullion {
 
@@ -28,7 +28,7 @@ enum class FormatCapability : int {
 
 class FormatCapabilityInspector {
 public:
-  std::map<WMTPixelFormat, FormatCapability> textureCapabilities{};
+  std::flat_map<WMTPixelFormat, FormatCapability> textureCapabilities{};
   void Inspect(WMT::Device device);
 };
 

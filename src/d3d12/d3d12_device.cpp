@@ -272,7 +272,7 @@ class MTLD3D12DeviceImpl : public MTLD3D12Object<ComObject<MTLD3D12Device, ID3DD
   uint64_t late_pipelines_ = 0;
   double pipeline_ms_ = 0, longest_pipeline_ms_ = 0;
   mullion::mutex acceleration_structure_lock_;
-  std::map<uint64_t, std::shared_ptr<AccelerationStructure>> acceleration_structures_;
+  std::flat_map<uint64_t, std::shared_ptr<AccelerationStructure>> acceleration_structures_;
   // compacted sizes are uint64s of shared buffers the GPU writes
   std::vector<WMT::Reference<WMT::Buffer>> compacted_size_buffers_;
   std::vector<CompactedSize> free_compacted_sizes_;
@@ -336,7 +336,7 @@ class MTLD3D12DeviceImpl : public MTLD3D12Object<ComObject<MTLD3D12Device, ID3DD
   // across the residency set's commit (a kernel call)
   mullion::shared_mutex va_lock_;
   std::map<uint64_t, BufferAllocation *> interval_map_;
-  std::map<uint64_t, std::vector<uint64_t>> sparse_buffer_mappings_;
+  std::flat_map<uint64_t, std::vector<uint64_t>> sparse_buffer_mappings_;
   // whether a tile of a reserved buffer has ever been mapped, by UpdateTileMappings on any queue: never false again
   std::atomic<bool> sparse_tiles_mapped_ = false;
   // what a null acceleration structure is to a ray query: a top-level structure of nothing
@@ -372,7 +372,7 @@ class MTLD3D12DeviceImpl : public MTLD3D12Object<ComObject<MTLD3D12Device, ID3DD
   bool archive_closing_ = false;
   mullion::thread archive_writer_;
   mullion::mutex depth_stencil_lock_;
-  std::map<std::array<uint32_t, 16>, WMT::Reference<WMT::DepthStencilState>> depth_stencil_states_;
+  std::flat_map<std::array<uint32_t, 16>, WMT::Reference<WMT::DepthStencilState>> depth_stencil_states_;
   std::once_flag listening_;
   std::unique_ptr<EventListener> event_listener_;
 
@@ -2874,7 +2874,7 @@ public:
     if (sparse_buffer_mappings_.empty())
       return {};
     std::vector<uint64_t> words{sparse_buffer_mappings_.size()};
-    for (auto &[address, tiles] : sparse_buffer_mappings_) {
+    for (auto [address, tiles] : sparse_buffer_mappings_) {
       SM50_SPARSE_BUFFER_MAPPING header{.address=address, .tile_count=tiles.size(), .tile_bytes=interval_map_.at(address)->sparse_tile_bytes};
       auto first = words.size();
       words.resize(first + sizeof(header) / sizeof(words[0]));
@@ -2988,9 +2988,10 @@ public:
   FormatCapability
   GetMTLPixelFormatCapability(WMTPixelFormat Format) final {
     auto original = WMTPixelFormat(ORIGINAL_FORMAT(Format));
-    if (!format_inspector_.textureCapabilities.contains(original))
+    auto it = format_inspector_.textureCapabilities.find(original);
+    if (it == format_inspector_.textureCapabilities.end())
       return FormatCapability(0);
-    auto capability = format_inspector_.textureCapabilities.at(original);
+    auto capability = it->second;
     // blending takes the stored channels as they are: rotated ones would blend red with alpha's factors
     if (RenderTargetChannels(Format) != RenderTargetChannels(original))
       capability = capability & ~FormatCapability::Blend;
