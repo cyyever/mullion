@@ -1750,7 +1750,7 @@ public:
     hr = ValidateResourceDescs(pDesc, pHeapProps);
     if (FAILED(hr))
       return hr;
-    hr = ValidateResourceStates(InitialState, pHeapProps);
+    hr = ValidateResourceStates(InitialState, pHeapProps, pDesc);
     if (FAILED(hr))
       return hr;
     // the allocation stays within the working set where going past it panics the kernel (mullion_memory.hpp)
@@ -1808,7 +1808,7 @@ public:
     hr = ValidateResourceDescs(pDesc, &heap_desc.Properties);
     if (FAILED(hr))
       return hr;
-    hr = ValidateResourceStates(InitialState, &heap_desc.Properties);
+    hr = ValidateResourceStates(InitialState, &heap_desc.Properties, pDesc);
     if (FAILED(hr))
       return hr;
     D3D12_RESOURCE_ALLOCATION_INFO info;
@@ -1856,7 +1856,7 @@ public:
     D3D12_HEAP_PROPERTIES heap{.Type=D3D12_HEAP_TYPE_DEFAULT};
     if (HRESULT hr = ValidateResourceDescs(pDesc, &heap); FAILED(hr))
       return hr;
-    if (HRESULT hr = ValidateResourceStates(InitialState, &heap); FAILED(hr))
+    if (HRESULT hr = ValidateResourceStates(InitialState, &heap, pDesc); FAILED(hr))
       return hr;
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER && OptimizedClearValue)
       return FAIL(E_INVALIDARG);
