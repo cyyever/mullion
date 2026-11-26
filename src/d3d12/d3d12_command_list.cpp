@@ -1734,7 +1734,12 @@ public:
   // an indexed draw's view: without an index buffer every index reads 0, as from an empty 16-bit one
   D3D12_INDEX_BUFFER_VIEW
   IndexedView(const D3D12_INDEX_BUFFER_VIEW &View) {
-    return View.BufferLocation ? View : D3D12_INDEX_BUFFER_VIEW{.BufferLocation=0, .SizeInBytes=0, .Format=DXGI_FORMAT_R16_UINT};
+    if (!View.BufferLocation)
+      return D3D12_INDEX_BUFFER_VIEW{.BufferLocation=0, .SizeInBytes=0, .Format=DXGI_FORMAT_R16_UINT};
+    D3D12_INDEX_BUFFER_VIEW view = View;
+    if (view.Format != DXGI_FORMAT_R32_UINT)
+      view.Format = DXGI_FORMAT_R16_UINT;
+    return view;
   }
 
   // a tessellated draw runs each group of patches in one object threadgroup of 32 threads (airconv's layout), which
