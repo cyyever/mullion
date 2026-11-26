@@ -224,7 +224,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
   // before. it updates fence_, which then stands for them all
   template <typename Wait>
   void
-  WaitAll(Wait &&wait) {
+  WaitAll(const Wait &wait) {
     wait(WMT::Fence(fence_));
     for (unsigned i = 0; i < group_count_; i++)
       wait(WMT::Fence(group_fences_[group_half_ * kGroupPasses + i]));
@@ -281,7 +281,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
       event = signal;
       seq = number;
       if (installed)
-        wait(event, seq);
+        std::forward<Wait>(wait)(event, seq);
       auto then = Release();
       lock.unlock();
       for (auto &follow : then)
@@ -317,7 +317,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
       std::scoped_lock lock(mutex);
       installed = true;
       if (!closed && event)
-        wait(event, seq);
+        std::forward<Wait>(wait)(event, seq);
     }
 
   private:
@@ -751,16 +751,16 @@ private:
 
   struct InflightCommandBuffer {
     WMT::Reference<MetalCommandBuffer> cmdbuf{};
-    WMT::Reference<WMT::Buffer> sparse_mappings{};
+    WMT::Reference<WMT::Buffer> sparse_mappings;
     std::shared_ptr<Gate> gate{};
-    std::shared_ptr<GPURecordChecks> records{};
+    std::shared_ptr<GPURecordChecks> records;
     HANDLE semaphore{};
-    std::function<void()> completed{};
-    std::vector<std::tuple<WMT::Reference<WMT::Buffer>, std::span<const uint32_t>, bool>> omitted{};
+    std::function<void()> completed;
+    std::vector<std::tuple<WMT::Reference<WMT::Buffer>, std::span<const uint32_t>, bool>> omitted;
     // the timestamp queries the command buffer samples: the device's counter sample buffer it holds until it
     // completes, and where each sample taken is with the queries it is for
-    WMT::Reference<WMT::CounterSampleBuffer> samples{};
-    std::vector<std::pair<uint64_t, std::vector<std::pair<Com<MTLD3D12QueryHeap>, uint32_t>>>> sampled{};
+    WMT::Reference<WMT::CounterSampleBuffer> samples;
+    std::vector<std::pair<uint64_t, std::vector<std::pair<Com<MTLD3D12QueryHeap>, uint32_t>>>> sampled;
     // the resolves of timestamps into readback buffers, which the CPU does when the command buffer completes
     struct Resolve {
       Com<MTLD3D12QueryHeap> heap;
@@ -772,9 +772,9 @@ private:
     };
     std::vector<Resolve> resolves{};
     // the allocators of the lists the command buffer is the last of
-    std::vector<Com<MTLD3D12CommandAllocator>> allocators{};
+    std::vector<Com<MTLD3D12CommandAllocator>> allocators;
     // MULLION_D3D12_GPU_ERRORS: the passes with indirect commands and where their resolvers keep their largest numbers
-    std::vector<std::pair<std::string, const RenderEncoderData::Most *>> most{};
+    std::vector<std::pair<std::string, const RenderEncoderData::Most *>> most;
     // how many encoders of each kind it has, and whether it presents: what a report of one that does not complete says
     std::array<uint16_t, kEncoderTypes> encoders{};
     bool presents = false;
@@ -2445,7 +2445,7 @@ public:
   template <typename Read>
   bool
   Deserialized(
-      D3D12_GPU_VIRTUAL_ADDRESS Source, D3D12_GPU_VIRTUAL_ADDRESS Destination, Read &&read,
+      D3D12_GPU_VIRTUAL_ADDRESS Source, D3D12_GPU_VIRTUAL_ADDRESS Destination, const Read &read,
       D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc, std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> &geometries,
       std::vector<D3D12_RAYTRACING_INSTANCE_DESC> &instances
   ) {

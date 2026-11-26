@@ -593,7 +593,7 @@ ArgumentEncodingContext::retainAllocation(Allocation* allocation) {
 
 void
 ArgumentEncodingContext::clearColor(
-    Rc<Texture> &&texture, uint64_t viewId, unsigned arrayLength, unsigned depthPlane, WMTClearColor color
+    const Rc<Texture> &texture, uint64_t viewId, unsigned arrayLength, unsigned depthPlane, WMTClearColor color
 ) {
   assert(!encoder_current);
   auto encoder_info = allocate<ClearEncoderData>();
@@ -655,7 +655,7 @@ ArgumentEncodingContext::copyBufferRenderTarget(const Rc<Texture> &texture, bool
 
 void
 ArgumentEncodingContext::clearDepthStencil(
-    Rc<Texture> &&texture, uint64_t viewId, unsigned arrayLength, unsigned flag, float depth, uint8_t stencil
+    const Rc<Texture> &texture, uint64_t viewId, unsigned arrayLength, unsigned flag, float depth, uint8_t stencil
 ) {
   assert(!encoder_current);
   if (texture->pixelFormat(viewId) == WMTPixelFormatDepth16Unorm) {
@@ -685,7 +685,7 @@ ArgumentEncodingContext::clearDepthStencil(
 
 void
 ArgumentEncodingContext::resolveTexture(
-    Rc<Texture> &&src, TextureViewKey src_view, Rc<Texture> &&dst, TextureViewKey dst_view
+    const Rc<Texture> &src, TextureViewKey src_view, const Rc<Texture> &dst, TextureViewKey dst_view
 ) {
   assert(!encoder_current);
   auto encoder_info = allocate<ResolveEncoderData>();
@@ -939,7 +939,7 @@ ArgumentEncodingContext::beginVisibilityResultQuery(Rc<VisibilityResultQuery> &&
   pending_queries_.push_back(std::move(query));
 }
 void
-ArgumentEncodingContext::endVisibilityResultQuery(Rc<VisibilityResultQuery> &&query) {
+ArgumentEncodingContext::endVisibilityResultQuery(const Rc<VisibilityResultQuery> &query) {
   query->end(seq_id_, vro_state_.getNextReadOffset());
   if (query->pipeline_statistics)
     std::erase_if(pipeline_queries_, [&](auto &active) { return active.ptr() == query.ptr(); });

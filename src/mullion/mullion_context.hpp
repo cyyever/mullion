@@ -810,12 +810,12 @@ public:
   };
 
   void clearColor(
-      Rc<Texture> &&texture, uint64_t viewId, unsigned arrayLength, unsigned depthPlane, WMTClearColor color
+      const Rc<Texture> &texture, uint64_t viewId, unsigned arrayLength, unsigned depthPlane, WMTClearColor color
   );
   void clearDepthStencil(
-      Rc<Texture> &&texture, uint64_t viewId, unsigned arrayLength, unsigned flag, float depth, uint8_t stencil
+      const Rc<Texture> &texture, uint64_t viewId, unsigned arrayLength, unsigned flag, float depth, uint8_t stencil
   );
-  void resolveTexture(Rc<Texture> &&src, TextureViewKey src_view, Rc<Texture> &&dst, TextureViewKey dst_view);
+  void resolveTexture(const Rc<Texture> &src, TextureViewKey src_view, const Rc<Texture> &dst, TextureViewKey dst_view);
 
   RenderEncoderData *startRenderPass(
       uint8_t dsv_planar_flags, uint8_t dsv_readonly_flags, uint8_t render_target_count, uint64_t argument_buffer_size
@@ -911,7 +911,7 @@ public:
 
   void bumpVisibilityResultOffset();
   void beginVisibilityResultQuery(Rc<VisibilityResultQuery> &&query);
-  void endVisibilityResultQuery(Rc<VisibilityResultQuery> &&query);
+  void endVisibilityResultQuery(const Rc<VisibilityResultQuery> &query);
   // the next draw counts in a segment of its own, not in the one the draws before it counted in
   void splitVisibilityResult();
   bool pipelineStatisticsActive() const { return !pipeline_queries_.empty(); }
