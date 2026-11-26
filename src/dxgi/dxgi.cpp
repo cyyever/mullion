@@ -40,14 +40,15 @@ static void TrustNGXCertificate() {
   FreeLibrary(crypt32);
 }
 
-// NVEXT is on with MULLION_ENABLE_NVEXT=1, or where the configuration shows the program an NVIDIA GPU
-// (dxgi.customVendorId = 10de), unless MULLION_ENABLE_NVEXT=0: a launcher that rewrites the environment it starts a
-// game with leaves the configuration's per-program section alone
+// NVEXT is on by default (MULLION_ENABLE_NVEXT=1), unless MULLION_ENABLE_NVEXT=0 or dxgi.customVendorId explicitly
+// selects a non-NVIDIA vendor.
 static bool NvidiaExtensionRequested() {
   auto env = env::getEnvVar("MULLION_ENABLE_NVEXT");
   if (env == "1" || env == "0")
     return env == "1";
   auto vendor = Config::getInstance().getOption<std::string>("dxgi.customVendorId");
+  if (vendor.empty())
+    return true;
   std::ranges::transform(vendor, vendor.begin(), [](unsigned char c) { return std::tolower(c); });
   return vendor == "10de" || vendor == "0x10de";
 }

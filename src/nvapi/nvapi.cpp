@@ -257,7 +257,7 @@ NvAPI_DISP_GetDisplayIdByDisplayName(const char *displayName, NvU32 *displayId) 
   ::EnumDisplayMonitors(
       nullptr, nullptr,
       [](HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lp) -> BOOL {
-        auto data = reinterpret_cast<MonitorEnumInfo *>(lp);
+        auto data = reinterpret_cast<MonitorEnumInfo *>(lp); // NOLINT(performance-no-int-to-ptr)
 
         ::MONITORINFOEXW monitor_info;
         monitor_info.cbSize = sizeof(monitor_info);
@@ -315,7 +315,7 @@ NvAPI_EnumPhysicalGPUs(NvPhysicalGpuHandle nvGPUHandle[NVAPI_MAX_PHYSICAL_GPUS],
 
   *pGpuCount = adapter_count;
   for (unsigned i = 0; i < adapter_count; i++) {
-    nvGPUHandle[i] = (NvPhysicalGpuHandle)devices.object(i).registryID();
+    nvGPUHandle[i] = (NvPhysicalGpuHandle)devices.object(i).registryID(); // NOLINT(performance-no-int-to-ptr)
   }
 
   return NVAPI_OK;
@@ -349,7 +349,7 @@ NvAPI_EnumLogicalGPUs(NvLogicalGpuHandle nvGPUHandle[NVAPI_MAX_LOGICAL_GPUS], Nv
 
   *pGpuCount = adapter_count;
   for (unsigned i = 0; i < adapter_count; i++) {
-    nvGPUHandle[i] = (NvLogicalGpuHandle)devices.object(i).registryID();
+    nvGPUHandle[i] = (NvLogicalGpuHandle)devices.object(i).registryID(); // NOLINT(performance-no-int-to-ptr)
   }
 
   return NVAPI_OK;
@@ -360,7 +360,7 @@ NvAPI_GetPhysicalGPUsFromDisplay(NvDisplayHandle hNvDisp, NvPhysicalGpuHandle nv
   if (!hNvDisp || !nvGPUHandle || !pGpuCount)
     return NVAPI_INVALID_ARGUMENT;
 
-  HMONITOR monitor = (HMONITOR)hNvDisp;
+  auto monitor = (HMONITOR)hNvDisp;
   if (!monitor)
     return NVAPI_NVIDIA_DEVICE_NOT_FOUND;
 
@@ -372,7 +372,7 @@ NvAPI_GetPhysicalGPUsFromDisplay(NvDisplayHandle hNvDisp, NvPhysicalGpuHandle nv
   unsigned count_devices = 0;
   for (unsigned i = 0; i < adapter_count; i++) {
     // TODO: Currently assuming all GPU instances are connected to specific monitor
-    nvGPUHandle[count_devices++] = (NvPhysicalGpuHandle)devices.object(i).registryID();
+    nvGPUHandle[count_devices++] = (NvPhysicalGpuHandle)devices.object(i).registryID(); // NOLINT(performance-no-int-to-ptr)
   }
   *pGpuCount = count_devices;
 
@@ -860,7 +860,7 @@ NvAPI_GPU_GetLogicalGpuInfo(NvLogicalGpuHandle hLogicalGpu, NV_LOGICAL_GPU_DATA 
   case NV_LOGICAL_GPU_DATA_VER1:
     pLogicalGpuData->physicalGpuCount = 1;
     memset(pLogicalGpuData->physicalGpuHandles, 0, sizeof(pLogicalGpuData->physicalGpuHandles));
-    pLogicalGpuData->physicalGpuHandles[0] = (NvPhysicalGpuHandle)registry_id;
+    pLogicalGpuData->physicalGpuHandles[0] = (NvPhysicalGpuHandle)registry_id; // NOLINT(performance-no-int-to-ptr)
     *reinterpret_cast<LUID *>(pLogicalGpuData->pOSAdapterId) = GetAdapterLuid(target_device);
     break;
   default:
@@ -1155,17 +1155,17 @@ static void *QueryInterfaceImpl(NvU32 id) {
 
 }; // namespace mullion
 
-// NVAPI answers only programs Mullion shows an NVIDIA GPU to: those DXGI turns NVEXT on for (NvidiaExtensionRequested
-// in dxgi.cpp: MULLION_ENABLE_NVEXT=1, or dxgi.customVendorId = 10de unless MULLION_ENABLE_NVEXT=0). any other,
-// Steam's GPU queries among them, finds no NVAPI, as it would on another vendor's GPU
+// NVAPI answers programs Mullion shows an NVIDIA GPU to (NvidiaExtensionRequested in dxgi.cpp: enabled by default
+// unless MULLION_ENABLE_NVEXT=0 or dxgi.customVendorId explicitly selects a non-NVIDIA vendor).
 extern "C" BOOL WINAPI
 DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
   if (reason != DLL_PROCESS_ATTACH)
     return TRUE;
   auto env = mullion::env::getEnvVar("MULLION_ENABLE_NVEXT");
   auto vendor = mullion::Config::getInstance().getOption<std::string>("dxgi.customVendorId");
-  std::transform(vendor.begin(), vendor.end(), vendor.begin(), [](unsigned char c) { return std::tolower(c); });
-  bool requested = env == "1" || env == "0" ? env == "1" : vendor == "10de" || vendor == "0x10de";
+  std::ranges::transform(vendor, vendor.begin(), [](unsigned char c) { return std::tolower(c); });
+  bool requested =
+      env == "1" || env == "0" ? env == "1" : vendor.empty() || vendor == "10de" || vendor == "0x10de";
   if (!requested)
     return FALSE;
   DisableThreadLibraryCalls(instance);
