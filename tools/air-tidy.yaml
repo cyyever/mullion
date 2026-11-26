@@ -1,6 +1,6 @@
 # performance-* checks copies, moves and container operations; Padding flags avoidable record padding.
 # Padding is a layout diagnostic; cache misses and false sharing still require runtime measurements.
-Checks: '-*,custom-air-write-error,performance-*,clang-analyzer-optin.performance.Padding,bugprone-use-after-move,readability-redundant-control-flow,modernize-*,-modernize-use-trailing-return-type,-modernize-avoid-c-arrays,-modernize-avoid-c-style-cast,modernize-use-scoped-lock'
+Checks: '-*,custom-air-write-error,performance-*,clang-analyzer-optin.performance.Padding,bugprone-use-after-move,bugprone-dangling-handle,bugprone-return-const-ref-from-parameter,cppcoreguidelines-missing-std-forward,cppcoreguidelines-rvalue-reference-param-not-moved,readability-redundant-control-flow,modernize-*,-modernize-use-trailing-return-type,-modernize-avoid-c-arrays,-modernize-avoid-c-style-cast,modernize-use-scoped-lock'
 CustomChecks:
   - Name: air-write-error
     Query: |
