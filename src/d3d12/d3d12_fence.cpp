@@ -49,7 +49,7 @@ public:
       std::erase_if(watched_, [](auto &watched) { return watched.expired(); });
       swept_ = std::max<size_t>(watched_.size(), 16);
     }
-    watched_.push_back(std::move(completion));
+    watched_.emplace_back(std::move(completion));
   }
 
 private:
@@ -121,7 +121,7 @@ Watcher::Look(PTP_WAIT wait) {
     // a fence that is gone leaves the list
     std::erase_if(watched_, [&](auto &watched) {
       if (auto completion = watched.lock()) {
-        live.push_back(std::move(completion));
+        live.emplace_back(std::move(completion));
         return false;
       }
       return true;

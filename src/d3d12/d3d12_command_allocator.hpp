@@ -612,7 +612,7 @@ public:
       info.memory.set(nullptr);
       info.length = length;
       info.options = WMTResourceStorageModePrivate | WMTResourceHazardTrackingModeUntracked;
-      depth_bounds_samples_.push_back(device_->GetMTLDevice().newBuffer(info));
+      depth_bounds_samples_.emplace_back(device_->GetMTLDevice().newBuffer(info));
       exhausted_ |= !depth_bounds_samples_.back();
     }
     return depth_bounds_samples_.back();
@@ -621,7 +621,7 @@ public:
   VisibilitySlot() {
     if (visibility_used_ == kVisibilityWindow) {
       if (!visibility_kept_.empty()) {
-        visibility_.push_back(std::move(visibility_kept_.back()));
+        visibility_.emplace_back(std::move(visibility_kept_.back()));
         visibility_kept_.pop_back();
         // as a new buffer is: a pass that does not run (predication) stores no counts, and its queries count nothing
         memset(visibility_.back().counts, 0, kVisibilityWindow);
@@ -630,7 +630,7 @@ public:
         info.memory.set(nullptr);
         info.length = kVisibilityWindow;
         info.options = WMTResourceHazardTrackingModeUntracked;
-        visibility_.push_back({device_->GetMTLDevice().newBuffer(info), info.gpu_address, info.memory.get()});
+        visibility_.emplace_back(device_->GetMTLDevice().newBuffer(info), info.gpu_address, info.memory.get());
       }
       exhausted_ |= !visibility_.back();
       visibility_address_ = visibility_.back().address;
@@ -655,7 +655,7 @@ public:
         exhausted_ = true;
         return {};
       }
-      temp_buffers_.push_back({std::move(buffer), info.length});
+      temp_buffers_.emplace_back(std::move(buffer), info.length);
       at = 0;
     }
     temp_offset_ = at + Size;

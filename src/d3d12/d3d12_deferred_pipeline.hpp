@@ -73,7 +73,7 @@ public:
     auto &pool = Pool::Get();
     {
       std::lock_guard lock(pool.mutex);
-      pool.queue.push_back(std::move(pipeline));
+      pool.queue.emplace_back(std::move(pipeline));
     }
     pool.queued.notify_one();
   }
