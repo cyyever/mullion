@@ -38,6 +38,7 @@
 #include "config/config.hpp"
 #include <algorithm>
 #include <bit>
+#include <bitset>
 #include <chrono>
 #include <map>
 #include <iomanip>
@@ -3084,7 +3085,7 @@ PipelineStateStream::Parse(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc) {
     desc_graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
   }
 
-  uint64_t defined_type = 0;
+  std::bitset<64> defined_type;
 
   while (stream_start < stream_end) {
     if (stream_start + sizeof(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE) > stream_end) {
@@ -3095,11 +3096,11 @@ PipelineStateStream::Parse(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc) {
 
     if ((uint32_t(type) >= D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID &&
          type != D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL2) ||
-        uint32_t(type) >= 64 || (defined_type & (uint64_t(1) << uint32_t(type)))) {
+        uint32_t(type) >= defined_type.size() || defined_type.test(uint32_t(type))) {
       ERR("CreatePipelineState: unknown or duplicated subobject type ", type);
       return E_INVALIDARG;
     }
-    defined_type |= (uint64_t(1) << uint32_t(type));
+    defined_type.set(uint32_t(type));
 
 #define GET_STREAM_DATA(data_type)                                                                                     \
   using subobject_t = struct {                                                                                         \
@@ -3279,11 +3280,10 @@ PipelineStateStream::Parse(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc) {
     }
   }
 
-  constexpr uint64_t depth_stencil_mask =
-      (uint64_t(1) << uint32_t(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL)) |
-      (uint64_t(1) << uint32_t(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1)) |
-      (uint64_t(1) << uint32_t(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL2));
-  if (std::popcount(defined_type & depth_stencil_mask) > 1) {
+  auto depth_stencil_count = defined_type.test(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL) +
+                             defined_type.test(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1) +
+                             defined_type.test(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL2);
+  if (depth_stencil_count > 1) {
     ERR("CreatePipelineState: conflicting depth-stencil subobject types");
     return E_INVALIDARG;
   }
