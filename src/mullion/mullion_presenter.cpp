@@ -172,8 +172,8 @@ template <typename CommandBuffer, typename Encoder>
 WMT::MetalDrawable
 Presenter::encodeCommands(
     CommandBuffer cmdbuf, WMT::Texture backbuffer, const PresentState &state,
-    std::type_identity_t<std::function<void(Encoder)>> &&wait_fences,
-    std::type_identity_t<std::function<void(Encoder)>> &&update_fences, uint64_t seq_id, unsigned *encoder_count
+    const std::type_identity_t<std::function<void(Encoder)>> &wait_fences,
+    const std::type_identity_t<std::function<void(Encoder)>> &update_fences, uint64_t seq_id, unsigned *encoder_count
 ) {
   const auto &metadata = state.metadata;
   double width = state.layer_props.drawable_width;
@@ -264,13 +264,13 @@ Presenter::encodeCommands(
 }
 
 template WMT::MetalDrawable Presenter::encodeCommands(
-    WMT::CommandBuffer, WMT::Texture, const PresentState &, std::function<void(WMT::RenderCommandEncoder)> &&,
-    std::function<void(WMT::RenderCommandEncoder)> &&, uint64_t, unsigned *
+    WMT::CommandBuffer, WMT::Texture, const PresentState &, const std::function<void(WMT::RenderCommandEncoder)> &,
+    const std::function<void(WMT::RenderCommandEncoder)> &, uint64_t, unsigned *
 );
 template WMT::MetalDrawable Presenter::encodeCommands(
     WMT::Metal4CommandBuffer, WMT::Texture, const PresentState &,
-    std::function<void(WMT::Metal4RenderCommandEncoder)> &&, std::function<void(WMT::Metal4RenderCommandEncoder)> &&,
-    uint64_t, unsigned *
+    const std::function<void(WMT::Metal4RenderCommandEncoder)> &,
+    const std::function<void(WMT::Metal4RenderCommandEncoder)> &, uint64_t, unsigned *
 );
 
 void

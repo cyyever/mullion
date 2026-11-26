@@ -103,8 +103,8 @@ public:
           decltype(std::declval<CommandBuffer>().renderCommandEncoder(std::declval<WMTRenderPassInfo &>()))>
   WMT::MetalDrawable encodeCommands(
       CommandBuffer cmdbuf, WMT::Texture backbuffer, const PresentState &state,
-      std::type_identity_t<std::function<void(Encoder)>> &&wait_fences,
-      std::type_identity_t<std::function<void(Encoder)>> &&update_fences, uint64_t seq_id = 0,
+      const std::type_identity_t<std::function<void(Encoder)>> &wait_fences,
+      const std::type_identity_t<std::function<void(Encoder)>> &update_fences, uint64_t seq_id = 0,
       unsigned *encoder_count = nullptr
   );
 
