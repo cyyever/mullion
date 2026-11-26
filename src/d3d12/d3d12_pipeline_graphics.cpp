@@ -173,12 +173,12 @@ PixelShaderVaryings(const D3D12_SHADER_BYTECODE &PS) {
     return 0;
   const D3D11_SIGNATURE_PARAMETER *parameters;
   uint32_t scalars = 0, count = parser.GetParameters(&parameters);
-  for (uint32_t i = 0; i < count; i++)
-    switch (parameters[i].SystemValue) {
+  for (const auto &param : std::span(parameters, count))
+    switch (param.SystemValue) {
     case D3D10_SB_NAME_UNDEFINED:
     case D3D10_SB_NAME_CLIP_DISTANCE:
     case D3D10_SB_NAME_CULL_DISTANCE:
-      scalars += std::popcount(uint32_t(parameters[i].Mask));
+      scalars += std::popcount(uint32_t(param.Mask));
       break;
     default:
       break;
@@ -196,19 +196,20 @@ VertexShaderVaryings(const D3D12_SHADER_BYTECODE &VS) {
   if (!VS.pShaderBytecode || FAILED(DXBCGetOutputSignature(VS.pShaderBytecode, &parser)))
     return 128;
   const D3D11_SIGNATURE_PARAMETER *parameters;
-  uint32_t registers = 0, count = parser.GetParameters(&parameters);
-  for (uint32_t i = 0; i < count; i++)
-    switch (parameters[i].SystemValue) {
+  std::bitset<32> registers;
+  uint32_t count = parser.GetParameters(&parameters);
+  for (const auto &param : std::span(parameters, count))
+    switch (param.SystemValue) {
     case D3D10_SB_NAME_UNDEFINED:
     case D3D10_SB_NAME_CLIP_DISTANCE:
     case D3D10_SB_NAME_CULL_DISTANCE:
-      if (parameters[i].Register < 32)
-        registers |= 1u << parameters[i].Register;
+      if (param.Register < registers.size())
+        registers.set(param.Register);
       break;
     default:
       break;
     }
-  return 4 * std::popcount(registers);
+  return 4 * uint32_t(registers.count());
 }
 
 HRESULT
