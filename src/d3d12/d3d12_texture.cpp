@@ -324,15 +324,6 @@ public:
           desc_.Layout != D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE ||
           (DepthStencilPlanarFlags(texture_info.pixel_format) & DepthStencilPlanarFlags(WMTPixelFormatStencil8)))
         return FAIL(E_INVALIDARG);
-      if (desc_.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && desc_.DepthOrArraySize > 1) {
-        auto size = device_->GetMTLDevice().sparseTileSize(
-            texture_info.type, texture_info.pixel_format, texture_info.sample_count, device_->GetSparsePageSize()
-        );
-        auto extent = GetResourceExtent(desc_, texture_info.mipmap_level_count - 1);
-        // tier 2 arrays cannot contain packed mips (D3D11.3 5.9.7.2)
-        if (extent.right < size.width || extent.bottom < size.height)
-          return FAIL(E_INVALIDARG);
-      }
     }
 
     if (!desc_.Alignment) {
