@@ -1018,7 +1018,7 @@ public:
 
     auto *entries = (VERTEX_BUFFER_ENTRY *)mapped;
     for (unsigned slot = 0, index = 0; slot < max_slot; slot++) {
-      if (!(slot_mask & (1 << slot)))
+      if (!(slot_mask & (1u << slot)))
         continue;
       auto &state = vertex_buffers_[slot];
       entries[index].buffer_handle = state.BufferLocation;

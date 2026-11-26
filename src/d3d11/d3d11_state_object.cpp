@@ -356,7 +356,7 @@ public:
     bool logic = !desc_.IndependentBlendEnable && desc_.RenderTarget[0].LogicOpEnable;
     std::array<SM50_SHADER_BLEND, 8> blend{};
     for (unsigned rt = 0; rt < num_rt; rt++) {
-      if (!(valid_rt & (1 << rt)))
+      if (!(valid_rt & (1u << rt)))
         continue;
       auto i = desc_.IndependentBlendEnable ? rt : 0;
       auto &renderTarget = desc_.RenderTarget[i];

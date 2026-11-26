@@ -430,7 +430,7 @@ class PipelineCache : public MTLD3D11PipelineCacheBase {
     if (!input_layouts.contains(buffer)) {
       uint32_t input_slot_mask = 0;
       for (auto &element : buffer) {
-        input_slot_mask |= (1 << element.Slot);
+        input_slot_mask |= (1u << element.Slot);
       }
       input_layouts.emplace(buffer, std::make_unique<CachedInputLayout>(
                                         std::move(buffer), input_slot_mask));

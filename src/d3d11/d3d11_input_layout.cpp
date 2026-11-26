@@ -8,6 +8,8 @@
 #include "sha1/sha1_util.hpp"
 #include "util_math.hpp"
 #include "log/log.hpp"
+#include <bitset>
+#include <span>
 
 namespace mullion {
 
@@ -19,7 +21,7 @@ HRESULT ExtractMTLInputLayoutElements(
 
   using namespace microsoft;
   uint16_t append_offset[32] = {0};
-  uint32_t register_mask = 0;
+  std::bitset<32> register_mask;
 
   CSignatureParser parser;
   HRESULT hr =
@@ -86,15 +88,15 @@ HRESULT ExtractMTLInputLayoutElements(
         desc.InputSlotClass == D3D11_INPUT_PER_INSTANCE_DATA
             ? desc.InstanceDataStepRate
             : 1;
-    register_mask |= (1 << inputSig.Register);
+    if (inputSig.Register < register_mask.size())
+      register_mask.set(inputSig.Register);
   }
-  for (UINT i = 0; i < num_parameters; i++) {
-    auto &inputSig = pParameters[i];
+  for (const auto &inputSig : std::span(pParameters, num_parameters)) {
     // the input assembler makes these two itself. every other input needs an element, whatever stage the signature
     // is of (Wine's test_create_input_layout has it from Windows)
     if (!strcasecmp(inputSig.SemanticName, "SV_VertexID") || !strcasecmp(inputSig.SemanticName, "SV_InstanceID"))
       continue;
-    if (!(register_mask & (1 << inputSig.Register))) {
+    if (inputSig.Register >= register_mask.size() || !register_mask.test(inputSig.Register)) {
       WARN("CreateInputLayout: Vertex shader expects ", inputSig.SemanticName,
            "_", inputSig.SemanticIndex, " but it's not in input layout element descriptors");
       return E_INVALIDARG;
