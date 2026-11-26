@@ -34,7 +34,7 @@ template <typename Env, typename V> class ReaderIO {
   class ErasureFunction : public BaseFunction {
   public:
     llvm::Expected<V> invoke(Env env) override { return std::invoke(fn, env); };
-    ErasureFunction(Fn &&ff) : fn(std::forward<Fn>(ff)) {}
+    ErasureFunction(Fn &&ff) : fn(std::move(ff)) {}
     ~ErasureFunction() = default;
     ErasureFunction(const ErasureFunction &copy) = delete;
     ErasureFunction &operator=(const ErasureFunction &copy_assign) = delete;
@@ -128,14 +128,16 @@ public:
     template <std::move_constructible S>
     trivial_value_awaiter<S> yield_value(ReaderIO<Env, S> &&s) {
       assert(to_be_filled);
-      return {s.build(*to_be_filled)};
+      auto moved = std::move(s);
+      return {moved.build(*to_be_filled)};
     };
 
     template <typename Env2, std::move_constructible S>
     trivial_value_awaiter<S> yield_value(ReaderIO<Env2, S> &&s) {
       assert(to_be_filled);
+      auto moved = std::move(s);
       struct environment_cast<Env, Env2> cast;
-      return {s.build(cast.cast(*to_be_filled))};
+      return {moved.build(cast.cast(*to_be_filled))};
     };
 
     void return_value(V value) {
@@ -143,11 +145,11 @@ public:
     };
   };
 
-  ReaderIO &concat(ReaderIO&& b) {
-    for(auto &f : b.ops) {
-      ops.push_back(std::move(f));
+  ReaderIO &concat(ReaderIO &&b) {
+    auto moved = std::move(b);
+    for (auto &f : moved.ops) {
+      ops.emplace_back(std::move(f));
     }
-    b.ops.clear();
     return *this;
   };
 

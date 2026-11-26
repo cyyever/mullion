@@ -129,18 +129,20 @@ public:
   }
 
   template <typename Visitor> void for_each(Visitor &&visitor) const {
+    auto &&vis = std::forward<Visitor>(visitor);
     size_t offset = 0;
 
     while (offset < size) {
-      dispatch(offset, visitor);
+      dispatch(offset, vis);
     }
   }
 
   template <typename Visitor> bool any(Visitor &&visitor) const {
+    auto &&vis = std::forward<Visitor>(visitor);
     size_t offset = 0;
 
     while (offset < size) {
-      if (dispatch(offset, visitor))
+      if (dispatch(offset, vis))
         return true;
     }
     return false;
