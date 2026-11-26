@@ -388,7 +388,7 @@ TextureViewKey Texture::checkViewUseArray(TextureViewKey key, bool isArray) {
   auto view = viewDescriptors_[key.index];
   shared_lock = {};
   static constexpr uint32_t ARRAY_TYPE_MASK = 0b0101001010;
-  if (unlikely(bool((1 << uint32_t(view.type)) & ARRAY_TYPE_MASK) != isArray)) {
+  if (unlikely(bool((1u << uint32_t(view.type)) & ARRAY_TYPE_MASK) != isArray)) {
     // TODO: this process can be cached
     auto new_view_desc = view;
     switch (view.type) {

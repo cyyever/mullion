@@ -16,7 +16,7 @@ constexpr int All = ReadWrite | UAV;
 }; // namespace ResourceAccess
 
 constexpr auto kLog2Lane = 6ull;
-constexpr auto kLane = 1 << kLog2Lane;
+constexpr auto kLane = 1ull << kLog2Lane;
 constexpr auto kLaneMask = kLane - 1;
 constexpr auto kAllLaneMask = ~0ull >> (64 /* uint64_t */ - kLane);
 constexpr auto kParity = 4; // can also use 3, although power of 2 is nice
@@ -77,8 +77,8 @@ public:
 
   constexpr void
   fillGenerationBefore(int parity, int lane) {
-    const int idx = (parity + kParity + (kParity - 1)) * kLane + lane;
-    for (int offset = 0; offset < kLane; ++offset) {
+    const uint64_t idx = uint64_t(parity + kParity + (kParity - 1)) * kLane + uint64_t(lane);
+    for (uint64_t offset = 0; offset < kLane; ++offset) {
       set(idx - offset);
     }
   }

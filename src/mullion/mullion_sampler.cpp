@@ -132,7 +132,7 @@ Sampler::createSampler(
     ret->sampler_state_white_handle = white_info.gpu_resource_id;
     std::copy_n(border_color, 4, ret->border_color);
   }
-  constexpr uint64_t field_max = (1 << SM50_SAMPLER_METADATA_LOD_BITS) - 1;
+  constexpr uint64_t field_max = (1ull << SM50_SAMPLER_METADATA_LOD_BITS) - 1;
   auto field = [](float lod) {
     return (uint64_t)std::lround(std::clamp(std::ldexp(lod, SM50_SAMPLER_METADATA_LOD_FRACTION_BITS), 0.0f, (float)field_max));
   };

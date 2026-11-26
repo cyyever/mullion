@@ -27,7 +27,7 @@ GenericAccessTracker::accessExclusive(
 ) {
   isShared = 0;
   if (exclusive_ == id) {
-    barrier_state.barrierSet |= (1 << uav);
+    barrier_state.barrierSet |= (1u << uav);
     return;
   }
   if (shared_.isLastAccess(id)) {
@@ -90,9 +90,9 @@ GenericAccessTracker::accessExclusivePreRaster(
     lastWriteFromPreRaster = 1;
     if (!isShared && !isSharedPreRaster) {
       if (last)
-        barrier_state.barrierPreRasterSet |= (1 << uav);
+        barrier_state.barrierPreRasterSet |= (1u << uav);
       else
-        barrier_state.barrierPreRasterAfterFragmentSet |= (1 << uav);
+        barrier_state.barrierPreRasterAfterFragmentSet |= (1u << uav);
       return;
     }
     if (isSharedPreRaster) {
@@ -107,7 +107,7 @@ GenericAccessTracker::accessExclusivePreRaster(
   }
   if (last_exclusive == id) {
     if (!isShared && !isSharedPreRaster) {
-      barrier_state.barrierPreRasterSet |= (1 << uav);
+      barrier_state.barrierPreRasterSet |= (1u << uav);
     }
     if (isSharedPreRaster) {
       isSharedPreRaster = 0;
@@ -186,9 +186,9 @@ GenericAccessTracker::accessExclusiveFragment(
     lastWriteFromPreRaster = 0;
     if (!isShared && !isSharedPreRaster) {
       if (last)
-        barrier_state.barrierFragmentAfterPreRasterSet |= (1 << uav);
+        barrier_state.barrierFragmentAfterPreRasterSet |= (1u << uav);
       else
-        barrier_state.barrierSet |= (1 << uav);
+        barrier_state.barrierSet |= (1u << uav);
       return;
     }
     if (isSharedPreRaster) {
@@ -204,7 +204,7 @@ GenericAccessTracker::accessExclusiveFragment(
   lastWriteFromPreRaster = 0;
   if (last_exclusive == id - 1) {
     if (!isShared && !isSharedPreRaster) {
-      barrier_state.barrierFragmentAfterPreRasterSet |= (1 << uav);
+      barrier_state.barrierFragmentAfterPreRasterSet |= (1u << uav);
       return;
     }
     if (isSharedPreRaster) {
@@ -242,8 +242,8 @@ public:
   constexpr WeakFenceMaskLTO() {
     int i = 0;
     for (int p = 0; p < kParity; ++p) {
-      for (int l = 0; l < kLane; ++l) {
-        weak_fences_lto[i++].fillGenerationBefore(p, l);
+      for (uint64_t l = 0; l < kLane; ++l) {
+        weak_fences_lto[i++].fillGenerationBefore(p, int(l));
       }
     }
   }
@@ -270,7 +270,7 @@ FenceLocalityCheck::collectAndSimplifyWaits(FenceSet strong_fences, EncoderId id
   FenceSet minimal_fences;
   FenceSet accessible_fences;
 
-  constexpr auto start_offset = kParityLane == 1 ? 0 : 1;
+  constexpr uint64_t start_offset = kParityLane == 1 ? 0 : 1;
 
   for (auto offset = start_offset; offset < kParityLane; offset++) {
     EncoderId prev_encoder_id = id - offset;

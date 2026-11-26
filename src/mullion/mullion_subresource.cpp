@@ -52,7 +52,7 @@ ResourceSubsetState::ResourceSubsetState(
       // unsigned int bit-fields promote to int if narrower than int
       for (auto slice = desc->firstArraySlice; std::cmp_less(slice ,desc->firstArraySlice + desc->arraySize); slice++) {
         for (auto level = desc->firstMiplevel; std::cmp_less(level ,desc->firstMiplevel + desc->miplevelCount); level++) {
-          if ((1 << planar) & planar_mask)
+          if ((1u << planar) & planar_mask)
             bits |= 1ull << (planar * total_array_size * total_mip_count + slice * total_mip_count + level);
         }
       }

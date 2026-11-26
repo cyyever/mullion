@@ -112,7 +112,7 @@ ArgumentEncodingContext::encodeVertexBuffers(uint32_t slot_mask, uint64_t offset
   auto *entries = getMappedArgumentBuffer<VERTEX_BUFFER_ENTRY>(offset);
 
   for (unsigned slot = 0, index = 0; slot < max_slot; slot++) {
-    if (!(slot_mask & (1 << slot)))
+    if (!(slot_mask & (1u << slot)))
       continue;
     auto &state = vbuf_[slot];
     auto &buffer = state.buffer;
