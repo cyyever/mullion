@@ -2663,8 +2663,8 @@ public:
     if (ResourceDestCount && !pDescs)
       goto invalid;
 
-    for (unsigned i = 0; i < ResourceDestCount; i++) {
-      const D3D12_RESOURCE_DESC *desc = &pDescs[i];
+    for (const auto &desc_ref : std::span(pDescs, ResourceDestCount)) {
+      const D3D12_RESOURCE_DESC *desc = &desc_ref;
       has_msaa_resource |= desc->SampleDesc.Count > 1;
 
       if (desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
@@ -2714,7 +2714,7 @@ public:
       resource_info.Offset = align(__ret->SizeInBytes, resource_info.Alignment);
 
       if (pAllocationInfos)
-        pAllocationInfos[i] = resource_info;
+        *pAllocationInfos++ = resource_info;
 
       __ret->SizeInBytes = resource_info.Offset + resource_info.SizeInBytes;
       __ret->Alignment = std::max(__ret->Alignment, resource_info.Alignment);

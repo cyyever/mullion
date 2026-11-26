@@ -653,13 +653,14 @@ public:
     promote_flush |= cmdlist->promote_flush;
 
     // shared by the list's regions, which a wait for a predicate's data puts in chunks of their own
-    auto query_list = std::make_shared<std::vector<Rc<VisibilityResultQuery>>>(cmdlist->issued_visibility_query.size());
-    for (size_t i = 0; i < cmdlist->issued_visibility_query.size(); i++) {
-      (*query_list)[i] = new VisibilityResultQuery();
+    auto query_list = std::make_shared<std::vector<Rc<VisibilityResultQuery>>>();
+    query_list->reserve(cmdlist->issued_visibility_query.size());
+    for (const auto &[query, _] : cmdlist->issued_visibility_query) {
+      auto &item = query_list->emplace_back(new VisibilityResultQuery());
       D3D11_QUERY_DESC desc;
-      cmdlist->issued_visibility_query[i].first->GetDesc(&desc);
-      (*query_list)[i]->pipeline_statistics = desc.Query == D3D11_QUERY_PIPELINE_STATISTICS;
-      cmdlist->issued_visibility_query[i].first->DoDeferredQuery((*query_list)[i].ptr());
+      query->GetDesc(&desc);
+      item->pipeline_statistics = desc.Query == D3D11_QUERY_PIPELINE_STATISTICS;
+      query->DoDeferredQuery(item.ptr());
     }
 
     for (const auto &query : cmdlist->ended_queries) {
