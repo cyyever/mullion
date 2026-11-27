@@ -1718,8 +1718,11 @@ public:
     // as the geometry stage's arguments have them (GeometryArguments): its invocations share mesh threadgroups where
     // the pipeline rasterizes what it emits as it is
     gs_mesh_invocations = bool(pDesc->GS.pShaderBytecode) && !tessellation
-                              ? SM50GeometryMeshInvocations(ref_gs.GeometryShader.MeshInvocations,
-                                                            conservative || quad_lines || wire_slope, stream_output)
+                              ? SM50GeometryMeshInvocations(
+                                    ref_gs.GeometryShader.MeshInvocations,
+                                    conservative || quad_lines || aliased_lines || wire_slope || wire_snap,
+                                    stream_output
+                                )
                               : 1;
     adjacency = plain && (pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE ||
                           pDesc->PrimitiveTopologyType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);

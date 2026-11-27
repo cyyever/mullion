@@ -235,7 +235,9 @@ geometry_mesh_invocations(const SM50ShaderInternal *pShaderInternal, SM50_SHADER
   args_get_data<SM50_SHADER_STREAM_OUTPUT, SM50_SHADER_STREAM_OUTPUT_DATA>(pArgs, &so);
   return SM50GeometryMeshInvocations(
       geometry_mesh_invocations(pShaderInternal),
-      pso_data && (pso_data->conservative || pso_data->quad_lines || pso_data->wire_slope), so
+      pso_data && (pso_data->conservative || pso_data->quad_lines || pso_data->aliased_lines ||
+                   pso_data->wire_slope || pso_data->wire_snap),
+      so
   );
 }
 

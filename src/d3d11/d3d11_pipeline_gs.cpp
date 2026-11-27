@@ -58,7 +58,8 @@ public:
     // a geometry shader's invocations share mesh threadgroups where its pipeline rasterizes them as they are
     MeshInvocations = pDesc->GeometryShader ? SM50GeometryMeshInvocations(
                                                   pDesc->GeometryShader->reflection().GeometryShader.MeshInvocations,
-                                                  false, pDesc->SOLayout != nullptr
+                                                  pDesc->QuadLines || pDesc->AliasedLines || pDesc->WireSlope || pDesc->WireSnap,
+                                                  pDesc->SOLayout != nullptr
                                               )
                                             : 1;
     RasterizationEnabled = RasterizationEnabled && (pDesc->GeometryShader || pDesc->PassThrough);

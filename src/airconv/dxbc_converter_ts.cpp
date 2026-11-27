@@ -503,13 +503,11 @@ convert_dxbc_vertex_hull_shader(
         .raster_order_group = {}
     });
 
-  uint32_t origin_idx = 0;
   auto origin_type = llvm::StructType::get(context, {types._int, types._int, types._int});
-  if (!native)
-    origin_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
-        .buffer_size = {}, .location_index = SM50_BINDING_INDEX_DRAW_ORIGIN, .array_size = 0,
-        .memory_access = air::MemoryAccess::read, .address_space = air::AddressSpace::constant,
-        .type = air::MSLWhateverStruct{.name="draw_origin", .type=origin_type}, .arg_name = "draw_origin", .raster_order_group = {}});
+  uint32_t origin_idx = func_signature.DefineInput(air::ArgumentBindingBuffer{
+      .buffer_size = {}, .location_index = SM50_BINDING_INDEX_DRAW_ORIGIN, .array_size = 0,
+      .memory_access = air::MemoryAccess::read, .address_space = air::AddressSpace::constant,
+      .type = air::MSLWhateverStruct{.name="draw_origin", .type=origin_type}, .arg_name = "draw_origin", .raster_order_group = {}});
 
   auto [function, function_metadata] = func_signature.CreateFunction(name, context, module, 0, true);
 
@@ -517,12 +515,10 @@ convert_dxbc_vertex_hull_shader(
   auto vertex_stage_end = llvm::BasicBlock::Create(context, "vertex_end", function);
   llvm::IRBuilder<> builder(entry_bb_global);
   llvm::Value *group_position = function->getArg(tg_id_idx);
-  if (!native) {
-    auto origin = builder.CreateLoad(origin_type, function->getArg(origin_idx));
-    for (unsigned axis = 0; axis < 3; ++axis)
-      group_position = builder.CreateInsertElement(group_position,
-          builder.CreateAdd(builder.CreateExtractElement(group_position, axis), builder.CreateExtractValue(origin, axis)), axis);
-  }
+  auto origin = builder.CreateLoad(origin_type, function->getArg(origin_idx));
+  for (unsigned axis = 0; axis < 3; ++axis)
+    group_position = builder.CreateInsertElement(group_position,
+        builder.CreateAdd(builder.CreateExtractElement(group_position, axis), builder.CreateExtractValue(origin, axis)), axis);
 
   llvm::raw_null_ostream nulldbg{};
   llvm::air::AIRBuilder air(

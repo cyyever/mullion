@@ -1,6 +1,6 @@
 #include "metallib_writer.hpp"
 #include "bitcode/air_bitcode_writer.hpp"
-#include "llvm/ADT/Triple.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/IR/Constants.h"
 
 using namespace llvm;

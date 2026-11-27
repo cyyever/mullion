@@ -245,7 +245,7 @@ ContractOutsidePosition(llvm::Module &M) {
       SmallVector<Value *, 32> Roots;
       bool Writes = false;
       for (auto &I : instructions(*F)) {
-        if (auto Branch = dyn_cast<BranchInst>(&I); Branch && Branch->isConditional())
+        if (auto Branch = dyn_cast<CondBrInst>(&I))
           Roots.push_back(Branch->getCondition());
         else if (auto Switch = dyn_cast<SwitchInst>(&I))
           Roots.push_back(Switch->getCondition());
@@ -255,7 +255,7 @@ ContractOutsidePosition(llvm::Module &M) {
           std::set<unsigned> Given;
           while (auto Insert = dyn_cast<InsertValueInst>(Aggregate)) {
             unsigned Field = Insert->getIndices()[0];
-            if (!Given.count(Field) && !FreeFields.count(Field))
+            if (!Given.contains(Field) && !FreeFields.contains(Field))
               Roots.push_back(Insert->getInsertedValueOperand());
             if (Insert->getNumIndices() == 1)
               Given.insert(Field);
@@ -265,11 +265,11 @@ ContractOutsidePosition(llvm::Module &M) {
         } else if (auto Call = dyn_cast<CallInst>(&I)) {
           auto Callee = Call->getCalledFunction();
           auto Name = Callee ? Callee->getName() : StringRef();
-          if (Name.startswith("air.set_") && Name.contains("_mesh")) {
+          if (Name.starts_with("air.set_") && Name.contains("_mesh")) {
             auto Index = Call->arg_size() > 1 ? dyn_cast<ConstantInt>(Call->getArgOperand(1)) : nullptr;
-            bool Free = Index && ((Name.startswith("air.set_vertex_data_mesh") && FreeVertexData.count(Index->getZExtValue())) ||
-                                  (Name.startswith("air.set_primitive_data_mesh") &&
-                                   FreePrimitiveData.count(Index->getZExtValue())));
+            bool Free = Index && ((Name.starts_with("air.set_vertex_data_mesh") && FreeVertexData.contains(Index->getZExtValue())) ||
+                                  (Name.starts_with("air.set_primitive_data_mesh") &&
+                                   FreePrimitiveData.contains(Index->getZExtValue())));
             if (!Free)
               for (auto &Arg : Call->args())
                 Roots.push_back(Arg);
@@ -301,7 +301,7 @@ ContractOutsidePosition(llvm::Module &M) {
       if (Reads && Writes)
         continue;
       for (auto &I : instructions(*F))
-        if (isa<FPMathOperator>(&I) && !isa<FCmpInst>(&I) && I.hasApproxFunc() && !Slice.count(&I)) {
+        if (isa<FPMathOperator>(&I) && !isa<FCmpInst>(&I) && I.hasApproxFunc() && !Slice.contains(&I)) {
           I.setHasAllowContract(true);
           I.setHasAllowReassoc(true);
           I.setHasAllowReciprocal(true);
